@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = "==3.10.17"
 dependencies = [
-    "fastdb4py>=0.1.9",
+    "fastdb4py>=0.1.10",
     "rasterio>=1.4.4",
     "taichi>=1.7.4",
 ]
