@@ -1,0 +1,11 @@
+[project]
+name = "nh-flood-2d"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = "==3.10.17"
+dependencies = [
+    "fastdb4py>=0.1.9",
+    "rasterio>=1.4.4",
+    "taichi>=1.7.4",
+]
