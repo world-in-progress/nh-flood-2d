@@ -6,24 +6,24 @@ import fastdb4py as fdb
 from pathlib import Path
 from typing import no_type_check
 
+from ..input import InputConfig
 from ..util.ti import init_taichi, copy_to_taichi
 from ..schema.feature import IndexLike, Ne, SideTopoInfo, Ns, Rainfall, Tide, Gate, U8Value, UVH
 
-def solver(fdb_dir: str, start_time_step: int = 0):
+def solver(cfg: InputConfig, start_time_step: int = 0):
     init_taichi(use_gpu=True, profiler=True)
     
     # Check fdbs
-    fdb_path = Path(fdb_dir)
-    ne_fdb_fn = fdb_path / 'ne.fdb'
-    ns_fdb_fn = fdb_path / 'ns.fdb'
-    rain_fdb_fn = fdb_path / 'rain.fdb'
-    tide_fdb_fn = fdb_path / 'tide.fdb'
-    gate_fdb_fn = fdb_path / 'gate.fdb'
-    boundary_fdb_fn = fdb_path / 'boundary.fdb'
+    ne_fdb_fn = Path(cfg.ne_fdb)
+    ns_fdb_fn = Path(cfg.ns_fdb)
+    rain_fdb_fn = Path(cfg.rain_fdb)
+    tide_fdb_fn = Path(cfg.tide_fdb)
+    gate_fdb_fn = Path(cfg.gate_fdb)
+    boundary_fdb_fn = Path(cfg.boundary_fdb)
     if not (ne_fdb_fn.exists() and ns_fdb_fn.exists() and 
             rain_fdb_fn.exists() and tide_fdb_fn.exists() and 
             gate_fdb_fn.exists() and boundary_fdb_fn.exists()):
-        raise FileNotFoundError("One or more required FDB files are missing.")
+        raise FileNotFoundError('One or more required FDB files are missing.')
     
     # Load fdbs
     ne_fdb = fdb.ORM.load(str(ne_fdb_fn), from_file=True)
@@ -302,15 +302,14 @@ def solver(fdb_dir: str, start_time_step: int = 0):
     # Prepare for output
     last_output_count = 0
     last_output_time = current_time
-    output_uvh_fn = fdb_path / 'uvh'
+    evolve_start_time = current_time
+    output_uvh_fn = Path(cfg.huv_dir)
     if output_uvh_fn.exists():
         shutil.rmtree(output_uvh_fn)
     output_uvh_fn.mkdir(parents=True, exist_ok=True)
     
     # Main simulation loop
-    while True:
-        if last_output_count >= 144:    # 12 hours simulation
-            break
+    while current_time - evolve_start_time < cfg.duration:
         
         # Update tide by linear interpolation
         if current_time >= tts[current_tide_idx + 1]:
@@ -336,8 +335,8 @@ def solver(fdb_dir: str, start_time_step: int = 0):
         current_time += dt
         
         # Output cumulative time every 5 minutes
-        if current_time - last_output_time >= 300.0:
-            last_output_time += 300.0
+        if current_time - last_output_time >= cfg.yield_step:
+            last_output_time += cfg.yield_step
             cumulative_time = current_time - simulation_begin_time
             print(f'Cumulative simulation time: {cumulative_time} seconds, current dt: {dt} seconds')
             
@@ -368,6 +367,3 @@ def lerp(a: float, b: float, t: float) -> float:
 @ti.func
 def horton_decay(initial: float, final: float, k: float, t: float) -> float:
     return final + (initial - final) * ti.exp(-k * t)
-
-if __name__ == '__main__':
-    solver('./fdb', start_time_step=0)

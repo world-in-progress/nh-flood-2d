@@ -1,3 +1,4 @@
+import shutil
 import rasterio
 import numpy as np
 import taichi as ti
@@ -6,6 +7,7 @@ from pathlib import Path
 from typing import no_type_check
 from rasterio.transform import from_origin
 
+from ..input import InputConfig
 from ..util import init_taichi, copy_to_taichi
 from ..schema.feature import Ne, UVH, Ns, IndexLike
     
@@ -83,17 +85,17 @@ def get_area_meta(ne_fdb_fn: str, ns_fdb_fn: str):
     compute_meta()
     return bbox.to_numpy(), (vr.to_numpy(), hr.to_numpy()), hws.to_numpy()[1:], hhs.to_numpy()[1:]  # skip virtual element 0
 
-def generate_flood_map(ne_fdb_fn: str, ns_fdb_fn: str, uvhs_dir: str, epsg_code: int, output_dir: str):
+def generate_flood_map(cfg: InputConfig):
     """
     Generate a GeoTIFF flood map from UVH calculation results.
-    
-    Args:
-        ne_fdb_fn: Path to the ne.fdb file.
-        ns_fdb_fn: Path to the ns.fdb file.
-        uvhs_dir: Path to the directory containing uvh_{index}.fdb files.
-        epsg_code: EPSG code for the spatial reference (e.g., 32615).
     """
     init_taichi()
+    
+    ne_fdb_fn = cfg.ne_fdb
+    ns_fdb_fn = cfg.ns_fdb
+    uvhs_dir = cfg.huv_dir
+    epsg_code = cfg.epsg_code
+    output_dir = cfg.flood_map_dir
     
     # Check input files
     uvhs_path = Path(uvhs_dir)
@@ -101,6 +103,12 @@ def generate_flood_map(ne_fdb_fn: str, ns_fdb_fn: str, uvhs_dir: str, epsg_code:
     ns_fdb_path = Path(ns_fdb_fn)
     if not ne_fdb_path.exists() or not ns_fdb_path.exists() or not uvhs_path.exists():
         raise FileNotFoundError(f'ne.fdb or ns.fdb or uvh directory not found at {ne_fdb_path} or {ns_fdb_path} or {uvhs_path}')
+    
+    # Clean output directory
+    output_dir = Path(output_dir)
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     
     # Calculate area metadata (bounding box, resolution, element half-sizes) from ne.fdb and ns.fdb
     (min_x, min_y, max_x, max_y), (vr_np, hr_np), half_widths, half_heights = get_area_meta(str(ne_fdb_path), str(ns_fdb_path))
@@ -139,7 +147,7 @@ def generate_flood_map(ne_fdb_fn: str, ns_fdb_fn: str, uvhs_dir: str, epsg_code:
             raise ValueError(f'UVH file name {uvh_file.name} does not contain an index. Expected format: uvh_{{index}}.fdb')
         
         out_name = f'flood_map_{idx}.tif'
-        out_path = Path(output_dir) / out_name
+        out_path = output_dir / out_name
 
         # Load UVH data
         uvh_fdb = fdb.ORM.load(str(uvh_file), from_file=True)

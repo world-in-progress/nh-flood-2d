@@ -3,11 +3,16 @@ import taichi as ti
 import fastdb4py as fdb
 from pathlib import Path
 
+from ..input import InputConfig
 from ..util.ti import init_taichi, copy_to_taichi
 from ..schema.feature import IndexLike, Ne, SideTopoInfo, Ns, U8Value
 
-def create_boundary_fdb(ne_fdb_fn: str, ns_fdb_fn: str, fdb_fn: str):
+def build_boundary_fdb(cfg: InputConfig):
     """Create boundary hydro element FDB from NE FDB and NS FDB"""
+    ne_fdb_fn: str = cfg.ne_fdb
+    ns_fdb_fn: str = cfg.ns_fdb
+    fdb_fn: str = cfg.boundary_fdb
+    
     # Init Taichi
     init_taichi(use_gpu=True, profiler=True)
     
@@ -98,7 +103,7 @@ if __name__ == '__main__':
     import time
     
     start_time = time.time()
-    create_boundary_fdb('./fdb/ne.fdb', './fdb/ns.fdb', './fdb/boundary.fdb')
+    build_boundary_fdb('./fdb/ne.fdb', './fdb/ns.fdb', './fdb/boundary.fdb')
     end_time = time.time()
     print(f"Boundary FDB created in {end_time - start_time:.2f} seconds.")
     

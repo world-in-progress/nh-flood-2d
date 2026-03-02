@@ -1,3 +1,4 @@
+import os
 import linecache
 import numpy as np
 import fastdb4py as fdb
@@ -6,6 +7,7 @@ import multiprocessing as mp
 from datetime import datetime
 from functools import partial
 
+from ..input import InputConfig
 from ..schema.feature import Tide, Rainfall, IndexLike, SideTopoInfo, Ne, Ns, Node, Gate
 
 def create_node_fdb(inp_fn: str, fdb_fn: str):
@@ -128,14 +130,7 @@ def create_ne_fdb_parallel(ne_fn: str, fdb_fn: str):
     fdb_path = Path(fdb_fn)
     fdb_path.parent.mkdir(parents=True, exist_ok=True)
     db.save(str(fdb_path))
-    db.unlink()  
-
-
-    # Save to file and remove shared database
-    fdb_path = Path(fdb_fn)
-    fdb_path.parent.mkdir(parents=True, exist_ok=True)
-    db.save(str(fdb_path))
-    db.unlink()  
+    db.unlink()
 
 def _filter_ne_ns(ne_fn: str, ns_fn: str, out_ne_fn: str, out_ns_fn: str):
     """
@@ -678,27 +673,39 @@ def _check_rainfall_fdb(r_fn: str, fdb_fn: str):
     
     print('FDB rainfall data verification passed.')
 
-def _create_worker(idx: int):
-    # Use filtered files if available
-    ne_file = 'temp_ne.txt' if Path('temp_ne.txt').exists() else 'test_data/ne.txt'
-    ns_file = 'temp_ns.txt' if Path('temp_ns.txt').exists() else 'test_data/ns.txt'
-
+def _create_worker(cfg: InputConfig, idx: int):
     if idx == 0:
-        create_node_fdb('test_data/0610.inp', 'fdb/node.fdb')
+        create_gate_fdb(cfg.gate, cfg.gate_fdb)
     elif idx == 1:
-        create_gate_fdb('test_data/max_gate7_ne.txt', 'fdb/gate.fdb')
+        create_ne_fdb_parallel(cfg.tmp_ne, cfg.ne_fdb)
     elif idx == 2:
-        create_ne_fdb_parallel(ne_file, 'fdb/ne.fdb')
+        create_ns_fdb_parallel(cfg.tmp_ns, cfg.ns_fdb)
     elif idx == 3:
-        create_ns_fdb_parallel(ns_file, 'fdb/ns.fdb')
+        create_tide_fdb_parallel(cfg.tide, cfg.tide_fdb)
     elif idx == 4:
-        create_tide_fdb_parallel('test_data/test_tide.csv', 'fdb/tide.fdb')
-    elif idx == 5:
-        create_rainfall_fdb_parallel('test_data/test_rain.csv', 'fdb/rain.fdb')
+        create_rainfall_fdb_parallel(cfg.rain, cfg.rain_fdb)
+
+def build_fdbs(cfg: InputConfig):
+    try:
+        # Generate filtered temporary NE/NS files
+        _filter_ne_ns(cfg.ne, cfg.ns, cfg.tmp_ne, cfg.tmp_ns)
+        
+        # Create FDBs in parallel
+        processes = []
+        for i in range(5):
+            p = mp.Process(target=_create_worker, args=(cfg, i))
+            p.start()
+            processes.append(p)
+        
+        for p in processes:
+            p.join()
+    finally:
+        # Cleanup temporary files
+        if Path(cfg.tmp_ne).exists(): os.remove(cfg.tmp_ne)
+        if Path(cfg.tmp_ns).exists(): os.remove(cfg.tmp_ns)
 
 if __name__ == '__main__':
     import time
-    import os
     start_time = time.time()
     
     # Generate filtered temporary NE/NS files
@@ -706,7 +713,7 @@ if __name__ == '__main__':
     
     # Create FDBs in parallel
     processes = []
-    for i in range(6):
+    for i in range(5):
         p = mp.Process(target=_create_worker, args=(i,))
         p.start()
         processes.append(p)
