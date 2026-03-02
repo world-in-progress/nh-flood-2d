@@ -1,1 +1,2 @@
+from .benchmark import benchmark
 from .ti import init_taichi, copy_to_taichi

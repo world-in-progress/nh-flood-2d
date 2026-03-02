@@ -11,7 +11,6 @@ class InputConfig(BaseModel):
     gate: str
     tide: str
     rain: str
-    uvhs_dir: str
     epsg_code: int
     output_dir: str
     
@@ -55,8 +54,8 @@ class InputConfig(BaseModel):
         return str(Path(self.output_dir) / 'preprocessed' / 'rain.fdb')
     
     @property
-    def huv_dir(self) -> str:
-        return str(Path(self.output_dir) / 'huv')
+    def uvh_dir(self) -> str:
+        return str(Path(self.output_dir) / 'uvh')
     
     @property
     def flood_map_dir(self) -> str:
@@ -68,7 +67,7 @@ class InputConfig(BaseModel):
             if tmp_path.exists():
                 tmp_path.unlink()
     
-    @field_validator('ne', 'ns', 'uvhs_dir')
+    @field_validator('ne', 'ns')
     def validate_paths(cls, v):
         path = Path(v)
         if not path.exists():

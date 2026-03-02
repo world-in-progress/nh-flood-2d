@@ -93,7 +93,7 @@ def generate_flood_map(cfg: InputConfig):
     
     ne_fdb_fn = cfg.ne_fdb
     ns_fdb_fn = cfg.ns_fdb
-    uvhs_dir = cfg.huv_dir
+    uvhs_dir = cfg.uvh_dir
     epsg_code = cfg.epsg_code
     output_dir = cfg.flood_map_dir
     

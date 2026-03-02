@@ -1,4 +1,3 @@
-import time
 import shutil
 import numpy as np
 import taichi as ti
@@ -6,10 +5,12 @@ import fastdb4py as fdb
 from pathlib import Path
 from typing import no_type_check
 
+from ..util import benchmark
 from ..input import InputConfig
 from ..util.ti import init_taichi, copy_to_taichi
-from ..schema.feature import IndexLike, Ne, SideTopoInfo, Ns, Rainfall, Tide, Gate, U8Value, UVH
+from ..schema.feature import Ne, Ns, IndexLike, SideTopoInfo, Rainfall, Tide, Gate, U8Value, UVH
 
+@benchmark(applied=True)
 def solver(cfg: InputConfig, start_time_step: int = 0):
     init_taichi(use_gpu=True, profiler=True)
     
@@ -141,10 +142,6 @@ def solver(cfg: InputConfig, start_time_step: int = 0):
                 eib, eit = el, eh
                 sdc_t[si] = ti.max(ti.abs(ey_t[eit] - ey_t[eib]), 0.01)
         
-        # # Update infiltration with horton model
-        # fr3[None] = fr5[None] = fr7[None] = horton_decay(3.0, 0.1, 2.0, 0.0) * 0.0254 / 3600.0
-        # fr1[None] = fr2[None] = horton_decay(0.8, 0.02, 10.0, 0.0) * 0.0254 / 3600.0
-        # fr4[None] = fr6[None] = 0.0
         fr1[None] = fr2[None] = fr3[None] = fr4[None] = fr5[None] = fr6[None] = fr7[None] = 0.0
             
     def init():
@@ -157,7 +154,7 @@ def solver(cfg: InputConfig, start_time_step: int = 0):
         
         while rainfalls[current_rain_idx].time < simulation_begin_time:
             current_rain_idx += 1
-            
+        
         ex = copy_to_taichi(nes.column.x, ti.f32, None)
         ey = copy_to_taichi(nes.column.y, ti.f32, None)
         sx = copy_to_taichi(nss.column.x, ti.f32, None)
@@ -296,14 +293,13 @@ def solver(cfg: InputConfig, start_time_step: int = 0):
             )
     
     # Main logic here ##################################################
-    start_time = time.time()
     init()
     
     # Prepare for output
     last_output_count = 0
     last_output_time = current_time
     evolve_start_time = current_time
-    output_uvh_fn = Path(cfg.huv_dir)
+    output_uvh_fn = Path(cfg.uvh_dir)
     if output_uvh_fn.exists():
         shutil.rmtree(output_uvh_fn)
     output_uvh_fn.mkdir(parents=True, exist_ok=True)
@@ -357,7 +353,6 @@ def solver(cfg: InputConfig, start_time_step: int = 0):
             uvh_db.save(str(uvh_fn))
             uvh_db.unlink()
             last_output_count += 1
-    print(f'Time profiling results: {time.time() - start_time} seconds')
             
 # Helpers ##################################################
 
