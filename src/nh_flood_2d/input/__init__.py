@@ -14,8 +14,15 @@ class InputConfig(BaseModel):
     epsg_code: int
     output_dir: str
     
-    duration: int = 86400   # total simulation duration in seconds (default: 24 hours)
+    afa: float = 0.5        # Courant number (CFL condition)
+    sita: float = 1.0       # time weighting factor
+    min_h: float = 0.02     # minimum water depth (m)
+    
+    duration: int = -1      # total simulation duration in seconds (default: -1 means auto-detect from input data)
     yield_step: int = 300   # output every 5 minutes (300 seconds) as default
+    
+    hydrograph_points: dict[str, tuple[float, float]] = {}  # name -> (x, y)
+    observation_dir: str = ''  # directory for observation data, file_name should be the same as hydrograph_points keys
     
     @property
     def tmp_ne(self) -> str:
@@ -55,11 +62,24 @@ class InputConfig(BaseModel):
     
     @property
     def uvh_dir(self) -> str:
-        return str(Path(self.output_dir) / 'uvh')
+        dir_path = Path(self.output_dir) / 'uvh'
+        if not dir_path.exists():
+            dir_path.mkdir(parents=True, exist_ok=True)
+        return str(dir_path)
     
     @property
     def flood_map_dir(self) -> str:
-        return str(Path(self.output_dir) / 'flood_maps')
+        dir_path = Path(self.output_dir) / 'flood_maps'
+        if not dir_path.exists():
+            dir_path.mkdir(parents=True, exist_ok=True)
+        return str(dir_path)
+    
+    @property
+    def hydrograph_dir(self) -> str:
+        dir_path = Path(self.output_dir) / 'hydrographs'
+        if not dir_path.exists():
+            dir_path.mkdir(parents=True, exist_ok=True)
+        return str(dir_path)
     
     def clean_tmp_files(self):
         for tmp_file in [self.tmp_ne, self.tmp_ns]:

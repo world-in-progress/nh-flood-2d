@@ -4,6 +4,7 @@ import numpy as np
 import taichi as ti
 import fastdb4py as fdb
 from pathlib import Path
+from datetime import datetime
 from typing import no_type_check
 from rasterio.transform import from_origin
 
@@ -139,14 +140,15 @@ def generate_flood_map(cfg: InputConfig):
     hh_field = copy_to_taichi(half_heights, ti.f32, None)
     
     # Make flood map for all UVH files in the directory
-    for uvh_file in uvhs_path.glob('uvh_*.fdb'):
+    uvh_paths = list(uvhs_path.glob('uvh_*.fdb'))
+    uvh_paths.sort(
+        key=lambda p: datetime.strptime(p.stem.split('_')[-1], '%Y%m%d-%H%M%S').timestamp()
+    )
+    for idx, uvh_file in enumerate(uvh_paths):
         print(f'Processing UVH file: {uvh_file} ...')
-        parts = uvh_file.stem.split('_')
-        idx = parts[-1] if len(parts) > 1 else None
-        if idx is None:
-            raise ValueError(f'UVH file name {uvh_file.name} does not contain an index. Expected format: uvh_{{index}}.fdb')
         
-        out_name = f'flood_map_{idx}.tif'
+        # Output file name based on UVH file name (e.g., flood_map_0_20240101-120000.tif)
+        out_name = f'flood_map_{idx}_{uvh_file.stem.split("_")[-1]}.tif'
         out_path = output_dir / out_name
 
         # Load UVH data

@@ -3,6 +3,7 @@ import numpy as np
 import taichi as ti
 import fastdb4py as fdb
 from pathlib import Path
+from datetime import datetime
 from typing import no_type_check
 
 from ..util import benchmark
@@ -62,9 +63,9 @@ def solver(cfg: InputConfig, start_time_step: int = 0):
     n = 0.033                                                       # Manning's roughness coefficient
     g = 9.81                                                        # gravitational acceleration (m/s²)
     pi = 3.141592653589793                                          # value of pi
-    afa = 0.5                                                       # Courant number (CFL condition)
-    sita = 1.0                                                      # time weighting factor
-    min_h = 0.02                                                    # minimum water depth (m)
+    afa = cfg.afa                                                   # Courant number (CFL condition)
+    sita = cfg.sita                                                 # time weighting factor
+    min_h = cfg.min_h                                               # minimum water depth (m)
     
     # Taichi fields about hydro elements
     esl_t = ti.field(dtype=ti.f32, shape=e_num)                     # side length of each hydro element
@@ -74,10 +75,16 @@ def solver(cfg: InputConfig, start_time_step: int = 0):
     eu_t = copy_to_taichi(nes.column.type, ti.u8, None)             # underlay type of each hydro element, this field will be transformed to type flag field in init_gpu()
     bdei_t = copy_to_taichi(bdeis.column.index, ti.i32, None)       # as index, taichi must use i32 as iterator index type
     
+    isl1_t = copy_to_taichi(ne_fdb[SideTopoInfo]['isl1'].column.info, ti.i32, [e_num, 10])
+    isl2_t = copy_to_taichi(ne_fdb[SideTopoInfo]['isl2'].column.info, ti.i32, [e_num, 10])
+    isl3_t = copy_to_taichi(ne_fdb[SideTopoInfo]['isl3'].column.info, ti.i32, [e_num, 10])
+    isl4_t = copy_to_taichi(ne_fdb[SideTopoInfo]['isl4'].column.info, ti.i32, [e_num, 10])
+    
     # Taichi fields about hydro sides
     ndt_t = ti.field(dtype=ti.f32, shape=())                        # next global time step
     dh_t = ti.field(dtype=ti.f32, shape=s_num)                      # dike height at each hydro side
     sq_t = ti.field(dtype=ti.f32, shape=s_num)                      # storage quantity at each hydro side (both in direction x and y)
+    sqn_t = ti.field(dtype=ti.f32, shape=s_num)                     # next time step storage quantity at each hydro side (both in direction x and y)
     sdc_t = ti.field(dtype=ti.f32, shape=s_num)                     # length between two hydro element centers at each hydro side
     sl_t = copy_to_taichi(nss.column.length, ti.f32, None)
     sbf_t = copy_to_taichi(sbfs.column.value, ti.u8, None)
@@ -133,6 +140,7 @@ def solver(cfg: InputConfig, start_time_step: int = 0):
         
         for si in range(1, s_num):
             sq_t[si] = 0.0
+            sqn_t[si] = 0.0
             dh_t[si] = -999.0
             so, el, eh = sts_t[si, 0], sts_t[si, 1], sts_t[si, 2]   # orient, lower element, higher element
             if so == 2:
@@ -143,7 +151,7 @@ def solver(cfg: InputConfig, start_time_step: int = 0):
                 sdc_t[si] = ti.max(ti.abs(ey_t[eit] - ey_t[eib]), 0.01)
         
         fr1[None] = fr2[None] = fr3[None] = fr4[None] = fr5[None] = fr6[None] = fr7[None] = 0.0
-            
+    
     def init():
         nonlocal current_time, simulation_begin_time, current_rain_idx
         
@@ -158,8 +166,7 @@ def solver(cfg: InputConfig, start_time_step: int = 0):
         ex = copy_to_taichi(nes.column.x, ti.f32, None)
         ey = copy_to_taichi(nes.column.y, ti.f32, None)
         sx = copy_to_taichi(nss.column.x, ti.f32, None)
-        isl1 = copy_to_taichi(ne_fdb[SideTopoInfo]['isl1'].column.info, ti.i32, [e_num, 10])
-        init_gpu(ex, ey, isl1, sx)
+        init_gpu(ex, ey, isl1_t, sx)
     
     @ti.kernel
     @no_type_check
@@ -169,15 +176,15 @@ def solver(cfg: InputConfig, start_time_step: int = 0):
         ndt_t[None] = 1000.0
         
         # Tick gates
-        for gi in range(g_num):
-            up, down, level = gate_t[gi, 0], gate_t[gi, 1], float(gate_t[gi, 2])
-            should_open = h_t[up] + 0.1 > h_t[down]
-            new_z = 0.0 if should_open else level
-            for ei_count in range(3, 100):
-                ei = gate_t[gi, ei_count]
-                if ei == 0:
-                    break
-                ez_t[ei] = new_z
+        # for gi in range(g_num):
+        #     up, down, level = gate_t[gi, 0], gate_t[gi, 1], float(gate_t[gi, 2])
+        #     should_open = h_t[up] + 0.1 > h_t[down]
+        #     new_z = 0.0 if should_open else level
+        #     for ei_count in range(3, 100):
+        #         ei = gate_t[gi, ei_count]
+        #         if ei == 0:
+        #             break
+        #         ez_t[ei] = new_z
         
         # Tick sides
         for si in range(1, s_num):
@@ -186,6 +193,8 @@ def solver(cfg: InputConfig, start_time_step: int = 0):
             # Handle flow in direction x (Type 2: Vertical side, connects Left/Right)
             if so == 2:
                 eil, eir = el, eh
+                side_l = isl1_t[eil, 0]
+                side_r = isl2_t[eir, 0]
                 hl, hr = h_t[eil], h_t[eir]
                 dx = sdc_t[si]
                 xq = sq_t[si]
@@ -194,10 +203,11 @@ def solver(cfg: InputConfig, start_time_step: int = 0):
                 xdq = (-g * (hr - hl) / dx) * ti.max(xwh, 0.0) * dt
                 # Calculate the friction term in direction x (Manning's formula)
                 xf = 1.0 + g * dt * (n ** 2) * ti.abs(xq / (ti.max(xwh, 0.00001) ** (7.0 / 3.0)))
-                new_xq = (sita * xq + (1.0 - sita) * (eq_t[eil, 0] / esl_t[eil] + eq_t[eir, 1] / esl_t[eir]) + xdq) / xf
+                new_xq = (sita * xq + (1.0 - sita) / 2.0 * (sqn_t[side_l] + sqn_t[side_r]) + xdq) / xf
                 new_xq = ti.select(xwh < min_h, 0.0, new_xq)    # cutoff small flow
                 new_xq *= bf                                    # zero flow for boundary sides
                 sq_t[si] = new_xq                               # update current flow quantity in direction x
+                sqn_t[si] = new_xq                              # update next time step flow quantity in direction x (for use in the next tick)
                 xwh = ti.max(xwh, 0.01)
                 sdt = bf * afa * sl_t[si] / (ti.sqrt(g * xwh) + ti.abs(new_xq) / xwh) # CFL Condition: Ignore boundary sides (connected to element 0)
                 sdt = ti.max((0.001 - sdt) * 100000.0, sdt)  # avoid too small time step
@@ -208,6 +218,8 @@ def solver(cfg: InputConfig, start_time_step: int = 0):
             # Handle flow in direction y (Type 1: Horizontal side, connects Bottom/Top)
             else:
                 eib, eit = el, eh
+                side_b = isl3_t[eib, 0]
+                side_t = isl4_t[eit, 0]
                 hb, ht = h_t[eib], h_t[eit]
                 dy = sdc_t[si]
                 yq = sq_t[si]
@@ -216,10 +228,11 @@ def solver(cfg: InputConfig, start_time_step: int = 0):
                 ydq = (-g * (ht - hb) / dy) * ti.max(ywh, 0.0) * dt
                 # Calculate the friction term in direction y (Manning's formula)
                 yf = 1.0 + g * dt * (n ** 2) * ti.abs(yq / (ti.max(ywh, 0.00001) ** (7.0 / 3.0)))
-                new_yq = (sita * yq + (1.0 - sita) * (eq_t[eib, 2] / esl_t[eib] + eq_t[eit, 3] / esl_t[eit]) + ydq) / yf
+                new_yq = (sita * yq + (1.0 - sita) / 2.0 * (sqn_t[side_b] + sqn_t[side_t]) + ydq) / yf
                 new_yq = ti.select(ywh < min_h, 0.0, new_yq)    # cutoff small flow
                 new_yq *= bf                                    # zero flow for boundary sides
                 sq_t[si] = new_yq                               # update current flow quantity in direction y
+                sqn_t[si] = new_yq                              # update next time step flow quantity in direction y (for use in the next tick)
                 ywh = ti.max(ywh, 0.01)
                 sdt = bf * afa * sl_t[si] / (ti.sqrt(g * ywh) + ti.abs(new_yq) / ywh) # CFL Condition: Ignore boundary sides (connected to element 0)
                 sdt = ti.max((0.001 - sdt) * 100000.0, sdt)  # avoid too small time step
@@ -296,7 +309,6 @@ def solver(cfg: InputConfig, start_time_step: int = 0):
     init()
     
     # Prepare for output
-    last_output_count = 0
     last_output_time = current_time
     evolve_start_time = current_time
     output_uvh_fn = Path(cfg.uvh_dir)
@@ -305,8 +317,7 @@ def solver(cfg: InputConfig, start_time_step: int = 0):
     output_uvh_fn.mkdir(parents=True, exist_ok=True)
     
     # Main simulation loop
-    while current_time - evolve_start_time < cfg.duration:
-        
+    while cfg.duration == -1 or current_time - evolve_start_time < cfg.duration:
         # Update tide by linear interpolation
         if current_time >= tts[current_tide_idx + 1]:
             if current_tide_idx + 2 >= t_num:
@@ -330,7 +341,7 @@ def solver(cfg: InputConfig, start_time_step: int = 0):
         dt = tick(tide, rainq)
         current_time += dt
         
-        # Output cumulative time every 5 minutes
+        # Output cumulative time at each yield step
         if current_time - last_output_time >= cfg.yield_step:
             last_output_time += cfg.yield_step
             cumulative_time = current_time - simulation_begin_time
@@ -349,10 +360,12 @@ def solver(cfg: InputConfig, start_time_step: int = 0):
             us[:] = u_t.to_numpy()
             vs[:] = v_t.to_numpy()
             hs[:] = h_t.to_numpy()
-            uvh_fn = output_uvh_fn / f'uvh_{last_output_count}.fdb'
+            
+            # Save uvh fdb, name: uvh_{timestamp of last_output_time}.fdb
+            time_str = datetime.fromtimestamp(last_output_time).strftime('%Y%m%d-%H%M%S')
+            uvh_fn = output_uvh_fn / f'uvh_{time_str}.fdb'
             uvh_db.save(str(uvh_fn))
             uvh_db.unlink()
-            last_output_count += 1
             
 # Helpers ##################################################
 

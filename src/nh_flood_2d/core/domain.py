@@ -317,7 +317,7 @@ class Domain:
         last_output_count = 0
         last_output_time = self.current_time
 
-        while self.current_time - self.evolve_start_time < self.cfg.duration:
+        while self.cfg.duration == -1 or self.current_time - self.evolve_start_time < self.cfg.duration:
             # Update tide by linear interpolation
             if self.current_time >= self.tts[self.current_tide_idx + 1]:
                 if self.current_tide_idx + 2 >= self.t_num:
