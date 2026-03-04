@@ -89,6 +89,73 @@ def create_gate_fdb(g_fn: str, fdb_fn: str):
     fdb_path.parent.mkdir(parents=True, exist_ok=True)
     db.save(str(fdb_path))
 
+def create_ne_fdb(ne_fn: str, fdb_fn: str):
+    """Create NE FDB from NE file"""
+    ne_path = Path(ne_fn)
+    if not ne_path.exists():
+        raise FileNotFoundError(f'NE file not found: {ne_path}')
+    
+    # Get element count
+    ne_f = open(ne_path, 'r', encoding='utf-8')
+    element_count = sum(1 for _ in ne_f) + 1  # including virtual element 0
+    ne_f.close()
+    
+    db = fdb.ORM.truncate([
+        fdb.TableDefn(IndexLike, element_count * 10, 'isl1'),
+        fdb.TableDefn(IndexLike, element_count * 10, 'isl2'),
+        fdb.TableDefn(IndexLike, element_count * 10, 'isl3'),
+        fdb.TableDefn(IndexLike, element_count * 10, 'isl4'),
+        fdb.TableDefn(Ne, element_count)
+    ])
+    
+    nes = db[Ne][Ne]
+    e_xs = nes.column.x
+    e_ys = nes.column.y
+    e_zs = nes.column.z
+    e_types = nes.column.type
+    e_indices = nes.column.index
+    e_lcount = nes.column.l_side_num
+    e_rcount = nes.column.r_side_num
+    e_bcount = nes.column.b_side_num
+    e_tcount = nes.column.t_side_num
+    
+    isl1 = db[IndexLike]['isl1'].column.index
+    isl2 = db[IndexLike]['isl2'].column.index
+    isl3 = db[IndexLike]['isl3'].column.index
+    isl4 = db[IndexLike]['isl4'].column.index
+    
+    for idx in range(1, element_count):
+        ne_record = linecache.getline(str(ne_path), idx)
+        data = ne_record.split(',')
+        indices_array = np.array([int(v) for v in data[5:-4]], dtype=np.uint32)
+        
+        # Set hydro element data directly to np arrays
+        e_indices[idx] = int(data[0])
+        e_xs[idx] = float(data[-4])
+        e_ys[idx] = float(data[-3])
+        e_zs[idx] = float(data[-2])
+        e_types[idx] = int(data[-1])
+        e_lcount[idx] = int(data[1])
+        e_rcount[idx] = int(data[2])
+        e_bcount[idx] = int(data[3])
+        e_tcount[idx] = int(data[4])
+        
+        # Set side indices
+        si_offset = idx * 10
+        l_count = e_lcount[idx]
+        r_count = e_rcount[idx]
+        b_count = e_bcount[idx]
+        t_count = e_tcount[idx]
+        isl1[si_offset:si_offset + l_count] = indices_array[0:l_count]
+        isl2[si_offset:si_offset + r_count] = indices_array[l_count:l_count + r_count]
+        isl3[si_offset:si_offset + b_count] = indices_array[l_count + r_count:l_count + r_count + b_count]
+        isl4[si_offset:si_offset + t_count] = indices_array[l_count + r_count + b_count:l_count + r_count + b_count + t_count]
+    
+    # Save to file and remove shared database
+    fdb_path = Path(fdb_fn)
+    fdb_path.parent.mkdir(parents=True, exist_ok=True)
+    db.save(str(fdb_path))
+
 def create_ne_fdb_parallel(ne_fn: str, fdb_fn: str):
     """Create NE FDB from NE file in parallel"""
     shared_name = 'shared_ne'
@@ -109,22 +176,23 @@ def create_ne_fdb_parallel(ne_fn: str, fdb_fn: str):
         fdb.TableDefn(Ne, element_count)
     ])
     
-    db.share(shared_name, close_after=False)
+    # db.share(shared_name, close_after=False)
     
-    # Add actual hydro elements in parallel
-    batch_size = 50000
-    batch_args = [i for i in range(1, element_count, batch_size)]
-    batch_func = partial(
-        _batch_ne_worker,
-        ne_count=element_count,
-        fdb_fn=shared_name,
-        batch_size=batch_size,
-        ne_file=ne_fn
-    )
+    # # Add actual hydro elements in parallel
+    # batch_size = 50000000
+    # batch_args = [i for i in range(1, element_count, batch_size)]
+    # batch_func = partial(
+    #     _batch_ne_worker,
+    #     ne_count=element_count,
+    #     fdb_fn=shared_name,
+    #     batch_size=batch_size,
+    #     ne_file=ne_fn
+    # )
     
-    num_processes = min(mp.cpu_count(), len(batch_args))
-    with mp.Pool(processes=num_processes) as pool:
-        pool.map(batch_func, batch_args)
+    # # num_procs = min(mp.cpu_count(), len(batch_args))
+    # num_procs = 1
+    # with mp.Pool(processes=num_procs) as pool:
+    #     pool.map(batch_func, batch_args)
     
     # Save to file and remove shared database
     fdb_path = Path(fdb_fn)
@@ -280,7 +348,7 @@ def create_ns_fdb_parallel(ns_fn: str, fdb_fn: str):
     db.share(shared_name, close_after=False)
     
     # Add actual sides in parallel
-    batch_size = 50000
+    batch_size = 50000000
     batch_args = [i for i in range(1, side_count, batch_size)]
     batch_func = partial(
         _batch_ns_worker,
@@ -291,6 +359,7 @@ def create_ns_fdb_parallel(ns_fn: str, fdb_fn: str):
     )
     
     num_procs = min(mp.cpu_count(), len(batch_args))
+    num_procs = 1
     with mp.Pool(processes=num_procs) as pool:
         pool.map(batch_func, batch_args)
         
@@ -328,7 +397,8 @@ def create_tide_fdb_parallel(t_fn: str, fdb_fn: str):
         t_fn=str(tide_path)
     )
     
-    num_procs = min(mp.cpu_count(), len(batch_args))
+    # num_procs = min(mp.cpu_count(), len(batch_args))
+    num_procs = 1
     with mp.Pool(processes=num_procs) as pool:
         pool.map(batch_func, batch_args)
     
@@ -686,23 +756,27 @@ def _create_worker(cfg: InputConfig, idx: int):
         create_rainfall_fdb_parallel(cfg.rain, cfg.rain_fdb)
 
 def build_fdbs(cfg: InputConfig):
-    try:
-        # Generate filtered temporary NE/NS files
-        _filter_ne_ns(cfg.ne, cfg.ns, cfg.tmp_ne, cfg.tmp_ns)
+    
+    # _filter_ne_ns(cfg.ne, cfg.ns, cfg.tmp_ne, cfg.tmp_ns)
+    create_ne_fdb(cfg.tmp_ne, cfg.ne_fdb)
+    create_ns_fdb_parallel(cfg.tmp_ns, cfg.ns_fdb)
+    # try:
+    #     # Generate filtered temporary NE/NS files
+    #     _filter_ne_ns(cfg.ne, cfg.ns, cfg.tmp_ne, cfg.tmp_ns)
         
-        # Create FDBs in parallel
-        processes = []
-        for i in range(5):
-            p = mp.Process(target=_create_worker, args=(cfg, i))
-            p.start()
-            processes.append(p)
+    #     # Create FDBs in parallel
+    #     processes = []
+    #     for i in range(5):
+    #         p = mp.Process(target=_create_worker, args=(cfg, i))
+    #         p.start()
+    #         processes.append(p)
         
-        for p in processes:
-            p.join()
-    finally:
-        # Cleanup temporary files
-        if Path(cfg.tmp_ne).exists(): os.remove(cfg.tmp_ne)
-        if Path(cfg.tmp_ns).exists(): os.remove(cfg.tmp_ns)
+    #     for p in processes:
+    #         p.join()
+    # finally:
+    #     # Cleanup temporary files
+    #     if Path(cfg.tmp_ne).exists(): os.remove(cfg.tmp_ne)
+    #     if Path(cfg.tmp_ns).exists(): os.remove(cfg.tmp_ns)
 
 if __name__ == '__main__':
     import time

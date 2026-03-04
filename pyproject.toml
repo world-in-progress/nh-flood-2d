@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = "==3.10.17"
 dependencies = [
-    "fastdb4py>=0.1.10",
+    "fastdb4py>=0.1.11",
     "matplotlib>=3.10.8",
     "pandas>=2.3.3",
     "pydantic>=2.12.5",

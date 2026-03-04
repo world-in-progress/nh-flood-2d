@@ -127,18 +127,18 @@ wheels = [
 
 [[package]]
 name = "fastdb4py"
-version = "0.1.10"
+version = "0.1.11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1c/f9/e1e90f86930e1a2c0462850cf3c2cd41b5af1fd03bdc934fa82515d68b98/fastdb4py-0.1.10.tar.gz", hash = "sha256:7716457bb126f7fc11b40801a0e970a80acaf86afd15f7812d66031904158efb", size = 595903 }
+sdist = { url = "https://files.pythonhosted.org/packages/fd/4a/f2f420d699982a1b746e54d5a7e1a87248d662eed108e8e4d4bf944c85ba/fastdb4py-0.1.11.tar.gz", hash = "sha256:45d5cfdf085d272caac9b8e6ae0c1c52b4bf9b1c9f6cf5461aa074f7d7bede2b", size = 598250 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/66/8f/3fa8a4f6e8994c39b04148d32cba662b538c815d37a6124c189920bbd282/fastdb4py-0.1.10-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:f9c332a6055f593853dfbf6453b0151edb25fc92965fc80969b7548c44abfc9f", size = 526875 },
-    { url = "https://files.pythonhosted.org/packages/38/96/2872d548db860629c7bae85a6dde5d6e492a812815f7891c7b230b6f8e8c/fastdb4py-0.1.10-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:b2df87af616eb91000866a15c05d5e69f2d117bb44b0a374cac4f76e8f27f016", size = 473272 },
-    { url = "https://files.pythonhosted.org/packages/c5/2c/d01015629b2aa5b8d6694d7b5baac039cf842039f88e836a40897bb3c0d3/fastdb4py-0.1.10-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:fc4719038dd816eb6b02939a3ad732dd0ab2b24c98b9d7b77ecd48dd2c56bfd6", size = 576317 },
-    { url = "https://files.pythonhosted.org/packages/4f/aa/ae27e0293ba9d027164275099d8a0dade3ebfba373c3dc5352c2b6a3196c/fastdb4py-0.1.10-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:e81a92be5310f1fb9b8f5e9884b05f3824134bbaba98fb6fae1f82d90b39d6e5", size = 605429 },
-    { url = "https://files.pythonhosted.org/packages/3d/62/249da88aa5d6314ba22864dd0d208515c537ba828f3b4d43e40577a77ade/fastdb4py-0.1.10-cp310-cp310-win_amd64.whl", hash = "sha256:59ea88503a81ad92693677cf8707350e40e7a84c7cc45f84289e7c60fcc7558a", size = 182014 },
+    { url = "https://files.pythonhosted.org/packages/e8/cc/30d3726dcf8c2d90883bd78c059c88d98b074adad5cff1519cdcb4741009/fastdb4py-0.1.11-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:7b0101ddaa48067d887acde2f7b59bb2cb5ff4423094037f6f66abe7a9e12b14", size = 528281 },
+    { url = "https://files.pythonhosted.org/packages/a7/d5/e5678a33ffaab5a3886267a69a908dd31010aac0c170f863156117200175/fastdb4py-0.1.11-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:e384836e03486f7c26510481dcafdd4252fffbc3249c0d0fb2839c7f6559061e", size = 474615 },
+    { url = "https://files.pythonhosted.org/packages/d9/4d/d9f388f66bf63e9ddeef538fffa4f5644cadceed8c8afd71aed9a4b91773/fastdb4py-0.1.11-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:f7d72a3baf003d3873775560a1f4604327fd38bde74e1aa7e94e1b3463597582", size = 577556 },
+    { url = "https://files.pythonhosted.org/packages/05/e6/0d3fca47bcbc3c782e93ce062f8679e7c28392034a78de46a4a8ef2ecbde/fastdb4py-0.1.11-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4319853ad886822c5cb7bbd488ae437a967294672d203c6746485d8b839258f8", size = 606729 },
+    { url = "https://files.pythonhosted.org/packages/af/e7/b8180d825dd21645ce1eed6afdb7738d62dfc3ef4a32871dc85a68ade940/fastdb4py-0.1.11-cp310-cp310-win_amd64.whl", hash = "sha256:a666450b9a175610b38f833cbce56e089e66e9ef8741ed5874b51b21597d3dd6", size = 183442 },
 ]
 
 [[package]]
@@ -248,7 +248,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fastdb4py", specifier = ">=0.1.10" },
+    { name = "fastdb4py", specifier = ">=0.1.11" },
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "pydantic", specifier = ">=2.12.5" },

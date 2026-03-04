@@ -125,7 +125,7 @@ def draw_hydrograph(cfg: InputConfig, station_name: str, clampped: bool = True, 
     )
     plt.plot(
         sim_df['datetime'], sim_df['depth'],
-        label='Simulated Water Level (m)', linewidth=2, linestyle='--'
+        label='Simulated Water Level (m)', linewidth=2
     )
     
     plt.title(f'Hydrograph at Station {station_name}', fontsize=16)
