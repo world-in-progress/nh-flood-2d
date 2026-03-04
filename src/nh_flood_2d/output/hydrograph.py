@@ -25,17 +25,18 @@ def _find_ei(ne_fdb_path: str, ns_fdb_path: str, x: float, y: float) -> int:
     eys = copy_to_taichi(nes.column.y, ti.f32, None)
     sxs = copy_to_taichi(nss.column.x, ti.f32, None)
     sys = copy_to_taichi(nss.column.y, ti.f32, None)
-    isl1 = copy_to_taichi(ne_fdb[IndexLike]['isl1'].column.index, ti.i32, [e_num, 10])
-    isl3 = copy_to_taichi(ne_fdb[IndexLike]['isl3'].column.index, ti.i32, [e_num, 10])
-    
+    isl_data  = copy_to_taichi(ne_fdb[IndexLike]['isl_data'].column.index,  ti.i32, None)
+    isl_ptr_l = copy_to_taichi(ne_fdb[IndexLike]['isl_ptr_l'].column.index, ti.i32, None)
+    isl_ptr_b = copy_to_taichi(ne_fdb[IndexLike]['isl_ptr_b'].column.index, ti.i32, None)
+
     the_ei = ti.field(ti.i32, shape=())
     the_ei[None] = -1
-    
+
     @ti.kernel
     def get_ei():
         for ei in range(1, e_num):
-            lsi0 = isl1[ei, 0]
-            lsi2 = isl3[ei, 0]
+            lsi0 = isl_data[isl_ptr_l[ei]]   # first left side
+            lsi2 = isl_data[isl_ptr_b[ei]]   # first bottom side
             slh = ti.floor(exs[ei] - sxs[lsi0] + 0.5) * 2.0
             slv = ti.floor(eys[ei] - sys[lsi2] + 0.5) * 2.0
             

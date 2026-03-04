@@ -156,6 +156,99 @@ def create_ne_fdb(ne_fn: str, fdb_fn: str):
     fdb_path.parent.mkdir(parents=True, exist_ok=True)
     db.save(str(fdb_path))
 
+def create_ne_fdb_compact(ne_fn: str, fdb_fn: str):
+    """Create NE FDB using a compact (CSR-like) side-index layout.
+
+    The original layout allocates 4 fixed arrays of size (e_num × 10) for side
+    indices, wasting ~9x memory on typical Cartesian grids where most elements
+    have only 1 side per direction.
+
+    Compact layout:
+      - ``isl_data``  : flat array of every side index, all elements concatenated
+                        [l-sides of e1, r-sides of e1, b-sides of e1, t-sides of e1,
+                         l-sides of e2, ...]
+      - ``isl_ptr_l`` : isl_ptr_l[ei] = index in isl_data where element ei's l-sides begin
+      - ``isl_ptr_r`` : isl_ptr_r[ei] = index in isl_data where element ei's r-sides begin
+      - ``isl_ptr_b`` : isl_ptr_b[ei] = index in isl_data where element ei's b-sides begin
+      - ``isl_ptr_t`` : isl_ptr_t[ei] = index in isl_data where element ei's t-sides begin
+
+    Memory: (total_actual_sides + 4 × e_num) × 4 bytes vs 160 × e_num bytes (old).
+    """
+    ne_path = Path(ne_fn)
+    if not ne_path.exists():
+        raise FileNotFoundError(f'NE file not found: {ne_path}')
+
+    with open(ne_path, 'r', encoding='utf-8') as f:
+        ne_lines = f.readlines()
+
+    element_count = len(ne_lines) + 1  # +1 for virtual element 0
+
+    # Count total side indices for pre-allocation
+    total_sides = 0
+    for line in ne_lines:
+        data = line.split(',')
+        total_sides += int(data[1]) + int(data[2]) + int(data[3]) + int(data[4])
+
+    db = fdb.ORM.truncate([
+        fdb.TableDefn(IndexLike, total_sides,   'isl_data'),
+        fdb.TableDefn(IndexLike, element_count, 'isl_ptr_l'),
+        fdb.TableDefn(IndexLike, element_count, 'isl_ptr_r'),
+        fdb.TableDefn(IndexLike, element_count, 'isl_ptr_b'),
+        fdb.TableDefn(IndexLike, element_count, 'isl_ptr_t'),
+        fdb.TableDefn(Ne, element_count)
+    ])
+
+    nes       = db[Ne][Ne]
+    e_xs      = nes.column.x
+    e_ys      = nes.column.y
+    e_zs      = nes.column.z
+    e_types   = nes.column.type
+    e_indices = nes.column.index
+    e_lcount  = nes.column.l_side_num
+    e_rcount  = nes.column.r_side_num
+    e_bcount  = nes.column.b_side_num
+    e_tcount  = nes.column.t_side_num
+
+    isl_data  = db[IndexLike]['isl_data'].column.index
+    isl_ptr_l = db[IndexLike]['isl_ptr_l'].column.index
+    isl_ptr_r = db[IndexLike]['isl_ptr_r'].column.index
+    isl_ptr_b = db[IndexLike]['isl_ptr_b'].column.index
+    isl_ptr_t = db[IndexLike]['isl_ptr_t'].column.index
+
+    data_offset = 0
+    for idx, line in enumerate(ne_lines, start=1):
+        data    = line.split(',')
+        l_count = int(data[1])
+        r_count = int(data[2])
+        b_count = int(data[3])
+        t_count = int(data[4])
+        total   = l_count + r_count + b_count + t_count
+
+        indices_array = np.array([int(v) for v in data[5:5 + total]], dtype=np.uint32)
+
+        e_indices[idx] = int(data[0])
+        e_xs[idx]      = float(data[-4])
+        e_ys[idx]      = float(data[-3])
+        e_zs[idx]      = float(data[-2])
+        e_types[idx]   = int(data[-1])
+        e_lcount[idx]  = l_count
+        e_rcount[idx]  = r_count
+        e_bcount[idx]  = b_count
+        e_tcount[idx]  = t_count
+
+        isl_data[data_offset:data_offset + total] = indices_array
+
+        isl_ptr_l[idx] = data_offset
+        isl_ptr_r[idx] = data_offset + l_count
+        isl_ptr_b[idx] = data_offset + l_count + r_count
+        isl_ptr_t[idx] = data_offset + l_count + r_count + b_count
+
+        data_offset += total
+
+    fdb_path = Path(fdb_fn)
+    fdb_path.parent.mkdir(parents=True, exist_ok=True)
+    db.save(str(fdb_path))
+
 def create_ne_fdb_parallel(ne_fn: str, fdb_fn: str):
     """Create NE FDB from NE file in parallel"""
     shared_name = 'shared_ne'
@@ -176,23 +269,23 @@ def create_ne_fdb_parallel(ne_fn: str, fdb_fn: str):
         fdb.TableDefn(Ne, element_count)
     ])
     
-    # db.share(shared_name, close_after=False)
+    db.share(shared_name, close_after=False)
     
-    # # Add actual hydro elements in parallel
-    # batch_size = 50000000
-    # batch_args = [i for i in range(1, element_count, batch_size)]
-    # batch_func = partial(
-    #     _batch_ne_worker,
-    #     ne_count=element_count,
-    #     fdb_fn=shared_name,
-    #     batch_size=batch_size,
-    #     ne_file=ne_fn
-    # )
+    # Add actual hydro elements in parallel
+    batch_size = 50000
+    batch_args = [i for i in range(1, element_count, batch_size)]
+    batch_func = partial(
+        _batch_ne_worker,
+        ne_count=element_count,
+        fdb_fn=shared_name,
+        batch_size=batch_size,
+        ne_file=ne_fn
+    )
     
-    # # num_procs = min(mp.cpu_count(), len(batch_args))
-    # num_procs = 1
-    # with mp.Pool(processes=num_procs) as pool:
-    #     pool.map(batch_func, batch_args)
+    # num_procs = min(mp.cpu_count(), len(batch_args))
+    num_procs = 1
+    with mp.Pool(processes=num_procs) as pool:
+        pool.map(batch_func, batch_args)
     
     # Save to file and remove shared database
     fdb_path = Path(fdb_fn)
@@ -747,7 +840,7 @@ def _create_worker(cfg: InputConfig, idx: int):
     if idx == 0:
         create_gate_fdb(cfg.gate, cfg.gate_fdb)
     elif idx == 1:
-        create_ne_fdb_parallel(cfg.tmp_ne, cfg.ne_fdb)
+        create_ne_fdb_compact(cfg.tmp_ne, cfg.ne_fdb)
     elif idx == 2:
         create_ns_fdb_parallel(cfg.tmp_ns, cfg.ns_fdb)
     elif idx == 3:
@@ -758,7 +851,7 @@ def _create_worker(cfg: InputConfig, idx: int):
 def build_fdbs(cfg: InputConfig):
     
     # _filter_ne_ns(cfg.ne, cfg.ns, cfg.tmp_ne, cfg.tmp_ns)
-    create_ne_fdb(cfg.tmp_ne, cfg.ne_fdb)
+    # create_ne_fdb_compact(cfg.tmp_ne, cfg.ne_fdb)
     create_ns_fdb_parallel(cfg.tmp_ns, cfg.ns_fdb)
     # try:
     #     # Generate filtered temporary NE/NS files
