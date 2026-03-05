@@ -3,11 +3,11 @@ import taichi as ti
 import fastdb4py as fdb
 from pathlib import Path
 
-from ..input import InputConfig
+from ..input import DomainConfig
 from ..util.ti import init_taichi, copy_to_taichi
 from ..schema.feature import IndexLike, Ne, SideTopoInfo, Ns, U8Value
 
-def build_boundary_fdb(cfg: InputConfig):
+def build_boundary_fdb(cfg: DomainConfig):
     """Create boundary hydro element FDB from NE FDB and NS FDB"""
     ne_fdb_fn: str = cfg.ne_fdb
     ns_fdb_fn: str = cfg.ns_fdb

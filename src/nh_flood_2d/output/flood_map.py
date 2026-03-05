@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import no_type_check
 from rasterio.transform import from_origin
 
-from ..input import InputConfig
+from ..input import DomainConfig
 from ..util import init_taichi, copy_to_taichi
 from ..schema.feature import Ne, UVH, Ns, IndexLike
     
@@ -86,7 +86,7 @@ def get_area_meta(ne_fdb_fn: str, ns_fdb_fn: str):
     compute_meta()
     return bbox.to_numpy(), (vr.to_numpy(), hr.to_numpy()), hws.to_numpy()[1:], hhs.to_numpy()[1:]  # skip virtual element 0
 
-def generate_flood_map(cfg: InputConfig):
+def generate_flood_map(cfg: DomainConfig):
     """
     Generate a GeoTIFF flood map from UVH calculation results.
     """

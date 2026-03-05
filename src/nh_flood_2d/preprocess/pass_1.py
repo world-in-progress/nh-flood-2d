@@ -7,7 +7,7 @@ import multiprocessing as mp
 from datetime import datetime
 from functools import partial
 
-from ..input import InputConfig
+from ..input import DomainConfig
 from ..schema.feature import Tide, Rainfall, IndexLike, SideTopoInfo, Ne, Ns, Node, Gate
 
 def create_node_fdb(inp_fn: str, fdb_fn: str):
@@ -836,7 +836,7 @@ def _check_rainfall_fdb(r_fn: str, fdb_fn: str):
     
     print('FDB rainfall data verification passed.')
 
-def _create_worker(cfg: InputConfig, idx: int):
+def _create_worker(cfg: DomainConfig, idx: int):
     if idx == 0:
         create_gate_fdb(cfg.gate, cfg.gate_fdb)
     elif idx == 1:
@@ -848,7 +848,7 @@ def _create_worker(cfg: InputConfig, idx: int):
     elif idx == 4:
         create_rainfall_fdb_parallel(cfg.rain, cfg.rain_fdb)
 
-def build_fdbs(cfg: InputConfig):
+def build_fdbs(cfg: DomainConfig):
     
     # _filter_ne_ns(cfg.ne, cfg.ns, cfg.tmp_ne, cfg.tmp_ns)
     # create_ne_fdb_compact(cfg.tmp_ne, cfg.ne_fdb)

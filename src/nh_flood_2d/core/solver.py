@@ -7,12 +7,12 @@ from datetime import datetime
 from typing import no_type_check
 
 from ..util import benchmark
-from ..input import InputConfig
+from ..input import DomainConfig
 from ..util.ti import init_taichi, copy_to_taichi
 from ..schema.feature import Ne, Ns, IndexLike, SideTopoInfo, Rainfall, Tide, Gate, U8Value, UVH
 
 @benchmark(applied=True)
-def solver(cfg: InputConfig, start_time_step: int = 0):
+def solver(cfg: DomainConfig, start_time_step: int = 0):
     init_taichi(use_gpu=True, profiler=True)
     
     # Check fdbs

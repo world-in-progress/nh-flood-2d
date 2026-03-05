@@ -5,7 +5,7 @@ import fastdb4py as fdb
 from pathlib import Path
 from typing import no_type_check, Iterator
 
-from ..input import InputConfig
+from ..input import DomainConfig
 from ..util.ti import init_taichi, copy_to_taichi
 from ..schema.feature import Ne, Ns, IndexLike, SideTopoInfo, Rainfall, Tide, Gate, U8Value, UVH
 
@@ -18,7 +18,7 @@ def horton_decay(initial: float, final: float, k: float, t: float) -> float:
 
 @ti.data_oriented
 class Domain:
-    def __init__(self, cfg: InputConfig, start_time_step: int = 0):
+    def __init__(self, cfg: DomainConfig, start_time_step: int = 0):
         self.cfg = cfg
         self.start_time_step = start_time_step
         

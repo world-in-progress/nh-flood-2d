@@ -1,15 +1,17 @@
 from src.nh_flood_2d.core.solver_compact import solver
 from src.nh_flood_2d.preprocess import preprocess
-from src.nh_flood_2d.input import load_input_config
+from src.nh_flood_2d.input import load_input_config, DomainConfig
 from src.nh_flood_2d.output.flood_map import generate_flood_map
-from src.nh_flood_2d.output.hydrograph import draw_hydrograph
+from src.nh_flood_2d.output.hydrograph import draw_hydrograph, compare_hydrograph
+
+domain_4 = load_input_config('./resource/domain_4.json')
+domain_mrgc = load_input_config('./resource/domain_mrgc.json')
+
+def evolve_domain(cfg: DomainConfig):
+    preprocess(cfg)
+    solver(cfg)
+    generate_flood_map(cfg)
 
 if __name__ == '__main__':
-    config = load_input_config('./resource/config.json')
-    
-    # preprocess(config)
-    solver(config)
-    # # generate_flood_map(config)
-    
-    stations = ['R22', 'D73', 'D74', 'D82']
-    draw_hydrograph(config, stations[0], True)
+    mses = compare_hydrograph([domain_4, domain_mrgc], 'R22', forward_ignore_second=3600 * 4)
+    print(f'RMSEs: {mses}')
