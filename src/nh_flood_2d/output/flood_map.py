@@ -24,7 +24,8 @@ def compute_depth(h: ti.template(), z: ti.template(), depth: ti.template()):
     Water depth = max(h - z, 0)
     """
     for i in h:
-        depth[i] = ti.max(h[i] - z[i], 0.0)
+        # depth[i] = ti.max(h[i] - z[i], 0.0)
+        depth[i] = z[i]
 
 def get_area_meta(ne_fdb_fn: str, ns_fdb_fn: str):
     """
@@ -44,8 +45,9 @@ def get_area_meta(ne_fdb_fn: str, ns_fdb_fn: str):
     eys = copy_to_taichi(nes.column.y, ti.f32, None)
     sxs = copy_to_taichi(nss.column.x, ti.f32, None)
     sys = copy_to_taichi(nss.column.y, ti.f32, None)
-    isl1 = copy_to_taichi(ne_fdb[IndexLike]['isl1'].column.index, ti.i32, [e_cnt, 10])
-    isl3 = copy_to_taichi(ne_fdb[IndexLike]['isl3'].column.index, ti.i32, [e_cnt, 10])
+    isl_data  = copy_to_taichi(ne_fdb[IndexLike]['isl_data'].column.index,  ti.i32, None)
+    isl_ptr_l = copy_to_taichi(ne_fdb[IndexLike]['isl_ptr_l'].column.index, ti.i32, None)
+    isl_ptr_b = copy_to_taichi(ne_fdb[IndexLike]['isl_ptr_b'].column.index, ti.i32, None)
     
     vr = ti.field(dtype=ti.f32, shape=())           # vertical resolution of cell in finest level
     hr = ti.field(dtype=ti.f32, shape=())           # horizontal resolution of cell in finest level
@@ -60,8 +62,8 @@ def get_area_meta(ne_fdb_fn: str, ns_fdb_fn: str):
         vr[None] = hr[None] = 99999999.0
         
         for ei in range(1, ti.i32(e_cnt)):
-            lsi0 = isl1[ei, 0]
-            lsi2 = isl3[ei, 0]
+            lsi0 = isl_data[isl_ptr_l[ei]]   # first left side
+            lsi2 = isl_data[isl_ptr_b[ei]]   # first bottom side
             hw = ti.floor(exs[ei] - sxs[lsi0] + 0.5)
             hh = ti.floor(eys[ei] - sys[lsi2] + 0.5)
             

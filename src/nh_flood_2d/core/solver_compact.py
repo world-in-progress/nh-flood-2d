@@ -8,25 +8,108 @@ from datetime import datetime
 from typing import no_type_check
 
 from ..util import benchmark
-from ..input import DomainConfig
+from ..output.hydrograph import _find_ei
+from ..input import DomainConfig, ForceConfig
 from ..util.ti import init_taichi, copy_to_taichi
 from ..schema.feature import Ne, Ns, IndexLike, SideTopoInfo, Rainfall, Tide, Gate, U8Value, UVH
 
+def set_elevation(domain_cfg, elevate_meter: float):
+    """
+    Set the z data of element to a specified elevation (elevate_meter) if it is below that elevation.
+    """
+    pt_file = Path.cwd() / Path('./resource/elevate/123.txt')
+    # Read xs and ys in pt_file as numpy
+    if not pt_file.exists():
+        raise FileNotFoundError(f'Elevate point file not found: {pt_file}')
+    pts = np.loadtxt(str(pt_file), delimiter=',', dtype=np.float32)
+    if pts.ndim == 1:
+        pts = pts.reshape(1, 2)
+
+    # Load ne.fdb and update z values based on the elevation points
+    ne_fdb_fn = Path(domain_cfg.ne_fdb)
+    ns_fdb_fn = Path(domain_cfg.ns_fdb) # use ns to calculate the bbox of ne
+    ne_fdb = fdb.ORM.load(str(ne_fdb_fn), from_file=True)
+    ns_fdb = fdb.ORM.load(str(ns_fdb_fn), from_file=True)
+
+    nes = ne_fdb[Ne][Ne]
+    nss = ns_fdb[Ns][Ns]
+
+    # Lengths and counts
+    e_num = len(nes)                                                # number of hydro elements
+    p_num = len(pts)                                                # number of elevation points
+
+    init_taichi(use_gpu=True, profiler=False)
+
+    # Coordinate fields
+    ex_t = copy_to_taichi(nes.column.x,  ti.f32, None)
+    ey_t = copy_to_taichi(nes.column.y,  ti.f32, None)
+    sx_t = copy_to_taichi(nss.column.x,  ti.f32, None)
+    sy_t = copy_to_taichi(nss.column.y,  ti.f32, None)
+
+    # Compact side-index fields for bounding-box calculation
+    isl_data_t  = copy_to_taichi(ne_fdb[IndexLike]['isl_data'].column.index,  ti.i32, None)
+    isl_ptr_l_t = copy_to_taichi(ne_fdb[IndexLike]['isl_ptr_l'].column.index, ti.i32, None)
+    isl_ptr_b_t = copy_to_taichi(ne_fdb[IndexLike]['isl_ptr_b'].column.index, ti.i32, None)
+
+    # Points field and result flag field
+    pts_t          = copy_to_taichi(pts, ti.f32, (p_num, 2))
+    needs_elevate_t = ti.field(dtype=ti.i32, shape=e_num)
+
+    @ti.kernel
+    @no_type_check
+    def find_elements_to_elevate():
+        for ei in range(1, e_num):
+            # Determine bounding box from leftmost and bottommost side positions
+            lsi = isl_data_t[isl_ptr_l_t[ei]]
+            bsi = isl_data_t[isl_ptr_b_t[ei]]
+            
+            half_width = ex_t[ei] - sx_t[lsi]
+            half_height = ey_t[ei] - sy_t[bsi]
+            
+            x_min = ex_t[ei] - half_width
+            x_max = ex_t[ei] + half_width
+            y_min = ey_t[ei] - half_height
+            y_max = ey_t[ei] + half_height
+            for pi in range(p_num):
+                px = pts_t[pi, 0]
+                py = pts_t[pi, 1]
+                if x_min <= px <= x_max and y_min <= py <= y_max:
+                    needs_elevate_t[ei] = 1
+                    break
+
+    find_elements_to_elevate()
+    
+    # Check if ei 354070 in picked elements
+    if needs_elevate_t[354070] == 1:
+        print(f'Element 354070 needs elevation. Its center is at ({ex_t[354070]}, {ey_t[354070]}), z = {nes.column.z[354070]}')
+    else:
+        print('OK!')
+
+    # Update z values where a point fell inside the element bbox and current z is below the target
+    flags = needs_elevate_t.to_numpy()
+    z_arr = nes.column.z
+    mask = (flags > 0) & (z_arr < elevate_meter)
+    z_arr[mask] = elevate_meter
+    print(f'set_elevation: {mask.sum()} elements elevated to {elevate_meter} m')
+
+    # Save updated ne.fdb back to disk
+    ne_fdb.save(str(ne_fdb_fn))
+    print(f'set_elevation: ne.fdb saved to {ne_fdb_fn}')
+
 @benchmark(applied=True)
-def solver(cfg: DomainConfig, start_time_step: int = 0):
+def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: int = 0):
     init_taichi(use_gpu=True, profiler=True)
+    
+    inflow_ei = _find_ei(domain_cfg.ne_fdb, domain_cfg.ns_fdb, 827040.3, 843912.8)
+    set_elevation(domain_cfg, elevate_meter=3.0)
 
     # Check fdbs
-    ne_fdb_fn = Path(cfg.ne_fdb)
-    ns_fdb_fn = Path(cfg.ns_fdb)
-    rain_fdb_fn = Path(cfg.rain_fdb)
-    tide_fdb_fn = Path(cfg.tide_fdb)
-    gate_fdb_fn = Path(cfg.gate_fdb)
-    boundary_fdb_fn = Path(cfg.boundary_fdb)
-    if not (ne_fdb_fn.exists() and ns_fdb_fn.exists() and
-            rain_fdb_fn.exists() and tide_fdb_fn.exists() and
-            gate_fdb_fn.exists() and boundary_fdb_fn.exists()):
-        raise FileNotFoundError('One or more required FDB files are missing.')
+    ne_fdb_fn = Path(domain_cfg.ne_fdb)
+    ns_fdb_fn = Path(domain_cfg.ns_fdb)
+    rain_fdb_fn = Path(force_cfg.rain_fdb)
+    tide_fdb_fn = Path(force_cfg.tide_fdb)
+    gate_fdb_fn = Path(force_cfg.gate_fdb)
+    boundary_fdb_fn = Path(domain_cfg.boundary_fdb)
 
     # Load fdbs
     ne_fdb = fdb.ORM.load(str(ne_fdb_fn), from_file=True)
@@ -64,9 +147,9 @@ def solver(cfg: DomainConfig, start_time_step: int = 0):
     n = 0.033                                                       # Manning's roughness coefficient
     g = 9.81                                                        # gravitational acceleration (m/s²)
     pi = 3.141592653589793                                          # value of pi
-    afa = cfg.afa                                                   # Courant number (CFL condition)
-    sita = cfg.sita                                                 # time weighting factor
-    min_h = cfg.min_h                                               # minimum water depth (m)
+    afa = domain_cfg.afa                                            # Courant number (CFL condition)
+    sita = domain_cfg.sita                                          # time weighting factor
+    min_h = domain_cfg.min_h                                        # minimum water depth (m)
 
     # Taichi fields about hydro elements
     esl_t = ti.field(dtype=ti.f32, shape=e_num)                     # side length of each hydro element
@@ -244,12 +327,17 @@ def solver(cfg: DomainConfig, start_time_step: int = 0):
 
         # Tick elements
         for ei in range(1, e_num):
+            # If is inflow element, add source/sink quantity to ssq_t
+            q_source = 0.0
+            if ei == inflow_ei:
+                q_source = rainq * 1000 * 300    # inflow quantity (m³/s)
+                
             # Calculate flow quantities
             ql = enq_t[ei, 0]
             qr = enq_t[ei, 1]
             qb = enq_t[ei, 2]
             qt = enq_t[ei, 3]
-            tq = ql - qr + qb - qt + ssq_t[ei]                                  # total inflow quantity
+            tq = ql - qr + qb - qt + ssq_t[ei] + q_source                       # total inflow quantity
             eq_t[ei, 0], eq_t[ei, 1], eq_t[ei, 2], eq_t[ei, 3] = ql, qr, qb, qt # update current side flow quantities
             enq_t[ei, 0] = enq_t[ei, 1] = enq_t[ei, 2] = enq_t[ei, 3] = 0.0     # reset next time step side flow quantities
 
@@ -310,13 +398,13 @@ def solver(cfg: DomainConfig, start_time_step: int = 0):
     # Prepare for output
     last_output_time = current_time
     evolve_start_time = current_time
-    output_uvh_fn = Path(cfg.uvh_dir)
+    output_uvh_fn = Path(domain_cfg.uvh_dir)
     if output_uvh_fn.exists():
         shutil.rmtree(output_uvh_fn)
     output_uvh_fn.mkdir(parents=True, exist_ok=True)
 
     # Main simulation loop
-    while cfg.duration == -1 or current_time - evolve_start_time < cfg.duration:
+    while domain_cfg.duration == -1 or current_time - evolve_start_time < domain_cfg.duration:
         # Update tide by linear interpolation
         if current_time >= tts[current_tide_idx + 1]:
             if current_tide_idx + 2 >= t_num:
@@ -341,8 +429,8 @@ def solver(cfg: DomainConfig, start_time_step: int = 0):
         current_time += dt
 
         # Output cumulative time at each yield step
-        if current_time - last_output_time >= cfg.yield_step:
-            last_output_time += cfg.yield_step
+        if current_time - last_output_time >= domain_cfg.yield_step:
+            last_output_time += domain_cfg.yield_step
             cumulative_time = current_time - simulation_begin_time
             print(f'Cumulative simulation time: {cumulative_time} seconds, current dt: {dt} seconds')
 

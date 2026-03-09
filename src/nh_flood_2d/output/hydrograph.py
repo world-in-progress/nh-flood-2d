@@ -49,6 +49,7 @@ def _find_ei(ne_fdb_path: str, ns_fdb_path: str, x: float, y: float) -> int:
                 the_ei[None] = ei
     
     get_ei()
+    # print(f'Found hydro element index {the_ei[None]} containing point ({x}, {y})')
     return the_ei[None]
 
 def _extract_data(cfg: DomainConfig, station_name: str):
@@ -96,7 +97,7 @@ def draw_hydrograph(cfg: DomainConfig, station_name: str, clampped: bool = True,
             dayfirst=True
         )
         df['Waterlevel'] = pd.to_numeric(df['Waterlevel(mPD)'], errors='coerce')
-        obs_df = df[['datetime', 'Waterlevel']].copy()
+        obs_df = df[['datetime', 'Waterlevel']].dropna(subset=['Waterlevel']).copy()
         obs_df.sort_values('datetime', inplace=True)
     
     # Extract and load simulation data
@@ -141,7 +142,8 @@ def compare_hydrograph(
     clampped: bool = True, 
     translation_second: int = 0, forward_ignore_second: int = 0,
     show_obs: bool = True,
-    baseline: DomainConfig | None = None
+    baseline: DomainConfig | None = None,
+    show: bool = True
 ) -> list[float]:
     # Validate that all configs reference the same observation file
     existing_obs_paths = [
@@ -167,7 +169,7 @@ def compare_hydrograph(
                 dayfirst=True
             )
             df['Waterlevel'] = pd.to_numeric(df['Waterlevel(mPD)'], errors='coerce')
-            obs_df = df[['datetime', 'Waterlevel']].copy()
+            obs_df = df[['datetime', 'Waterlevel']].dropna(subset=['Waterlevel']).copy()
             obs_df.sort_values('datetime', inplace=True)
 
     # Extract and load simulation data for each config
@@ -215,12 +217,14 @@ def compare_hydrograph(
             label=f'Simulated Water Level (m) [{label}]', linewidth=2
         )
 
-    plt.title(f'Hydrograph Comparison at Station {station_name}', fontsize=16)
-    plt.xlabel('Time', fontsize=14)
-    plt.ylabel('Water Level (m)', fontsize=14)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    if show:
+        plt.title(f'Hydrograph Comparison at Station {station_name}', fontsize=16)
+        plt.xlabel('Time', fontsize=14)
+        plt.ylabel('Water Level (m)', fontsize=14)
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+    
     # Compute RMSE values against the baseline series using linear interpolation on time
     if baseline is not None:
         # Use the specified baseline config's simulation data as reference

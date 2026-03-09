@@ -1,6 +1,7 @@
-from .pass_1 import build_fdbs
-from .pass_2 import build_boundary_fdb
+from .force import prepare_force
+from .domain import prepare_domain
+from ..input import ForceConfig, DomainConfig
 
-def preprocess(cfg):
-    build_fdbs(cfg)
-    build_boundary_fdb(cfg)
+def preprocess(domain_cfg: DomainConfig, force_cfg: ForceConfig):
+    prepare_force(force_cfg)
+    prepare_domain(domain_cfg)
