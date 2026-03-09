@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import no_type_check
 from rasterio.transform import from_origin
 
-from ..input import InputConfig
+from ..input import DomainConfig
 from ..util import init_taichi, copy_to_taichi
 from ..schema.feature import Ne, UVH, Ns, IndexLike
     
@@ -24,7 +24,8 @@ def compute_depth(h: ti.template(), z: ti.template(), depth: ti.template()):
     Water depth = max(h - z, 0)
     """
     for i in h:
-        depth[i] = ti.max(h[i] - z[i], 0.0)
+        # depth[i] = ti.max(h[i] - z[i], 0.0)
+        depth[i] = z[i]
 
 def get_area_meta(ne_fdb_fn: str, ns_fdb_fn: str):
     """
@@ -44,8 +45,9 @@ def get_area_meta(ne_fdb_fn: str, ns_fdb_fn: str):
     eys = copy_to_taichi(nes.column.y, ti.f32, None)
     sxs = copy_to_taichi(nss.column.x, ti.f32, None)
     sys = copy_to_taichi(nss.column.y, ti.f32, None)
-    isl1 = copy_to_taichi(ne_fdb[IndexLike]['isl1'].column.index, ti.i32, [e_cnt, 10])
-    isl3 = copy_to_taichi(ne_fdb[IndexLike]['isl3'].column.index, ti.i32, [e_cnt, 10])
+    isl_data  = copy_to_taichi(ne_fdb[IndexLike]['isl_data'].column.index,  ti.i32, None)
+    isl_ptr_l = copy_to_taichi(ne_fdb[IndexLike]['isl_ptr_l'].column.index, ti.i32, None)
+    isl_ptr_b = copy_to_taichi(ne_fdb[IndexLike]['isl_ptr_b'].column.index, ti.i32, None)
     
     vr = ti.field(dtype=ti.f32, shape=())           # vertical resolution of cell in finest level
     hr = ti.field(dtype=ti.f32, shape=())           # horizontal resolution of cell in finest level
@@ -60,8 +62,8 @@ def get_area_meta(ne_fdb_fn: str, ns_fdb_fn: str):
         vr[None] = hr[None] = 99999999.0
         
         for ei in range(1, ti.i32(e_cnt)):
-            lsi0 = isl1[ei, 0]
-            lsi2 = isl3[ei, 0]
+            lsi0 = isl_data[isl_ptr_l[ei]]   # first left side
+            lsi2 = isl_data[isl_ptr_b[ei]]   # first bottom side
             hw = ti.floor(exs[ei] - sxs[lsi0] + 0.5)
             hh = ti.floor(eys[ei] - sys[lsi2] + 0.5)
             
@@ -86,7 +88,7 @@ def get_area_meta(ne_fdb_fn: str, ns_fdb_fn: str):
     compute_meta()
     return bbox.to_numpy(), (vr.to_numpy(), hr.to_numpy()), hws.to_numpy()[1:], hhs.to_numpy()[1:]  # skip virtual element 0
 
-def generate_flood_map(cfg: InputConfig):
+def generate_flood_map(cfg: DomainConfig):
     """
     Generate a GeoTIFF flood map from UVH calculation results.
     """
@@ -284,3 +286,178 @@ def generate_flood_map(cfg: InputConfig):
                     dst.write(dt, 1, window=window)
             
         print(f'    Saved flood map to: {out_path}')
+
+def generate_max_inundation_extent_map(cfg: DomainConfig, min_depth: float = 0.2, invalid_data: float = -9999.0):
+    """
+    Generate a single GeoTIFF showing the maximum inundation extent across all UVH timesteps.
+
+    For each pixel, the maximum water depth over all output steps is computed.
+    Pixels whose maximum depth never reaches `min_depth` are set to `invalid_data` (nodata).
+    Pixels that do reach `min_depth` retain their maximum depth value.
+
+    Uses the same Taichi-accelerated tiled rasterization approach as generate_flood_map.
+    Optimized: accumulates per-element max h on GPU across all timesteps, then rasterizes once.
+    Output: <domain_dir>/max_inundation/max_inundation.tif
+    """
+    init_taichi()
+
+    ne_fdb_fn = cfg.ne_fdb
+    ns_fdb_fn = cfg.ns_fdb
+    uvhs_dir = cfg.uvh_dir
+    epsg_code = cfg.epsg_code
+    output_path = Path(cfg.max_inundation_dir) / 'max_inundation.tif'
+
+    # Check input files
+    uvhs_path = Path(uvhs_dir)
+    ne_fdb_path = Path(ne_fdb_fn)
+    ns_fdb_path = Path(ns_fdb_fn)
+    if not ne_fdb_path.exists() or not ns_fdb_path.exists() or not uvhs_path.exists():
+        raise FileNotFoundError(f'ne.fdb or ns.fdb or uvh directory not found at {ne_fdb_path} or {ns_fdb_path} or {uvhs_path}')
+
+    # Calculate area metadata
+    (min_x, min_y, max_x, max_y), (vr_np, hr_np), half_widths, half_heights = get_area_meta(str(ne_fdb_path), str(ns_fdb_path))
+    print(f'Bounding Box: ({min_x}, {min_y}) to ({max_x}, {max_y})')
+    print(f'Vertical Pixel Resolution: {vr_np} m, Horizontal Pixel Resolution: {hr_np} m')
+
+    width = int(np.ceil((max_x - min_x) / hr_np))
+    height = int(np.ceil((max_y - min_y) / vr_np))
+    print(f'Max Inundation Map Size: {width} x {height}')
+
+    # Load mesh data into Taichi fields
+    ne_fdb = fdb.ORM.load(str(ne_fdb_path), from_file=True)
+    nes = ne_fdb[Ne][Ne]
+    e_cnt = len(nes)
+
+    if e_cnt == 0:
+        print('No elements to process. Check if ne.fdb is correct and has elements.')
+        return
+
+    x_field  = copy_to_taichi(nes.column.x[1:], ti.f32, None)
+    y_field  = copy_to_taichi(nes.column.y[1:], ti.f32, None)
+    z_field  = copy_to_taichi(nes.column.z[1:], ti.f32, None)
+    hw_field = copy_to_taichi(half_widths, ti.f32, None)
+    hh_field = copy_to_taichi(half_heights, ti.f32, None)
+
+    # Sort UVH files chronologically
+    uvh_paths = list(uvhs_path.glob('uvh_*.fdb'))
+    uvh_paths.sort(
+        key=lambda p: datetime.strptime(p.stem.split('_')[-1], '%Y%m%d-%H%M%S').timestamp()
+    )
+
+    if not uvh_paths:
+        print('No UVH files found. Nothing to process.')
+        return
+
+    real_e_cnt = e_cnt - 1  # skip virtual element 0
+
+    # Per-element max-h accumulator on GPU, initialized to -inf so any real h wins
+    max_h_field = ti.field(dtype=ti.f32, shape=real_e_cnt)
+    max_h_field.fill(-1e10)
+
+    @ti.kernel
+    @no_type_check
+    def update_max_h(h: ti.template(), max_h: ti.template()):
+        for i in h:
+            ti.atomic_max(max_h[i], h[i])
+
+    # Pass 1: scan all timesteps, keep per-element maximum h on GPU
+    for uvh_file in uvh_paths:
+        print(f'Processing UVH file: {uvh_file} ...')
+        uvh_fdb = fdb.ORM.load(str(uvh_file), from_file=True)
+        uvhs = uvh_fdb[UVH][UVH]
+        h_field = copy_to_taichi(uvhs.column.h[1:], ti.f32, None)
+        update_max_h(h_field, max_h_field)
+
+    # Pass 2: compute max depth once and rasterize once
+    depth_field = ti.field(dtype=ti.f32, shape=real_e_cnt)
+
+    @ti.kernel
+    @no_type_check
+    def compute_depth_max(h: ti.template(), z: ti.template(), depth: ti.template()):
+        for i in h:
+            depth[i] = ti.max(h[i] - z[i], 0.0)
+
+    compute_depth_max(max_h_field, z_field, depth_field)
+
+    tile_field = ti.field(dtype=ti.f32, shape=(TILE_SIZE, TILE_SIZE))
+
+    @ti.kernel
+    @no_type_check
+    def rasterize_tile_kernel(
+        x: ti.template(), y: ti.template(),
+        hw: ti.template(), hh: ti.template(),
+        depth: ti.template(),
+        tile: ti.template(), tile_min_x: float, tile_max_y: float,
+        hr: float, vr: float,
+        t_rows: int, t_cols: int
+    ):
+        for i in x:
+            px = x[i]
+            py = y[i]
+            phw = hw[i]
+            phh = hh[i]
+
+            e_min_x = px - phw
+            e_max_x = px + phw
+            e_min_y = py - phh
+            e_max_y = py + phh
+
+            tile_max_x = tile_min_x + t_cols * hr
+            tile_min_y = tile_max_y - t_rows * vr
+            if (e_max_x >= tile_min_x and e_min_x < tile_max_x and
+                    e_max_y >= tile_min_y and e_min_y < tile_max_y):
+                start_col_f = ti.floor((e_min_x - tile_min_x) / hr)
+                end_col_f   = ti.floor((e_max_x - tile_min_x) / hr)
+                start_row_f = ti.floor((tile_max_y - e_max_y) / vr)
+                end_row_f   = ti.floor((tile_max_y - e_min_y) / vr)
+
+                col_start = ti.max(0, int(start_col_f))
+                col_end   = ti.min(t_cols - 1, int(end_col_f))
+                row_start = ti.max(0, int(start_row_f))
+                row_end   = ti.min(t_rows - 1, int(end_row_f))
+
+                d = depth[i]
+                for r in range(row_start, row_end + 1):
+                    for c in range(col_start, col_end + 1):
+                        tile[r, c] = d
+
+    result = np.full((height, width), invalid_data, dtype=np.float32)
+
+    print('Rasterizing max depth ...')
+    for row_off in range(0, height, TILE_SIZE):
+        for col_off in range(0, width, TILE_SIZE):
+            current_h = min(TILE_SIZE, height - row_off)
+            current_w = min(TILE_SIZE, width - col_off)
+
+            tile_top_y  = max_y - row_off * vr_np
+            tile_left_x = min_x + col_off * hr_np
+
+            tile_field.fill(invalid_data)
+            rasterize_tile_kernel(
+                x_field, y_field, hw_field, hh_field, depth_field, tile_field,
+                tile_left_x, tile_top_y, float(hr_np), float(vr_np), current_h, current_w
+            )
+
+            tile_np = tile_field.to_numpy()[:current_h, :current_w]
+            result[row_off:row_off + current_h, col_off:col_off + current_w] = tile_np
+
+    # Apply minimum depth threshold: pixels below min_depth → invalid_data
+    result = np.where(result >= min_depth, result, invalid_data).astype(np.float32)
+
+    # Write single GeoTIFF
+    transform = from_origin(min_x, max_y, hr_np, vr_np)
+    with rasterio.open(
+        output_path, 'w',
+        driver='GTiff',
+        height=height, width=width, count=1,
+        dtype=rasterio.float32,
+        crs=rasterio.crs.CRS.from_epsg(epsg_code),
+        transform=transform,
+        nodata=invalid_data,
+        compress='lzw',
+        tiled=True,
+        blockxsize=512, blockysize=512
+    ) as dst:
+        dst.write(result, 1)
+
+    print(f'Saved max inundation map to: {output_path}')

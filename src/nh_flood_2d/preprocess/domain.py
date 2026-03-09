@@ -1,6 +1,7 @@
 import os
 import linecache
 import numpy as np
+import taichi as ti
 import fastdb4py as fdb
 from pathlib import Path
 import multiprocessing as mp
@@ -8,86 +9,8 @@ from datetime import datetime
 from functools import partial
 
 from ..input import DomainConfig
-from ..schema.feature import Tide, Rainfall, IndexLike, SideTopoInfo, Ne, Ns, Node, Gate
-
-def create_node_fdb(inp_fn: str, fdb_fn: str):
-    """Create node FDB from inp file"""
-    inp_path = Path(inp_fn)
-    if not inp_path.exists():
-        raise FileNotFoundError(f'Inp file not found: {inp_path}')
-    db = fdb.ORM.create()
-    
-    # Add virtual node 0
-    virtual_node = Node()
-    virtual_node.index = 0
-    virtual_node.name = 'virtual_node_0'
-    virtual_node.x = 0.0
-    virtual_node.y = 0.0
-    virtual_node.is_outfall = False
-    db.push(virtual_node)
-    
-    node_index = 0
-    in_coordinates_section = False
-    with open(inp_path, 'r', encoding='utf-8') as f:
-        for l in f:
-            stripped = l.strip()
-            
-            # Handle the start and end of Coordinates section
-            if '[coordinates]' in stripped.lower(): # start of coordinates section
-                in_coordinates_section = True
-                continue
-            elif stripped.startswith('[') and in_coordinates_section: # end of coordinates section
-                break
-            
-            # Focus on the content of Coordinates section
-            # Skip other sections, the header of Coordinates section and empty lines
-            if not in_coordinates_section or stripped.startswith(';;') or not stripped:
-                continue
-            
-            # Parse coordinate line
-            parts = stripped.split()
-            if len(parts) < 3:
-                continue # skip invalid lines
-            node_index += 1
-            node_name = parts[0]
-            is_outfall = node_name.lower().startswith('outfall')
-            
-            node = Node()
-            node.index = node_index
-            node.name = node_name
-            node.x = float(parts[1])
-            node.y = float(parts[2])
-            node.is_outfall = is_outfall
-            
-            db.push(node)
-    
-    fdb_path = Path(fdb_fn)
-    fdb_path.parent.mkdir(parents=True, exist_ok=True)
-    db.save(str(fdb_path))
-
-def create_gate_fdb(g_fn: str, fdb_fn: str):
-    """Create gate FDB from gate file"""
-    g_path = Path(g_fn)
-    if not g_path.exists():
-        raise FileNotFoundError(f'Gate file not found: {g_path}')
-
-    db = fdb.ORM.truncate([
-        fdb.TableDefn(IndexLike, 1, 'gate_count'),
-        fdb.TableDefn(Gate, 100 * 100)
-    ])  # assuming max 100 gates
-    gates = db[Gate][Gate].column.info
-    
-    count = 0
-    with open(g_path, 'r', encoding='utf-8') as f:
-        for idx, l in enumerate(f):
-            count += 1
-            gate_array = np.array([int(v) for v in l.strip().split(',')], dtype=np.uint32)
-            gates[idx * 100:idx * 100 + gate_array.shape[0]] = gate_array
-    db[IndexLike]['gate_count'][0].index = count
-    
-    fdb_path = Path(fdb_fn)
-    fdb_path.parent.mkdir(parents=True, exist_ok=True)
-    db.save(str(fdb_path))
+from ..util import init_taichi, copy_to_taichi
+from ..schema.feature import Ne, Ns, IndexLike, SideTopoInfo, U8Value
 
 def create_ne_fdb(ne_fn: str, fdb_fn: str):
     """Create NE FDB from NE file"""
@@ -462,83 +385,6 @@ def create_ns_fdb_parallel(ns_fn: str, fdb_fn: str):
     db.save(str(fdb_path))
     db.unlink()
 
-def create_tide_fdb_parallel(t_fn: str, fdb_fn: str):
-    """Create tide FDB from tide file in parallel"""
-    shared_name = 'shared_tide'
-    tide_path = Path(t_fn)
-    if not tide_path.exists():
-        raise FileNotFoundError(f'Tide file not found: {tide_path}')
-    
-    # Get tide record counts
-    t_f = open(tide_path, 'r', encoding='utf-8')
-    t_count = sum(1 for _ in t_f) - 1  # exclude header
-    t_f.close()
-    
-    db = fdb.ORM.truncate([
-        fdb.TableDefn(Tide, t_count)        
-    ])
-    db.share(shared_name, close_after=False)
-    
-    # Add tide records in parallel
-    batch_size = 10000
-    batch_args = [i for i in range(0, t_count, batch_size)]
-    batch_func = partial(
-        _batch_tide_worker,
-        t_count=t_count,
-        fdb_fn=shared_name,
-        batch_size=batch_size,
-        t_fn=str(tide_path)
-    )
-    
-    # num_procs = min(mp.cpu_count(), len(batch_args))
-    num_procs = 1
-    with mp.Pool(processes=num_procs) as pool:
-        pool.map(batch_func, batch_args)
-    
-    # Save to file and remove shared database
-    fdb_path = Path(fdb_fn)
-    fdb_path.parent.mkdir(parents=True, exist_ok=True)
-    db.save(str(fdb_path))
-    db.unlink()
-
-def create_rainfall_fdb_parallel(r_fn: str, fdb_fn: str):
-    """Create rainfall FDB from rainfall file in parallel"""
-    shared_name = 'shared_rainfall'
-    rainfall_path = Path(r_fn)
-    if not rainfall_path.exists():
-        raise FileNotFoundError(f'Rainfall file not found: {rainfall_path}')
-    
-    # Get rainfall record counts
-    r_f = open(rainfall_path, 'r', encoding='utf-8')
-    r_count = sum(1 for _ in r_f) - 1  # exclude header
-    r_f.close()
-    
-    db = fdb.ORM.truncate([
-        fdb.TableDefn(Rainfall, r_count)        
-    ])
-    db.share(shared_name, close_after=False)
-    
-    # Add rainfall records in parallel
-    batch_size = 10000
-    batch_args = [i for i in range(0, r_count, batch_size)]
-    batch_func = partial(
-        _batch_rainfall_worker,
-        r_count=r_count,
-        fdb_fn=shared_name,
-        batch_size=batch_size,
-        r_fn=str(rainfall_path)
-    )
-    
-    num_procs = min(mp.cpu_count(), len(batch_args))
-    with mp.Pool(processes=num_procs) as pool:
-        pool.map(batch_func, batch_args)
-    
-    # Save to file and remove shared database
-    fdb_path = Path(fdb_fn)
-    fdb_path.parent.mkdir(parents=True, exist_ok=True)
-    db.save(str(fdb_path))
-    db.unlink()
-    
 def _batch_ne_worker(ne_si: int, ne_count: int, fdb_fn: str, batch_size: int, ne_file: str):
     try:
         db = fdb.ORM.load(fdb_fn)
@@ -620,94 +466,77 @@ def _batch_ns_worker(ns_si: int, ns_count: int, fdb_fn: str, batch_size: int, ns
     finally:
         db.close()
 
-def _batch_tide_worker(t_si: int, t_count: int, fdb_fn: str, batch_size: int, t_fn: str):
-    try:
-        db = fdb.ORM.load(fdb_fn)
-        ts = db[Tide][Tide]
-        times = ts.column.time
-        levels = ts.column.level
-        
-        for l_idx in range(t_si, min(t_si + batch_size, t_count)):
-            line = linecache.getline(t_fn, l_idx + 2) # +2 to skip header and 0-based index
-            data = line.strip().split(',')
-            time_str = f'{data[0]} {data[1]}'
-            date = datetime.strptime(time_str, '%d/%m/%Y %H:%M:%S').timestamp()
+def build_boundary_fdb(cfg: DomainConfig):
+    """Create boundary hydro element FDB from NE FDB and NS FDB"""
+    ne_fdb_fn: str = cfg.ne_fdb
+    ns_fdb_fn: str = cfg.ns_fdb
+    fdb_fn: str = cfg.boundary_fdb
+    
+    # Init Taichi
+    init_taichi(use_gpu=True, profiler=True)
+    
+    # Load necessaray information from fdbs
+    es = fdb.ORM.load(ne_fdb_fn, from_file=True)[Ne][Ne]
+    ss = fdb.ORM.load(ns_fdb_fn, from_file=True)[Ns][Ns]
+    s_ts = fdb.ORM.load(ns_fdb_fn, from_file=True)[SideTopoInfo][SideTopoInfo]
+    e_num = len(es)
+    s_num = len(ss)
+    e_xs_t = copy_to_taichi(es.column.x, ti.f32, None)
+    e_ys_t = copy_to_taichi(es.column.y, ti.f32, None)
+    s_ts_t = copy_to_taichi(s_ts.column.info, ti.u32, [s_num, 3])
+    
+    # Set Taichi fields
+    sbf_t = ti.field(dtype=ti.u8, shape=s_num)          # side boundary flag
+    bi_t = ti.field(dtype=ti.u32, shape=e_num)          # boundary element indices
+    bcount_t = ti.field(dtype=ti.u32, shape=())         # boundary element count
+    is_boundary = ti.field(dtype=ti.u8, shape=e_num)    # mark boundary elements
+    bcount_t[None] = 0
+    
+    @ti.kernel
+    def mark_boundary_elements():
+        for si in range(1, s_num):
+            ei = 0
+            sbf_t[si] = 0
+            orient = s_ts_t[si, 0]
+            el = s_ts_t[si, 1]
+            eh = s_ts_t[si, 2]
             
-            times[l_idx] = date
-            levels[l_idx] = float(data[2])
-    finally:
-        db.close()
+            if orient == 1 and el * eh == 0:    # horizontal side
+                ei = el if eh == 0 else eh
+                sbf_t[si] = 1
+            elif orient == 2 and el * eh == 0:  # vertical side
+                ei = el if eh == 0 else eh
+                sbf_t[si] = 1
+            
+            if ei != 0 and e_xs_t[ei] < 808411.0 and e_ys_t[ei] < 837066.0:
+                is_boundary[ei] = 1
 
-def _batch_rainfall_worker(r_si: int, r_count: int, fdb_fn: str, batch_size: int, r_fn: str):
-    try:
-        db = fdb.ORM.load(fdb_fn)
-        rs = db[Rainfall][Rainfall]
-        times = rs.column.time
-        quantities = rs.column.quantity
-        
-        for r_idx in range(r_si, min(r_si + batch_size, r_count)):
-            l = linecache.getline(r_fn, r_idx + 2) # +2 to skip header and 0-based index
-            data = l.strip().split(',')
-            date = datetime.strptime(data[0], '%Y/%m/%d %H:%M').timestamp()
-            times[r_idx] = date
-            quantities[r_idx] = float(data[2])
-    finally:
-        db.close()
-
-def _check_node_fdb(inp_fn: str, fdb_fn: str):
-    inp_path = Path(inp_fn)
+    @ti.kernel
+    def collect_boundary_elements():
+        for i in range(1, e_num):
+            if is_boundary[i] == 1:
+                idx = ti.atomic_add(bcount_t[None], 1)
+                bi_t[idx] = i
+    
+    mark_boundary_elements()
+    collect_boundary_elements()
+    
+    # Create boundary FDB
+    capacity = int(bcount_t.to_numpy()[None][0])
+    db = fdb.ORM.truncate([
+        fdb.TableDefn(IndexLike, capacity, 'bdei'),
+        fdb.TableDefn(U8Value, s_num, 'sbf')
+    ])
+    bdei: np.ndarray = db[IndexLike]['bdei'].column.index
+    bdei[:] = bi_t.to_numpy()[:capacity]
+    sbf: np.ndarray = db[U8Value]['sbf'].column.value
+    sbf[:] = sbf_t.to_numpy()[:s_num]
+    
+    # Save to file
     fdb_path = Path(fdb_fn)
-    db = fdb.ORM.load(str(fdb_path), from_file=True)
-    nodes = db[Node][Node]
-    
-    node_index = 1
-    in_coordinates_section = False
-    with open(inp_path, 'r', encoding='utf-8') as f:
-        for l in f:
-            stripped = l.strip()
-            
-            # Handle the start and end of Coordinates section
-            if '[coordinates]' in stripped.lower(): # start of coordinates section
-                in_coordinates_section = True
-                continue
-            elif stripped.startswith('[') and in_coordinates_section: # end of coordinates section
-                break
-            
-            # Focus on the content of Coordinates section
-            # Skip other sections, the header of Coordinates section and empty lines
-            if not in_coordinates_section or stripped.startswith(';;') or not stripped:
-                continue
-            
-            # Parse coordinate line
-            parts = stripped.split()
-            if len(parts) < 3:
-                continue # skip invalid lines
-            
-            node = nodes[node_index]
-            
-            node_index += 1
-            node_name = parts[0]
-            is_outfall = node_name.lower().startswith('outfall')
-            assert node is not None, f'Node index {node_index} not found in FDB'
-            assert node.name == node_name, f'Node name mismatch at index {node_index}: {node.name} != {node_name}'
-            assert abs(node.x - float(parts[1])) < 0.1, f'Node x mismatch at index {node_index}: {node.x} != {parts[1]}'
-            assert abs(node.y - float(parts[2])) < 0.1, f'Node y mismatch at index {node_index}: {node.y} != {parts[2]}'
-            assert node.is_outfall == is_outfall, f'Node is_outfall mismatch at index {node_index}: {node.is_outfall} != {is_outfall}'
-    
-    print('FDB node data verification passed.')
-
-def _check_gate_fdb(gate_fn: str, fdb_fn: str):
-    db = fdb.ORM.load(fdb_fn, from_file=True)
-    gates = db[Gate][Gate].column.info
-    
-    with open(gate_fn, 'r', encoding='utf-8') as f:
-        for idx, l in enumerate(f):
-            gate_array = np.array([int(v) for v in l.strip().split(',')], dtype=np.uint32)
-            fdb_gate_array = gates[idx * 100:idx * 100 + gate_array.shape[0]]
-            if not np.array_equal(gate_array, fdb_gate_array):
-                raise ValueError(f'Gate data mismatch at index {idx}')
-    
-    print('FDB gate data verification passed.')
+    fdb_path.parent.mkdir(parents=True, exist_ok=True)
+    db.save(str(fdb_path))
+    db.unlink()
 
 def _check_ne_fdb(ne_fn: str, fdb_fn: str):
     db = fdb.ORM.load(fdb_fn, from_file=True)
@@ -792,112 +621,46 @@ def _check_ns_fdb(ns_fn: str, fdb_fn: str):
 
     print('FDB NS data verification passed.')
 
-def _check_tide_fdb(tide_fn: str, fdb_fn: str):
+def _check_boundary_fdb(test_fn: str, fdb_fn: str):
+    """Check created boundary FDB"""
+    # Load test boundary indices
+    test_bd_ie = []
+    with open(test_fn, 'r', encoding='utf-8') as f:
+        for line in f:
+            test_bd_ie.append(int(line.strip()))
+    test_bd_ie = sorted(test_bd_ie)
+    
+    # Load created boundary FDB
     db = fdb.ORM.load(fdb_fn, from_file=True)
-    tides = db[Tide][Tide]
-    times = tides.column.time
-    levels = tides.column.level
+    bdei = db[IndexLike]['bdei'].column.index
+    fdb_bd_ie = sorted(bdei.tolist())
     
-    with open(tide_fn, 'r', encoding='utf-8') as f:
-        next(f)  # skip header
-        for idx, line in enumerate(f):
-            data = line.strip().split(',')
-            time = data[0] + ' ' + data[1]
-            date = datetime.strptime(time, '%d/%m/%Y %H:%M:%S').timestamp()
-            level = float(data[2])
-            
-            fdb_time = times[idx]
-            fdb_level = levels[idx]
-            
-            if abs(fdb_time - date) > 1e-6 or abs(fdb_level - level) > 1e-6:
-                raise ValueError(f'Mismatch at record {idx}: file({date}, {level}) != fdb({fdb_time}, {fdb_level})')
-    
-    print('FDB tide data verification passed.')
-    
-def _check_rainfall_fdb(r_fn: str, fdb_fn: str):
-    db = fdb.ORM.load(fdb_fn, from_file=True)
-    rainfalls = db[Rainfall][Rainfall]
-    times = rainfalls.column.time
-    quantities = rainfalls.column.quantity
-    
-    with open(r_fn, 'r', encoding='utf-8') as f:
-        next(f)  # skip header
-        for idx, line in enumerate(f):
-            data = line.strip().split(',')
-            time = data[0]
-            date = datetime.strptime(time, '%Y/%m/%d %H:%M').timestamp()
-            quantity = float(data[2])
-            
-            fdb_time = times[idx]
-            fdb_quantity = quantities[idx]
-            
-            if abs(fdb_time - date) > 1e-6 or abs(fdb_quantity - quantity) > 1e-6:
-                raise ValueError(f'Mismatch at record {idx}: file({date}, {quantity}) != fdb({fdb_time}, {fdb_quantity})')
-    
-    print('FDB rainfall data verification passed.')
+    # Compare
+    for i in range(len(test_bd_ie)):
+        if test_bd_ie[i] != fdb_bd_ie[i]:
+            print(f"Boundary index mismatch at position {i}: test {test_bd_ie[i]} vs fdb {fdb_bd_ie[i]}")
+    print("Boundary FDB check passed!")
 
 def _create_worker(cfg: DomainConfig, idx: int):
     if idx == 0:
-        create_gate_fdb(cfg.gate, cfg.gate_fdb)
-    elif idx == 1:
         create_ne_fdb_compact(cfg.tmp_ne, cfg.ne_fdb)
-    elif idx == 2:
+    else:
         create_ns_fdb_parallel(cfg.tmp_ns, cfg.ns_fdb)
-    elif idx == 3:
-        create_tide_fdb_parallel(cfg.tide, cfg.tide_fdb)
-    elif idx == 4:
-        create_rainfall_fdb_parallel(cfg.rain, cfg.rain_fdb)
 
-def build_fdbs(cfg: DomainConfig):
-    
-    # _filter_ne_ns(cfg.ne, cfg.ns, cfg.tmp_ne, cfg.tmp_ns)
-    # create_ne_fdb_compact(cfg.tmp_ne, cfg.ne_fdb)
-    # create_ns_fdb_parallel(cfg.tmp_ns, cfg.ns_fdb)
+def prepare_domain(cfg: DomainConfig):
     try:
         # Generate filtered temporary NE/NS files
         _filter_ne_ns(cfg.ne, cfg.ns, cfg.tmp_ne, cfg.tmp_ns)
         
-        # Create FDBs in parallel
-        processes = []
-        for i in range(5):
-            p = mp.Process(target=_create_worker, args=(cfg, i))
-            p.start()
-            processes.append(p)
+        # Prepare ne FDB
+        create_ne_fdb_compact(cfg.tmp_ne, cfg.ne_fdb)
         
-        for p in processes:
-            p.join()
+        # Prepare ns FDB
+        create_ns_fdb_parallel(cfg.tmp_ns, cfg.ns_fdb)
+        
+        # Prepare boundary FDB
+        build_boundary_fdb(cfg)
     finally:
         # Cleanup temporary files
         if Path(cfg.tmp_ne).exists(): os.remove(cfg.tmp_ne)
         if Path(cfg.tmp_ns).exists(): os.remove(cfg.tmp_ns)
-
-if __name__ == '__main__':
-    import time
-    start_time = time.time()
-    
-    # Generate filtered temporary NE/NS files
-    _filter_ne_ns('test_data/ne.txt', 'test_data/ns.txt', 'temp_ne.txt', 'temp_ns.txt')
-    
-    # Create FDBs in parallel
-    processes = []
-    for i in range(5):
-        p = mp.Process(target=_create_worker, args=(i,))
-        p.start()
-        processes.append(p)
-    
-    for p in processes:
-        p.join()
-        
-    # Cleanup temporary files
-    if Path('temp_ne.txt').exists(): os.remove('temp_ne.txt')
-    if Path('temp_ns.txt').exists(): os.remove('temp_ns.txt')
-
-    end_time = time.time()
-    print(f'FDB creation completed in {end_time - start_time:.2f} seconds.')
-    
-    # _check_node_fdb('test_data/0610.inp', 'fdb/node.fdb')
-    # _check_gate_fdb('test_data/max_gate7_ne.txt', 'fdb/gate.fdb')
-    # _check_ne_fdb('test_data/ne.txt', 'fdb/ne.fdb')
-    # _check_ns_fdb('test_data/ns.txt', 'fdb/ns.fdb')
-    # _check_tide_fdb('test_data/test_tide.csv', 'fdb/tide.fdb')
-    # _check_rainfall_fdb('test_data/test_rain.csv', 'fdb/rain.fdb')
