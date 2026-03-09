@@ -68,7 +68,14 @@ class DomainConfig(BaseModel):
         if not dir_path.exists():
             dir_path.mkdir(parents=True, exist_ok=True)
         return str(dir_path)
-    
+
+    @property
+    def max_inundation_dir(self) -> str:
+        dir_path = self._domain_path / 'max_inundation'
+        if not dir_path.exists():
+            dir_path.mkdir(parents=True, exist_ok=True)
+        return str(dir_path)
+
     @property
     def hydrograph_dir(self) -> str:
         dir_path = self._domain_path / 'hydrographs'

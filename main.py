@@ -1,6 +1,6 @@
 from src.nh_flood_2d.preprocess import preprocess
 from src.nh_flood_2d.core.solver_compact import solver
-from src.nh_flood_2d.output.flood_map import generate_flood_map
+from src.nh_flood_2d.output.flood_map import generate_flood_map, generate_max_inundation_extent_map
 from src.nh_flood_2d.output.hydrograph import draw_hydrograph, compare_hydrograph
 from src.nh_flood_2d.input import load_domain_config, DomainConfig, load_force_config, ForceConfig
 
@@ -20,6 +20,8 @@ if __name__ == '__main__':
     # draw_hydrograph(domain_mrcg, 'D74', True, -3600)
     # generate_flood_map(domain_mrcg)
     
-    mses = compare_hydrograph([domain_mrcg], 'R22', clampped=True, show=True)
+    # generate_max_inundation_extent_map(domain_4)
+    
+    mses = compare_hydrograph([domain_4, domain_mrcg], 'D74', clampped=True, show=False, show_obs=False, baseline=domain_4)
     print(f'RMSEs: {mses}')
     

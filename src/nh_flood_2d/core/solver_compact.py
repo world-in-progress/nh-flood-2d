@@ -101,7 +101,7 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
     init_taichi(use_gpu=True, profiler=True)
     
     inflow_ei = _find_ei(domain_cfg.ne_fdb, domain_cfg.ns_fdb, 827040.3, 843912.8)
-    set_elevation(domain_cfg, elevate_meter=3.0)
+    # set_elevation(domain_cfg, elevate_meter=3.0)
 
     # Check fdbs
     ne_fdb_fn = Path(domain_cfg.ne_fdb)
@@ -327,17 +327,18 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
 
         # Tick elements
         for ei in range(1, e_num):
-            # If is inflow element, add source/sink quantity to ssq_t
-            q_source = 0.0
-            if ei == inflow_ei:
-                q_source = rainq * 1000 * 300    # inflow quantity (m³/s)
+            # # If is inflow element, add source/sink quantity to ssq_t
+            # q_source = 0.0
+            # if ei == inflow_ei:
+            #     q_source = rainq * 1000 * 300    # inflow quantity (m³/s)
                 
             # Calculate flow quantities
             ql = enq_t[ei, 0]
             qr = enq_t[ei, 1]
             qb = enq_t[ei, 2]
             qt = enq_t[ei, 3]
-            tq = ql - qr + qb - qt + ssq_t[ei] + q_source                       # total inflow quantity
+            # tq = ql - qr + qb - qt + ssq_t[ei] + q_source                       # total inflow quantity
+            tq = ql - qr + qb - qt + ssq_t[ei]                                  # total inflow quantity
             eq_t[ei, 0], eq_t[ei, 1], eq_t[ei, 2], eq_t[ei, 3] = ql, qr, qb, qt # update current side flow quantities
             enq_t[ei, 0] = enq_t[ei, 1] = enq_t[ei, 2] = enq_t[ei, 3] = 0.0     # reset next time step side flow quantities
 
