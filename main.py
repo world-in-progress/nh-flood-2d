@@ -1,8 +1,8 @@
 from src.nh_flood_2d.preprocess import preprocess
 from src.nh_flood_2d.core.solver_compact import solver
-from src.nh_flood_2d.output.flood_map import generate_flood_map, generate_max_inundation_extent_map
 from src.nh_flood_2d.output.hydrograph import draw_hydrograph, compare_hydrograph
 from src.nh_flood_2d.input import load_domain_config, DomainConfig, load_force_config, ForceConfig
+from src.nh_flood_2d.output.flood_map import generate_flood_map, generate_max_inundation_extent_map
 
 df7_cfg = load_force_config('./resource/df7.json')
 df11_cfg = load_force_config('./resource/df11.json')
