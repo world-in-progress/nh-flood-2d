@@ -13,6 +13,8 @@ from ..input import DomainConfig, ForceConfig
 from ..util.ti import init_taichi, copy_to_taichi
 from ..schema.feature import Ne, Ns, IndexLike, SideTopoInfo, Rainfall, Tide, Gate, U8Value, UVH
 
+USE_GATE_EFFECT = True
+
 def set_elevation(domain_cfg, elevate_meter: float):
     """
     Set the z data of element to a specified elevation (elevate_meter) if it is below that elevation.
@@ -100,7 +102,7 @@ def set_elevation(domain_cfg, elevate_meter: float):
 def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: int = 0):
     init_taichi(use_gpu=True, profiler=True)
     
-    inflow_ei = _find_ei(domain_cfg.ne_fdb, domain_cfg.ns_fdb, 827040.3, 843912.8)
+    # inflow_ei = _find_ei(domain_cfg.ne_fdb, domain_cfg.ns_fdb, 827040.3, 843912.8)
     # set_elevation(domain_cfg, elevate_meter=3.0)
 
     # Check fdbs
@@ -225,7 +227,7 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
             # Get side length (all four sides are the same for square elements)
             lsi0 = isl_data[isl_ptr_l[ei]]
             esl_t[ei] = ti.max((ex_t[ei] - sx_t[lsi0]) * 2.0, 0.0001)
-            eu_t[ei] = 0b1 << (eu_t[ei] - 1)    # set type flag bit
+            # eu_t[ei] = 0b1 << (eu_t[ei] - 1)    # set type flag bit
 
         for si in range(1, s_num):
             sq_t[si] = 0.0
@@ -257,12 +259,23 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
         sx = copy_to_taichi(nss.column.x, ti.f32, None)
         init_gpu(ex, ey, isl_data_t, isl_ptr_l_t, sx)
 
+    gate_is_open = ti.field(dtype=ti.i32, shape=())
+    if not USE_GATE_EFFECT:
+        gate_is_open[None] = 1
+        
     @ti.kernel
     @no_type_check
     def tick(tide: float, rainq: float) -> ti.f32:
         # Tick dt
         dt = ti.max(0.0001, ti.min(ndt_t[None], 1.0))    # clamp dt to avoid instability
         ndt_t[None] = 1000.0
+        
+        # Tick gates
+        if tide > 1.5 and gate_is_open[None] == 0:
+            for i in range(1, e_num):
+                if eu_t[i] == 11:
+                    ez_t[i] = 0.0
+            gate_is_open[None] = 1
 
         # Tick sides
         for si in range(1, s_num):
@@ -327,11 +340,6 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
 
         # Tick elements
         for ei in range(1, e_num):
-            # # If is inflow element, add source/sink quantity to ssq_t
-            # q_source = 0.0
-            # if ei == inflow_ei:
-            #     q_source = rainq * 1000 * 300    # inflow quantity (m³/s)
-                
             # Calculate flow quantities
             ql = enq_t[ei, 0]
             qr = enq_t[ei, 1]
@@ -343,14 +351,14 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
             enq_t[ei, 0] = enq_t[ei, 1] = enq_t[ei, 2] = enq_t[ei, 3] = 0.0     # reset next time step side flow quantities
 
             # Calculate infiltration masks for all underlay types
-            eu = eu_t[ei]       # underlay type flag
-            f1 = (eu >> 0) & 1  # building
-            f2 = (eu >> 1) & 1  # road
-            f3 = (eu >> 2) & 1  # agricultural land
-            f4 = (eu >> 3) & 1  # fish pond
-            f5 = (eu >> 4) & 1  # mountainous land
-            f6 = (eu >> 5) & 1  # water body
-            f7 = (eu >> 6) & 1  # catch basin
+            eu = eu_t[ei]       # underlay type value
+            f1 = ti.select(eu == 1, 1.0, 0.0)    # building
+            f2 = ti.select(eu == 2, 1.0, 0.0)    # road
+            f3 = ti.select(eu == 3, 1.0, 0.0)    # agricultural land
+            f4 = ti.select(eu == 4, 1.0, 0.0)    # fish pond
+            f5 = ti.select(eu == 5, 1.0, 0.0)    # mountainous land
+            f6 = ti.select(eu == 6, 1.0, 0.0)    # water body
+            f7 = ti.select(eu == 7, 1.0, 0.0)    # catch basin
 
             ea = esl_t[ei] ** 2                 # area of element
             next_h = h_t[ei] + (tq * dt) / ea   # update next water depth

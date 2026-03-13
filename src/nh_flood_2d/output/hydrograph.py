@@ -144,7 +144,7 @@ def compare_hydrograph(
     show_obs: bool = True,
     baseline: DomainConfig | None = None,
     show: bool = True
-) -> list[float]:
+) -> tuple[list[float], list[float]]:
     # Validate that all configs reference the same observation file
     existing_obs_paths = [
         str(Path(cfg.observation_dir) / f'{station_name}.csv')
@@ -225,7 +225,11 @@ def compare_hydrograph(
         plt.tight_layout()
         plt.show()
     
-    # Compute RMSE values against the baseline series using linear interpolation on time
+    # Compute RMSE and NSE values against the baseline series using linear interpolation on time
+    def _nse(obs: np.ndarray, sim: np.ndarray) -> float:
+        denom = np.sum((obs - obs.mean()) ** 2)
+        return float(1.0 - np.sum((obs - sim) ** 2) / denom) if denom != 0 else float('-inf')
+
     if baseline is not None:
         # Use the specified baseline config's simulation data as reference
         baseline_label = Path(baseline.domain_dir).name
@@ -243,24 +247,28 @@ def compare_hydrograph(
         base_vals = baseline_df['depth'].values
 
         rmse_values: list[float] = []
+        nse_values: list[float] = []
         for lbl, sim_df in sim_dfs:
             if lbl == baseline_label:
                 continue
             sim_ts = sim_df['datetime'].astype(np.int64).values / 1e9
             interp_vals = np.interp(base_ts, sim_ts, sim_df['depth'].values)
             rmse_values.append(float(np.sqrt(np.mean((base_vals - interp_vals) ** 2))))
-        return rmse_values
+            nse_values.append(_nse(base_vals, interp_vals))
+        return rmse_values, nse_values
     else:
         # Use obs as baseline; return [] if obs is unavailable
         if obs_df is None:
-            return []
+            return [], []
 
         base_ts = obs_df['datetime'].astype(np.int64).values / 1e9
         base_vals = obs_df['Waterlevel'].values
 
         rmse_values = []
+        nse_values = []
         for lbl, sim_df in sim_dfs:
             sim_ts = sim_df['datetime'].astype(np.int64).values / 1e9
             interp_vals = np.interp(base_ts, sim_ts, sim_df['depth'].values)
             rmse_values.append(float(np.sqrt(np.mean((base_vals - interp_vals) ** 2))))
-        return rmse_values    
+            nse_values.append(_nse(base_vals, interp_vals))
+        return rmse_values, nse_values

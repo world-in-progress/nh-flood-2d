@@ -375,7 +375,10 @@ def generate_max_inundation_extent_map(cfg: DomainConfig, min_depth: float = 0.2
     @no_type_check
     def compute_depth_max(h: ti.template(), z: ti.template(), depth: ti.template()):
         for i in h:
-            depth[i] = ti.max(h[i] - z[i], 0.0)
+            # depth[i] = ti.max(h[i] - z[i], 0.0)
+            depth[i] = h[i]
+            if (h[i] - z[i]) < min_depth:
+                depth[i] = -9999.0  # mark as invalid if max depth < threshold
 
     compute_depth_max(max_h_field, z_field, depth_field)
 

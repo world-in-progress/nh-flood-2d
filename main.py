@@ -8,20 +8,21 @@ df7_cfg = load_force_config('./resource/df7.json')
 df11_cfg = load_force_config('./resource/df11.json')
 domain_4 = load_domain_config('./resource/domain_4.json')
 domain_mrcg = load_domain_config('./resource/domain_mrcg.json')
-domain_basic = load_domain_config('./resource/domain_basic.json')
+domain_mrcg_gw = load_domain_config('./resource/domain_mrcg_gw.json')
+# domain_basic = load_domain_config('./resource/domain_basic.json')
 
 def evolve_domain(domain_cfg: DomainConfig, force_cfg: ForceConfig):
     preprocess(domain_cfg, force_cfg)
     solver(domain_cfg, force_cfg)
 
 if __name__ == '__main__':
-    # evolve_domain(domain_mrcg, df7_cfg)
+    # evolve_domain(domain_mrcg_gw, df7_cfg)
     
     # draw_hydrograph(domain_mrcg, 'D74', True, -3600)
     # generate_flood_map(domain_mrcg)
     
-    # generate_max_inundation_extent_map(domain_4)
+    generate_max_inundation_extent_map(domain_4)
     
-    mses = compare_hydrograph([domain_4, domain_mrcg], 'D74', clampped=True, show=False, show_obs=False, baseline=domain_4)
-    print(f'RMSEs: {mses}')
+    # mses = compare_hydrograph([domain_mrcg, domain_mrcg_gw], 'D43C', clampped=True, show=True, show_obs=False)
+    # print(f'RMSEs: {mses}')
     

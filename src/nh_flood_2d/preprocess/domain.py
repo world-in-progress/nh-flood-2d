@@ -462,7 +462,7 @@ def _batch_ns_worker(ns_si: int, ns_count: int, fdb_fn: str, batch_size: int, ns
             s_xs[idx] = float(data[7])
             s_ys[idx] = float(data[8])
             s_zs[idx] = float(data[9])
-            s_attrs[idx] = int(data[10])
+            s_attrs[idx] = int(float(data[10]))
     finally:
         db.close()
 
