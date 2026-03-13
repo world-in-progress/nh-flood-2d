@@ -508,7 +508,8 @@ def build_boundary_fdb(cfg: DomainConfig):
                 ei = el if eh == 0 else eh
                 sbf_t[si] = 1
             
-            if ei != 0 and e_xs_t[ei] < 808411.0 and e_ys_t[ei] < 837066.0:
+            # if ei != 0 and e_xs_t[ei] < 808411.0 and e_ys_t[ei] < 837066.0:
+            if ei != 0 and e_xs_t[ei] < 808361.0 and e_ys_t[ei] < 837066.0:
                 is_boundary[ei] = 1
 
     @ti.kernel
@@ -523,6 +524,7 @@ def build_boundary_fdb(cfg: DomainConfig):
     
     # Create boundary FDB
     capacity = int(bcount_t.to_numpy()[None][0])
+    print(f'Boundary element count: {capacity}')
     db = fdb.ORM.truncate([
         fdb.TableDefn(IndexLike, capacity, 'bdei'),
         fdb.TableDefn(U8Value, s_num, 'sbf')
