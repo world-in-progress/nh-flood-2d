@@ -289,13 +289,18 @@ def generate_flood_map(cfg: DomainConfig):
             
         print(f'    Saved flood map to: {out_path}')
 
-def generate_max_inundation_extent_map(cfg: DomainConfig, min_depth: float = 0.2, invalid_data: float = -9999.0):
+def generate_max_inundation_extent_map(cfg: DomainConfig, min_depth: float = 0.05, invalid_data: float = -9999.0, is_absolute: bool = False):
     """
     Generate a single GeoTIFF showing the maximum inundation extent across all UVH timesteps.
 
     For each pixel, the maximum water depth over all output steps is computed.
     Pixels whose maximum depth never reaches `min_depth` are set to `invalid_data` (nodata).
     Pixels that do reach `min_depth` retain their maximum depth value.
+
+    If `is_absolute` is True, the output is a binary int8 map:
+      - 1 for wet pixels (max depth >= min_depth)
+      - 0 for dry pixels (max depth < min_depth)
+      - `invalid_data` for pixels outside the domain (e.g., -128)
 
     Uses the same Taichi-accelerated tiled rasterization approach as generate_flood_map.
     Optimized: accumulates per-element max h on GPU across all timesteps, then rasterizes once.
@@ -373,14 +378,23 @@ def generate_max_inundation_extent_map(cfg: DomainConfig, min_depth: float = 0.2
     # Pass 2: compute max depth once and rasterize once
     depth_field = ti.field(dtype=ti.f32, shape=real_e_cnt)
 
-    @ti.kernel
-    @no_type_check
-    def compute_depth_max(h: ti.template(), z: ti.template(), depth: ti.template()):
-        for i in h:
-            # depth[i] = ti.max(h[i] - z[i], 0.0)
-            depth[i] = h[i]
-            if (h[i] - z[i]) < min_depth:
-                depth[i] = -9999.0  # mark as invalid if max depth < threshold
+    if is_absolute:
+        @ti.kernel
+        @no_type_check
+        def compute_depth_max(h: ti.template(), z: ti.template(), depth: ti.template()):
+            for i in h:
+                if (h[i] - z[i]) >= min_depth:
+                    depth[i] = 1.0
+                else:
+                    depth[i] = 0.0
+    else:
+        @ti.kernel
+        @no_type_check
+        def compute_depth_max(h: ti.template(), z: ti.template(), depth: ti.template()):
+            for i in h:
+                depth[i] = h[i]
+                if (h[i] - z[i]) < min_depth:
+                    depth[i] = -9999.0  # mark as invalid if max depth < threshold
 
     compute_depth_max(max_h_field, z_field, depth_field)
 
@@ -426,7 +440,7 @@ def generate_max_inundation_extent_map(cfg: DomainConfig, min_depth: float = 0.2
                     for c in range(col_start, col_end + 1):
                         tile[r, c] = d
 
-    result = np.full((height, width), invalid_data, dtype=np.float32)
+    result = np.full((height, width), -128 if is_absolute else invalid_data, dtype=np.int8 if is_absolute else np.float32)
 
     print('Rasterizing max depth ...')
     for row_off in range(0, height, TILE_SIZE):
@@ -444,21 +458,28 @@ def generate_max_inundation_extent_map(cfg: DomainConfig, min_depth: float = 0.2
             )
 
             tile_np = tile_field.to_numpy()[:current_h, :current_w]
+            if is_absolute:
+                tile_np = tile_np.astype(np.int8)
             result[row_off:row_off + current_h, col_off:col_off + current_w] = tile_np
 
     # Apply minimum depth threshold: pixels below min_depth → invalid_data
-    result = np.where(result >= min_depth, result, invalid_data).astype(np.float32)
+    if is_absolute:
+        result = result.astype(np.int8)
+    else:
+        result = np.where(result >= min_depth, result, invalid_data).astype(np.float32)
 
     # Write single GeoTIFF
+    out_dtype = rasterio.int8 if is_absolute else rasterio.float32
+    out_nodata = -128 if is_absolute else invalid_data
     transform = from_origin(min_x, max_y, hr_np, vr_np)
     with rasterio.open(
         output_path, 'w',
         driver='GTiff',
         height=height, width=width, count=1,
-        dtype=rasterio.float32,
+        dtype=out_dtype,
         crs=rasterio.crs.CRS.from_epsg(epsg_code),
         transform=transform,
-        nodata=invalid_data,
+        nodata=out_nodata,
         compress='lzw',
         tiled=True,
         blockxsize=512, blockysize=512

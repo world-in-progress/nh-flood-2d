@@ -21,10 +21,10 @@ if __name__ == '__main__':
     # draw_hydrograph(domain_mrcg, 'D74', True, -3600)
     # generate_flood_map(domain_4)
     
-    # generate_max_inundation_extent_map(domain_4)
+    generate_max_inundation_extent_map(domain_4)
     
     # mses = compare_hydrograph([domain_4], 'R22', clampped=True, show=True, show_obs=False, baseline=domain_4)
     # print(f'RMSEs: {mses}')
     
-    plot_spatial_mae_curve(domain_4, domain_mrcg, df7_cfg)
+    # plot_spatial_mae_curve(domain_4, domain_mrcg, df7_cfg)
     
