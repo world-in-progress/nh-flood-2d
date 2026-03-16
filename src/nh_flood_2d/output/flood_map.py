@@ -4,13 +4,13 @@ import numpy as np
 import taichi as ti
 import fastdb4py as fdb
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import no_type_check
 from rasterio.transform import from_origin
 
-from ..input import DomainConfig
+from ..input import DomainConfig, ForceConfig
 from ..util import init_taichi, copy_to_taichi
-from ..schema.feature import Ne, UVH, Ns, IndexLike
+from ..schema.feature import Ne, UVH, Ns, IndexLike, Rainfall
     
 # Check if grid is too large for single Taichi field (limit near 2^31 elements, but practical limit lower)
 # Using 20000x20000 as a safe threshold for tiling
@@ -25,7 +25,9 @@ def compute_depth(h: ti.template(), z: ti.template(), depth: ti.template()):
     """
     for i in h:
         # depth[i] = ti.max(h[i] - z[i], 0.0)
-        depth[i] = z[i]
+        depth[i] = h[i]
+        if (h[i] - z[i]) < 0.2:  # if depth < 0.2m, consider it dry
+            depth[i] = -9999.0  # mark as invalid if max depth < threshold
 
 def get_area_meta(ne_fdb_fn: str, ns_fdb_fn: str):
     """
@@ -464,3 +466,262 @@ def generate_max_inundation_extent_map(cfg: DomainConfig, min_depth: float = 0.2
         dst.write(result, 1)
 
     print(f'Saved max inundation map to: {output_path}')
+
+def plot_spatial_mae_curve(
+    cfg_ref: DomainConfig,
+    cfg_cmp: DomainConfig,
+    force_cfg: ForceConfig | None = None,
+    min_depth: float = 0.05,
+    output_path: str | None = None,
+    show: bool = True,
+) -> list[float]:
+    """
+    Plot Spatial Mean Absolute Error (MAE) of Water Surface Elevation (WSE)
+    between two simulation configurations across all shared UVH timesteps.
+
+    For every timestep t that both configs have produced, computes:
+
+        MAE(t) = (1 / N_t) * sum |WSE_ref(t) - WSE_cmp(t)|
+
+    where N_t is the number of raster pixels simultaneously wet (h - z > min_depth)
+    in both grids.  The result is a 1-D time-series curve.
+
+    If *force_cfg* is provided and its rain.fdb exists, a rainfall hyetograph is
+    overlaid on an inverted secondary Y-axis (meteorological convention: bars grow
+    downward from the top of the figure).
+
+    Uses Taichi GPU-accelerated tiled rasterisation (same TILE_SIZE as the rest of
+    this module) and atomic double-precision reduction for the MAE accumulation.
+
+    Parameters
+    ----------
+    cfg_ref      : Reference DomainConfig  (e.g., high-resolution 4 m baseline)
+    cfg_cmp      : Comparison DomainConfig (e.g., MRCG)
+    force_cfg    : Optional ForceConfig; when provided the rainfall hyetograph is
+                   overlaid using rain.fdb from its preprocessed directory.
+    min_depth    : Minimum water depth (m) threshold for a cell to be considered wet.
+    output_path  : If given, the figure is saved to this file path.
+    show         : If True, plt.show() is called after rendering.
+
+    Returns
+    -------
+    List of per-timestep spatial MAE values (metres), in chronological order.
+    """
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
+
+    init_taichi()
+
+    ne_path_ref  = Path(cfg_ref.ne_fdb)
+    ns_path_ref  = Path(cfg_ref.ns_fdb)
+    ne_path_cmp  = Path(cfg_cmp.ne_fdb)
+    ns_path_cmp  = Path(cfg_cmp.ns_fdb)
+    uvh_path_ref = Path(cfg_ref.uvh_dir)
+    uvh_path_cmp = Path(cfg_cmp.uvh_dir)
+
+    for p in [ne_path_ref, ns_path_ref, ne_path_cmp, ns_path_cmp, uvh_path_ref, uvh_path_cmp]:
+        if not p.exists():
+            raise FileNotFoundError(f'Required path not found: {p}')
+
+    # ── Area metadata for both grids ───────────────────────────────────────────
+    (xmin_r, ymin_r, xmax_r, ymax_r), (vr_r, hr_r), hws_r, hhs_r = get_area_meta(str(ne_path_ref), str(ns_path_ref))
+    (xmin_c, ymin_c, xmax_c, ymax_c), (vr_c, hr_c), hws_c, hhs_c = get_area_meta(str(ne_path_cmp), str(ns_path_cmp))
+
+    # Common spatial domain: bounding-box intersection, finest resolution
+    gmin_x = float(max(xmin_r, xmin_c))
+    gmin_y = float(max(ymin_r, ymin_c))
+    gmax_x = float(min(xmax_r, xmax_c))
+    gmax_y = float(min(ymax_r, ymax_c))
+    if gmin_x >= gmax_x or gmin_y >= gmax_y:
+        raise ValueError('The bounding boxes of cfg_ref and cfg_cmp do not overlap.')
+
+    g_hr = float(min(hr_r, hr_c))
+    g_vr = float(min(vr_r, vr_c))
+    g_width  = int(np.ceil((gmax_x - gmin_x) / g_hr))
+    g_height = int(np.ceil((gmax_y - gmin_y) / g_vr))
+    print(f'Common raster grid: {g_width} x {g_height} px  @  {g_hr} m x {g_vr} m')
+
+    # ── Load element geometry into Taichi fields ───────────────────────────────
+    ne_fdb_r = fdb.ORM.load(str(ne_path_ref), from_file=True)
+    nes_r    = ne_fdb_r[Ne][Ne]
+    ne_fdb_c = fdb.ORM.load(str(ne_path_cmp), from_file=True)
+    nes_c    = ne_fdb_c[Ne][Ne]
+
+    ex_r  = copy_to_taichi(nes_r.column.x[1:], ti.f32, None)
+    ey_r  = copy_to_taichi(nes_r.column.y[1:], ti.f32, None)
+    ez_r  = copy_to_taichi(nes_r.column.z[1:], ti.f32, None)
+    ehw_r = copy_to_taichi(hws_r,               ti.f32, None)
+    ehh_r = copy_to_taichi(hhs_r,               ti.f32, None)
+
+    ex_c  = copy_to_taichi(nes_c.column.x[1:], ti.f32, None)
+    ey_c  = copy_to_taichi(nes_c.column.y[1:], ti.f32, None)
+    ez_c  = copy_to_taichi(nes_c.column.z[1:], ti.f32, None)
+    ehw_c = copy_to_taichi(hws_c,               ti.f32, None)
+    ehh_c = copy_to_taichi(hhs_c,               ti.f32, None)
+
+    # Two tile buffers (one per mesh) for tiled GPU rasterisation
+    tile_ref = ti.field(dtype=ti.f32, shape=(TILE_SIZE, TILE_SIZE))
+    tile_cmp = ti.field(dtype=ti.f32, shape=(TILE_SIZE, TILE_SIZE))
+
+    # Pre-allocate h fields once; updated each timestep with from_numpy().
+    # Avoids calling ti.field() inside the loop which exhausts Metal's snode limit.
+    h_r_field = ti.field(dtype=ti.f32, shape=len(nes_r) - 1)
+    h_c_field = ti.field(dtype=ti.f32, shape=len(nes_c) - 1)
+
+    # ── Taichi kernels ─────────────────────────────────────────────────────────
+
+    @ti.kernel
+    @no_type_check
+    def rasterize_wse(
+        x: ti.template(), y: ti.template(),
+        hw: ti.template(), hh: ti.template(),
+        z: ti.template(), h: ti.template(),
+        tile: ti.template(),
+        tile_min_x: float, tile_max_y: float,
+        hr: float, vr: float,
+        t_rows: int, t_cols: int,
+    ):
+        """Rasterise WSE (h) onto *tile*; pixels where depth < min_depth → nodata."""
+        for i in x:
+            px  = x[i];  py  = y[i]
+            phw = hw[i]; phh = hh[i]
+
+            e_min_x = px - phw;  e_max_x = px + phw
+            e_min_y = py - phh;  e_max_y = py + phh
+
+            tile_max_x = tile_min_x + t_cols * hr
+            tile_min_y = tile_max_y - t_rows * vr
+
+            if (e_max_x >= tile_min_x and e_min_x < tile_max_x and
+                    e_max_y >= tile_min_y and e_min_y < tile_max_y):
+                wse = h[i]
+                if (wse - z[i]) < min_depth:
+                    wse = -9999.0
+
+                c0 = ti.max(0, int(ti.floor((e_min_x - tile_min_x) / hr)))
+                c1 = ti.min(t_cols - 1, int(ti.floor((e_max_x - tile_min_x) / hr)))
+                r0 = ti.max(0, int(ti.floor((tile_max_y - e_max_y) / vr)))
+                r1 = ti.min(t_rows - 1, int(ti.floor((tile_max_y - e_min_y) / vr)))
+
+                for r in range(r0, r1 + 1):
+                    for c in range(c0, c1 + 1):
+                        tile[r, c] = wse
+
+    # ── Discover shared UVH timesteps ──────────────────────────────────────────
+    ts_ref = {p.stem.split('_')[-1]: p for p in uvh_path_ref.glob('uvh_*.fdb')}
+    ts_cmp = {p.stem.split('_')[-1]: p for p in uvh_path_cmp.glob('uvh_*.fdb')}
+    common = sorted(
+        set(ts_ref) & set(ts_cmp),
+        key=lambda t: datetime.strptime(t, '%Y%m%d-%H%M%S').timestamp(),
+    )
+    if not common:
+        raise ValueError('No common UVH timestamps found between cfg_ref and cfg_cmp.')
+    print(f'Processing {len(common)} shared UVH timesteps ...')
+
+    # ── Optional: load rainfall for hyetograph overlay ─────────────────────────
+    rain_dts: list[datetime] | None = None
+    rain_qty: np.ndarray | None = None
+    if force_cfg is not None:
+        rain_fdb_path = Path(force_cfg.rain_fdb)
+        if rain_fdb_path.exists():
+            _rfdb   = fdb.ORM.load(str(rain_fdb_path), from_file=True)
+            _rfall  = _rfdb[Rainfall][Rainfall]
+            rain_dts = [datetime.fromtimestamp(float(t), tz=timezone.utc).replace(tzinfo=None) for t in _rfall.column.time]
+            rain_qty = _rfall.column.quantity.copy()   # mm per interval
+        else:
+            print(f'Warning: rain.fdb not found at {rain_fdb_path}, skipping hyetograph.')
+
+    # ── Per-timestep spatial MAE computation ───────────────────────────────────
+    mae_list:  list[float]    = []
+    time_axis: list[datetime] = []
+
+    for ts in common:
+        uvh_r = fdb.ORM.load(str(ts_ref[ts]), from_file=True)[UVH][UVH]
+        uvh_c = fdb.ORM.load(str(ts_cmp[ts]), from_file=True)[UVH][UVH]
+
+        # Reuse pre-allocated fields; no new ti.field() allocation here
+        h_r_field.from_numpy(uvh_r.column.h[1:].astype(np.float32))
+        h_c_field.from_numpy(uvh_c.column.h[1:].astype(np.float32))
+
+        mae_sum_acc = 0.0
+        mae_cnt_acc = 0
+
+        for row_off in range(0, g_height, TILE_SIZE):
+            for col_off in range(0, g_width, TILE_SIZE):
+                t_rows  = min(TILE_SIZE, g_height - row_off)
+                t_cols  = min(TILE_SIZE, g_width  - col_off)
+                top_y   = gmax_y - row_off * g_vr
+                left_x  = gmin_x + col_off * g_hr
+
+                tile_ref.fill(-9999.0)
+                tile_cmp.fill(-9999.0)
+
+                rasterize_wse(
+                    ex_r, ey_r, ehw_r, ehh_r, ez_r, h_r_field,
+                    tile_ref, left_x, top_y, g_hr, g_vr, t_rows, t_cols,
+                )
+                rasterize_wse(
+                    ex_c, ey_c, ehw_c, ehh_c, ez_c, h_c_field,
+                    tile_cmp, left_x, top_y, g_hr, g_vr, t_rows, t_cols,
+                )
+
+                # MAE reduction on CPU; tiles are small (≤ TILE_SIZE²) so this is fast.
+                # Avoids ti.f64 / ti.i64 which are unsupported on Metal (macOS GPU).
+                tr_np = tile_ref.to_numpy()[:t_rows, :t_cols]
+                tc_np = tile_cmp.to_numpy()[:t_rows, :t_cols]
+                mask  = (tr_np > -9000.0) & (tc_np > -9000.0)
+                if mask.any():
+                    mae_sum_acc += float(np.sum(np.abs(tr_np[mask] - tc_np[mask])))
+                    mae_cnt_acc += int(mask.sum())
+
+        mae = mae_sum_acc / mae_cnt_acc if mae_cnt_acc > 0 else 0.0
+        mae_list.append(mae)
+        time_axis.append(datetime.strptime(ts, '%Y%m%d-%H%M%S'))
+        print(f'  {ts}: MAE = {mae:.4f} m  (N_wet = {mae_cnt_acc} px)')
+
+    # ── Plot ───────────────────────────────────────────────────────────────────
+    plt.rcParams['font.family'] = 'Times New Roman'
+
+    fig, ax1 = plt.subplots(figsize=(14, 5))
+
+    ax1.plot(time_axis, mae_list, color='steelblue', linewidth=2, label='Spatial MAE (m)')
+    ax1.set_xlabel('Time', fontweight='bold')
+    ax1.set_ylabel('Spatial MAE of WSE (m)', color='steelblue', fontweight='bold')
+    ax1.tick_params(axis='y', labelcolor='steelblue')
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d %H:%M'))
+    fig.autofmt_xdate()
+
+    if rain_dts is not None and rain_qty is not None and len(rain_dts) > 1:
+        # Clamp rainfall records to the simulation time range
+        sim_start = min(time_axis)
+        sim_end   = max(time_axis)
+        rain_pairs = [(d, q) for d, q in zip(rain_dts, rain_qty) if sim_start <= d <= sim_end]
+        if rain_pairs:
+            rain_dts_clamped, rain_qty_clamped = zip(*rain_pairs)
+            ax2 = ax1.twinx()
+            dt_sec = (rain_dts[1] - rain_dts[0]).total_seconds()
+            bar_w  = dt_sec / 86400.0   # matplotlib date unit = 1 day
+            ax2.bar(
+                rain_dts_clamped, rain_qty_clamped,
+                width=bar_w, align='edge',
+                alpha=0.35, color='dimgray', label='Rainfall (mm)',
+            )
+            ax2.set_ylabel('Rainfall (mm)', color='dimgray', fontweight='bold')
+            ax2.tick_params(axis='y', labelcolor='dimgray')
+            ax2.invert_yaxis()   # meteorological convention: bars grow downward from top
+            ax2.legend(loc='upper right')
+
+    ref_label = Path(cfg_ref.domain_dir).name
+    cmp_label = Path(cfg_cmp.domain_dir).name
+    ax1.set_title(f'Spatial MAE of WSE — {ref_label}  vs  {cmp_label}  (min_depth = {min_depth} m)', fontweight='bold')
+    ax1.legend(loc='upper left')
+    plt.tight_layout()
+
+    if output_path:
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
+        print(f'Saved figure to: {output_path}')
+    if show:
+        plt.show()
+    plt.close(fig)
+
+    return mae_list

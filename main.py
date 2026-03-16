@@ -2,7 +2,7 @@ from src.nh_flood_2d.preprocess import preprocess
 from src.nh_flood_2d.core.solver_compact import solver
 from src.nh_flood_2d.output.hydrograph import draw_hydrograph, compare_hydrograph
 from src.nh_flood_2d.input import load_domain_config, DomainConfig, load_force_config, ForceConfig
-from src.nh_flood_2d.output.flood_map import generate_flood_map, generate_max_inundation_extent_map
+from src.nh_flood_2d.output.flood_map import generate_flood_map, generate_max_inundation_extent_map, plot_spatial_mae_curve
 
 df7_cfg = load_force_config('./resource/df7.json')
 df11_cfg = load_force_config('./resource/df11.json')
@@ -19,10 +19,12 @@ if __name__ == '__main__':
     # evolve_domain(domain_mrcg_gw, df7_cfg)
     
     # draw_hydrograph(domain_mrcg, 'D74', True, -3600)
-    # generate_flood_map(domain_mrcg)
+    # generate_flood_map(domain_4)
     
-    generate_max_inundation_extent_map(domain_4)
+    # generate_max_inundation_extent_map(domain_4)
     
-    # mses = compare_hydrograph([domain_mrcg, domain_mrcg_gw], 'D43C', clampped=True, show=True, show_obs=False)
+    # mses = compare_hydrograph([domain_4], 'R22', clampped=True, show=True, show_obs=False, baseline=domain_4)
     # print(f'RMSEs: {mses}')
+    
+    plot_spatial_mae_curve(domain_4, domain_mrcg, df7_cfg)
     
