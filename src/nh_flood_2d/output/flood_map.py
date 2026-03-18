@@ -4,8 +4,10 @@ import numpy as np
 import taichi as ti
 import fastdb4py as fdb
 from pathlib import Path
-from datetime import datetime, timezone
+import matplotlib.pyplot as plt
 from typing import no_type_check
+import matplotlib.dates as mdates
+from datetime import datetime, timezone
 from rasterio.transform import from_origin
 
 from ..input import DomainConfig, ForceConfig
@@ -528,8 +530,6 @@ def plot_spatial_mae_curve(
     -------
     List of per-timestep spatial MAE values (metres), in chronological order.
     """
-    import matplotlib.pyplot as plt
-    import matplotlib.dates as mdates
 
     init_taichi()
 
