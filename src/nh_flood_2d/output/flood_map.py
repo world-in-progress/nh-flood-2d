@@ -803,7 +803,6 @@ def plot_spatial_mae_curve(
                 )
 
                 # MAE reduction on CPU; tiles are small (≤ TILE_SIZE²) so this is fast.
-                # Avoids ti.f64 / ti.i64 which are unsupported on Metal (macOS GPU).
                 tr_np = tile_ref.to_numpy()[:t_rows, :t_cols]
                 tc_np = tile_cmp.to_numpy()[:t_rows, :t_cols]
                 mask  = (tr_np > -9000.0) & (tc_np > -9000.0)
@@ -823,7 +822,7 @@ def plot_spatial_mae_curve(
 
     ax1.plot(time_axis, mae_list, color='steelblue', linewidth=2, label='Spatial MAE (m)')
     ax1.set_xlabel('Time', fontweight='bold')
-    ax1.set_ylabel('Spatial MAE of WSE (m)', color='steelblue', fontweight='bold')
+    ax1.set_ylabel('Spatial MAE of WSE (m)', color='steelblue', fontweight='bold', fontsize=16)
     ax1.tick_params(axis='y', labelcolor='steelblue')
     ax1.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d %H:%M'))
     fig.autofmt_xdate()
@@ -843,19 +842,19 @@ def plot_spatial_mae_curve(
                 width=bar_w, align='edge',
                 alpha=0.35, color='dimgray', label='Rainfall (mm)',
             )
-            ax2.set_ylabel('Rainfall (mm)', color='dimgray', fontweight='bold')
+            ax2.set_ylabel('Rainfall (mm)', color='dimgray', fontweight='bold', fontsize=16)
             ax2.tick_params(axis='y', labelcolor='dimgray')
-            ax2.invert_yaxis()   # meteorological convention: bars grow downward from top
+            ax2.invert_yaxis()      # meteorological convention: bars grow downward from top
             ax2.legend(loc='upper right')
 
     ref_label = Path(cfg_ref.domain_dir).name
     cmp_label = Path(cfg_cmp.domain_dir).name
-    ax1.set_title(f'Spatial MAE of WSE — {ref_label}  vs  {cmp_label}  (min_depth = {min_depth} m)', fontweight='bold')
+    # ax1.set_title(f'Spatial MAE of WSE — {ref_label}  vs  {cmp_label}  (min_depth = {min_depth} m)', fontweight='bold')
     ax1.legend(loc='upper left')
     plt.tight_layout()
 
     if output_path:
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
         print(f'Saved figure to: {output_path}')
     if show:
         plt.show()
