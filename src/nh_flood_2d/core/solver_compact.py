@@ -194,13 +194,15 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
     cumulative_rain_time_t = ti.field(dtype=ti.f32, shape=())
 
     # Infiltration rate
-    fr1 = ti.field(dtype=ti.f32, shape=())   # building
-    fr2 = ti.field(dtype=ti.f32, shape=())   # road
-    fr3 = ti.field(dtype=ti.f32, shape=())   # agricultural land
-    fr4 = ti.field(dtype=ti.f32, shape=())   # fish pond
-    fr5 = ti.field(dtype=ti.f32, shape=())   # mountainous land
-    fr6 = ti.field(dtype=ti.f32, shape=())   # water body
-    fr7 = ti.field(dtype=ti.f32, shape=())   # catch basin
+    fr1 = ti.field(dtype=ti.f32, shape=())   # building land
+    fr2 = ti.field(dtype=ti.f32, shape=())   # business land
+    fr3 = ti.field(dtype=ti.f32, shape=())   # industrial land
+    fr4 = ti.field(dtype=ti.f32, shape=())   # transport land
+    fr5 = ti.field(dtype=ti.f32, shape=())   # infrastructure land
+    fr6 = ti.field(dtype=ti.f32, shape=())   # agricultural land
+    fr7 = ti.field(dtype=ti.f32, shape=())   # fish pond land
+    # fr8                                    # water body
+    # fr9                                    # mountainous land
 
     # Time counters
     current_time = 0.0
@@ -210,9 +212,11 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
 
     @ti.kernel
     @no_type_check
-    def init_gpu(ex_t: ti.template(), ey_t: ti.template(),
-                 isl_data: ti.template(), isl_ptr_l: ti.template(),
-                 sx_t: ti.template()):
+    def init_gpu(
+        ex_t: ti.template(), ey_t: ti.template(),
+        isl_data: ti.template(), isl_ptr_l: ti.template(),
+        sx_t: ti.template()
+    ):
         ndt_t[None] = 0.1
         cumulative_rain_time_t[None] = 0.0
 
@@ -227,7 +231,10 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
             # Get side length (all four sides are the same for square elements)
             lsi0 = isl_data[isl_ptr_l[ei]]
             esl_t[ei] = ti.max((ex_t[ei] - sx_t[lsi0]) * 2.0, 0.0001)
-            # eu_t[ei] = 0b1 << (eu_t[ei] - 1)    # set type flag bit
+            
+            # Set water level of elements in water body to 2.0m
+            if eu_t[ei] == 8:
+                h_t[ei] = 2.0
 
         for si in range(1, s_num):
             sq_t[si] = 0.0
@@ -352,14 +359,14 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
 
             # Calculate infiltration masks for all underlay types
             eu = eu_t[ei]       # underlay type value
-            f1 = ti.select(eu == 1, 1.0, 0.0)    # building
-            f2 = ti.select(eu == 2, 1.0, 0.0)    # road
-            f3 = ti.select(eu == 3, 1.0, 0.0)    # agricultural land
-            f4 = ti.select(eu == 4, 1.0, 0.0)    # fish pond
-            f5 = ti.select(eu == 5, 1.0, 0.0)    # mountainous land
-            f6 = ti.select(eu == 6, 1.0, 0.0)    # water body
-            f7 = ti.select(eu == 7, 1.0, 0.0)    # catch basin
-
+            f1 = ti.select(eu == 1, 1.0, 0.0)
+            f2 = ti.select(eu == 2, 1.0, 0.0)
+            f3 = ti.select(eu == 3, 1.0, 0.0)
+            f4 = ti.select(eu == 4, 1.0, 0.0)
+            f5 = ti.select(eu == 5, 1.0, 0.0)
+            f6 = ti.select(eu == 6, 1.0, 0.0)
+            f7 = ti.select(eu == 7, 1.0, 0.0)
+                                   
             ea = esl_t[ei] ** 2                 # area of element
             next_h = h_t[ei] + (tq * dt) / ea   # update next water depth
             next_h += rainq * dt                # add rainfall effect
