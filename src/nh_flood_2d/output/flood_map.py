@@ -24,10 +24,10 @@ def compute_depth(h: ti.template(), z: ti.template(), depth: ti.template()):
     Water depth = max(h - z, 0)
     """
     for i in h:
-        # depth[i] = ti.max(h[i] - z[i], 0.0)
-        depth[i] = h[i]
-        if (h[i] - z[i]) < 0.2:  # if depth < 0.2m, consider it dry
-            depth[i] = -9999.0  # mark as invalid if max depth < threshold
+        depth[i] = ti.max(h[i] - z[i], 0.0)
+        # depth[i] = h[i]
+        # if (h[i] - z[i]) < 0.2:  # if depth < 0.2m, consider it dry
+        #     depth[i] = -9999.0  # mark as invalid if max depth < threshold
 
 def get_area_meta(ne_fdb_fn: str, ns_fdb_fn: str):
     """
@@ -487,6 +487,122 @@ def generate_max_inundation_extent_map(cfg: DomainConfig, min_depth: float = 0.0
         dst.write(result, 1)
 
     print(f'Saved max inundation map to: {output_path}')
+
+def generate_f1_score_map(
+    truth_path: str,
+    pred_path: str,
+    output_path: str,
+    invalid_data: int = -128,
+) -> dict[str, float]:
+    """
+    Generate a spatial F1-Score classification map from two binary inundation extent maps.
+
+    Both inputs should be binary int8 GeoTIFFs produced by generate_max_inundation_extent_map
+    with is_absolute=True (values: 0=dry, 1=wet, invalid_data=outside domain).
+
+    The prediction raster is reprojected to the truth raster grid (nearest-neighbour) before
+    comparison, so the two inputs do not need to share the same resolution or extent.
+
+    Output pixel categories (written as classified int8 GeoTIFF with embedded colormap):
+      - 1  → TP: both truth and prediction flooded  (blue)
+      - 2  → FP: prediction flooded, truth dry      (red)
+      - 3  → FN: truth flooded, prediction dry       (gray)
+      - 0  → TN: both dry                            (transparent)
+      - invalid_data → either input is outside its domain
+
+    Parameters
+    ----------
+    truth_path   : Path to the truth binary inundation GeoTIFF (treated as ground truth).
+    pred_path    : Path to the prediction binary inundation GeoTIFF.
+    output_path  : Destination path for the classified GeoTIFF.
+    invalid_data : Nodata value used in both input rasters (default -128 for int8).
+
+    Returns
+    -------
+    dict with keys 'f1', 'precision', 'recall', 'tp', 'fp', 'fn', 'tn'.
+    """
+    from rasterio.enums import Resampling
+    from rasterio.warp import reproject as rio_reproject
+
+    # ── Read truth raster ──────────────────────────────────────────────────────
+    with rasterio.open(truth_path) as src:
+        truth = src.read(1).astype(np.int16)
+        truth_transform = src.transform
+        truth_crs = src.crs
+        truth_shape = src.shape
+
+    # ── Reproject prediction onto the truth grid ───────────────────────────────
+    pred_aligned = np.full(truth_shape, invalid_data, dtype=np.int16)
+    with rasterio.open(pred_path) as src:
+        rio_reproject(
+            source=rasterio.band(src, 1),
+            destination=pred_aligned,
+            src_transform=src.transform,
+            src_crs=src.crs,
+            dst_transform=truth_transform,
+            dst_crs=truth_crs,
+            resampling=Resampling.nearest,
+            src_nodata=invalid_data,
+            dst_nodata=invalid_data,
+        )
+
+    # ── Classify pixels ────────────────────────────────────────────────────────
+    invalid_mask = (truth == invalid_data) | (pred_aligned == invalid_data)
+    tp_mask = (truth == 1) & (pred_aligned == 1) & ~invalid_mask
+    fp_mask = (truth == 0) & (pred_aligned == 1) & ~invalid_mask
+    fn_mask = (truth == 1) & (pred_aligned == 0) & ~invalid_mask
+    tn_mask = (truth == 0) & (pred_aligned == 0) & ~invalid_mask
+
+    result = np.zeros(truth_shape, dtype=np.int8)
+    result[tp_mask] = 1
+    result[fp_mask] = 2
+    result[fn_mask] = 3
+    result[tn_mask] = 0
+    result[invalid_mask] = np.int8(invalid_data)
+
+    # ── Compute metrics ────────────────────────────────────────────────────────
+    tp = int(tp_mask.sum())
+    fp = int(fp_mask.sum())
+    fn = int(fn_mask.sum())
+    tn = int(tn_mask.sum())
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall    = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1        = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+
+    print(f'F1: {f1:.4f}  |  Precision: {precision:.4f}  |  Recall: {recall:.4f}')
+    print(f'TP: {tp}  FP: {fp}  FN: {fn}  TN: {tn}')
+
+    # ── Write classified GeoTIFF with embedded colormap ────────────────────────
+    out_path = Path(output_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with rasterio.open(
+        out_path, 'w',
+        driver='GTiff',
+        height=truth_shape[0], width=truth_shape[1], count=1,
+        dtype=rasterio.int8,
+        crs=truth_crs,
+        transform=truth_transform,
+        nodata=invalid_data,
+        compress='lzw',
+        tiled=True,
+        blockxsize=512, blockysize=512,
+    ) as dst:
+        dst.write(result, 1)
+        # RGBA colormap embedded in the GeoTIFF (readable by QGIS, ArcGIS, etc.)
+        dst.write_colormap(1, {
+            0: (255, 255, 255, 0),    # TN  — transparent white
+            1: (70,  130, 180, 255),  # TP  — steel blue
+            2: (205,  92,  92, 255),  # FP  — indian red
+            3: (169, 169, 169, 255),  # FN  — gray
+        })
+
+    print(f'Saved F1-score map to: {out_path}')
+
+    return {'f1': f1, 'precision': precision, 'recall': recall,
+            'tp': tp, 'fp': fp, 'fn': fn, 'tn': tn}
+
 
 def plot_spatial_mae_curve(
     cfg_ref: DomainConfig,
