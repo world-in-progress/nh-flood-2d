@@ -3,6 +3,7 @@ from src.nh_flood_2d.core.solver_compact import solver
 from src.nh_flood_2d.output.hydrograph import draw_hydrograph, compare_hydrograph
 from src.nh_flood_2d.input import load_domain_config, DomainConfig, load_force_config, ForceConfig
 from src.nh_flood_2d.output.flood_map import generate_flood_map, generate_max_inundation_extent_map, plot_spatial_mae_curve
+from src.nh_flood_2d.util.alt import modify_dem_by_lum
 
 df7_cfg = load_force_config('./resource/df7.json')
 df11_cfg = load_force_config('./resource/df11.json')
@@ -27,5 +28,13 @@ if __name__ == '__main__':
     # mses = compare_hydrograph([domain_4], 'R22', clampped=True, show=True, show_obs=False, baseline=domain_4)
     # print(f'RMSEs: {mses}')
     
-    plot_spatial_mae_curve(domain_4, domain_mrcg, df7_cfg, output_path='./resource/spatial_mae_curve.png')
+    modify_dem_by_lum(
+        dem_path='./resource/dem.tif',
+        lum_path='./resource/LUM.tif',
+        land_use_type=8,
+        output_path='./resource/modified_dem.tif',
+        minus_value=2,
+    )
+    
+    # plot_spatial_mae_curve(domain_4, domain_mrcg, df7_cfg, output_path='./resource/spatial_mae_curve.png')
     
