@@ -6,9 +6,21 @@ readme = "README.md"
 requires-python = "==3.10.17"
 dependencies = [
     "fastdb4py>=0.1.12",
+    "geopandas>=1.1.3",
+    "imageio>=2.34",
+    "imageio-ffmpeg>=0.5",
     "matplotlib>=3.10.8",
     "pandas>=2.3.3",
+    "pillow>=10.0",
     "pydantic>=2.12.5",
     "rasterio>=1.4.4",
+    "scipy>=1.15.3",
     "taichi>=1.7.4",
+    "triangle>=2023.11.28",
+    "shapely>=2.1.2",
+]
+
+[tool.uv.workspace]
+members = [
+    "resource/rebuild_dem",
 ]
