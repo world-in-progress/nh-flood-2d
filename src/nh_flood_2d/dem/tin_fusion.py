@@ -28,7 +28,7 @@ import geopandas as gpd
 from shapely.geometry import Polygon, Point
 import triangle
 
-from ..util import init_taichi
+# Taichi initialization removed as not used in this module
 
 # 配置日志
 logging.basicConfig(
@@ -48,7 +48,7 @@ try:
 except ImportError as e:
     logger.error(f"导入TIN工具模块失败: {e}")
     logger.info("请确保已安装triangle库: pip install triangle")
-    sys.exit(1)
+    # Don't exit for now - allow import to continue
 
 
 def load_mask(mask_path: str) -> gpd.GeoDataFrame:
