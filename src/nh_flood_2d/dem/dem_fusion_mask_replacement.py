@@ -24,6 +24,7 @@ import rasterio.features
 from scipy.interpolate import LinearNDInterpolator
 from scipy.spatial import Delaunay
 from shapely.geometry import Point, Polygon
+from .tin_utils import create_constrained_tin, triangle_area
 import geopandas as gpd
 import logging
 import sys
@@ -274,3 +275,50 @@ def merge_point_clouds(bay_points: Tuple[np.ndarray, np.ndarray, np.ndarray],
                f"Z[{all_z.min():.1f}, {all_z.max():.1f}]")
 
     return merged_points
+
+
+def create_tin_from_points(points: np.ndarray, max_triangle_area: float = 8.0) -> Tuple[Delaunay, np.ndarray]:
+    """
+    从点云创建带面积约束的TIN
+
+    Args:
+        points: Nx3点云数组 (x, y, z)
+        max_triangle_area: 最大三角形面积（平方米）
+
+    Returns:
+        Tuple[Delaunay, np.ndarray]: 三角网对象和点云数组
+    """
+    logger.info(f"从{len(points):,}个点创建TIN，最大三角形面积={max_triangle_area}m²")
+
+    # 提取XY坐标
+
+    xy_points = points[:, :2]
+
+    # 创建带约束的三角网
+
+    tin = create_constrained_tin(xy_points, max_triangle_area)
+
+    # 验证TIN覆盖范围
+
+    if len(tin.simplices) == 0:
+        raise ValueError("无法创建有效的三角网")
+
+    # 计算三角形统计信息
+
+    areas = []
+    for simplex in tin.simplices:
+        tri_points = xy_points[simplex]
+
+        area = triangle_area(tri_points[0], tri_points[1], tri_points[2])
+
+        areas.append(area)
+
+    logger.info(f"TIN统计: {len(tin.simplices):,}个三角形，"
+
+               f"平均面积={np.mean(areas):.2f}m²，"
+
+               f"最大面积={np.max(areas):.2f}m²，"
+
+               f"最小面积={np.min(areas):.2f}m²")
+
+    return tin, xy_points
