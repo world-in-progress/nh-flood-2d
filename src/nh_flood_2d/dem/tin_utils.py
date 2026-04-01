@@ -62,14 +62,14 @@ def split_triangle(tri_points: np.ndarray, max_area: float) -> List[np.ndarray]:
     elif sides[0][1] == 2 and sides[0][2] == 3:
         # 分割p2-p3边
         return [
-            np.array([p1, p2, mid23]),
-            np.array([p1, mid23, p3])
+            np.array([p2, mid23, p1]),
+            np.array([p3, mid23, p1])
         ]
     else:
         # 分割p3-p1边
         return [
-            np.array([p1, p2, mid31]),
-            np.array([p2, p3, mid31])
+            np.array([p3, mid31, p2]),
+            np.array([p1, mid31, p2])
         ]
 
 

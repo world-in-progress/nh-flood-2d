@@ -454,3 +454,174 @@ def merge_dem_layers(non_mask_layer: np.ndarray, mask_interp_layer: np.ndarray,
                f"总计={total_pixels:,}")
 
     return output_dem
+
+
+def write_dem(output_path: str, dem_array: np.ndarray, dem_meta: dict):
+    """
+    将DEM数据写入TIFF文件
+
+    Args:
+        output_path: 输出文件路径
+        dem_array: DEM高程矩阵
+        dem_meta: DEM元数据
+    """
+    logger.info(f"写入输出DEM: {output_path}")
+
+    # 更新元数据
+    out_meta = dem_meta.copy()
+    out_meta.update({
+        'driver': 'GTiff',
+        'count': 1,
+        'dtype': str(dem_array.dtype),
+        'nodata': dem_meta.get('nodata', -9999.0)
+    })
+
+    # 确保数据类型匹配
+    output_dtype = dem_meta.get('dtype', 'float32')
+    if output_dtype == 'int32':
+        dem_array = dem_array.astype(np.int32)
+    elif output_dtype == 'float32':
+        dem_array = dem_array.astype(np.float32)
+    else:
+        dem_array = dem_array.astype(np.float32)
+
+    # 写入文件
+    with rasterio.open(output_path, 'w', **out_meta) as dst:
+        dst.write(dem_array, 1)
+
+    logger.info(f"DEM写入完成，文件大小: {dem_array.shape[1]}x{dem_array.shape[0]}")
+
+
+def fuse_dem_with_mask_replacement(
+    dem_path: str,
+    mask_shp_path: str,
+    bay_points_path: str,
+    shenzhenhe_points_path: str,
+    output_path: str,
+    output_resolution: float = 4.0,
+    max_triangle_area: float = 8.0,
+    nodata_value: float = -9999.0
+) -> None:
+    """
+    主函数：使用分块掩模替换法融合DEM
+
+    Args:
+        dem_path: 原始DEM文件路径
+        mask_shp_path: 掩模shapefile路径
+        bay_points_path: bay.txt点云文件路径
+        shenzhenhe_points_path: shenzhenhe.csv点云文件路径
+        output_path: 输出DEM文件路径
+        output_resolution: 输出分辨率（米）
+        max_triangle_area: 最大三角形面积（平方米）
+        nodata_value: 无数据值
+    """
+    start_time = time.time()
+    logger.info("开始DEM融合处理（分块掩模替换法）")
+    logger.info(f"原始DEM: {dem_path}")
+    logger.info(f"掩模文件: {mask_shp_path}")
+    logger.info(f"bay.txt点云: {bay_points_path}")
+    logger.info(f"shenzhenhe.csv点云: {shenzhenhe_points_path}")
+    logger.info(f"输出文件: {output_path}")
+    logger.info(f"输出分辨率: {output_resolution}米")
+    logger.info(f"最大三角形面积: {max_triangle_area}平方米")
+
+    try:
+        # 步骤1: 重采样DEM到目标分辨率
+        logger.info("步骤1/8: 重采样DEM")
+        dem_array, dem_meta = resample_dem_to_4m(dem_path, output_resolution)
+
+        # 步骤2: 栅格化掩模
+        logger.info("步骤2/8: 栅格化掩模")
+        mask_raster = rasterize_mask(
+            mask_shp_path,
+            dem_meta['transform'],
+            dem_meta['width'],
+            dem_meta['height'],
+            dem_meta['crs']
+        )
+
+        # 步骤3: 提取掩模外像元
+        logger.info("步骤3/8: 提取掩模外像元")
+        non_mask_layer = extract_non_mask_pixels(dem_array, mask_raster)
+
+        # 步骤4: 读取和合并高精度点云
+        logger.info("步骤4/8: 读取高精度点云")
+        bay_points = read_bay_points(bay_points_path)
+        shenzhenhe_points = read_shenzhenhe_points(shenzhenhe_points_path)
+        highres_points = merge_point_clouds(bay_points, shenzhenhe_points)
+
+        # 步骤5: 创建带面积约束的TIN
+        logger.info("步骤5/8: 创建带面积约束的TIN")
+        tin, xy_points = create_tin_from_points(highres_points, max_triangle_area)
+
+        # 步骤6: 对掩模区域进行TIN插值
+        logger.info("步骤6/8: 对掩模区域进行TIN插值")
+        mask_interp_layer = interpolate_mask_area(
+            mask_raster, dem_meta, tin, xy_points, highres_points[:, 2]
+        )
+
+        # 步骤7: 合并图层
+        logger.info("步骤7/8: 合并DEM图层")
+        fused_dem = merge_dem_layers(non_mask_layer, mask_interp_layer, nodata_value)
+
+        # 步骤8: 写入输出文件
+        logger.info("步骤8/8: 写入输出DEM")
+        # 更新元数据中的NoData值
+        dem_meta['nodata'] = nodata_value
+        write_dem(output_path, fused_dem, dem_meta)
+
+        # 计算处理时间
+        elapsed_time = time.time() - start_time
+        logger.info(f"处理完成! 总耗时: {elapsed_time:.2f}秒")
+
+        # 输出统计信息
+        valid_pixels = np.sum(~np.isclose(fused_dem, nodata_value) & ~np.isnan(fused_dem))
+        total_pixels = fused_dem.size
+        logger.info(f"输出DEM统计: {valid_pixels:,}/{total_pixels:,}有效像素 "
+                   f"({100*valid_pixels/total_pixels:.1f}%)")
+
+    except Exception as e:
+        logger.error(f"DEM融合处理失败: {e}")
+        raise
+
+
+def main():
+    """主函数：命令行接口"""
+    import argparse
+
+    parser = argparse.ArgumentParser(description='DEM融合脚本（分块掩模替换法）')
+    parser.add_argument('--dem', required=True, help='原始DEM文件路径')
+    parser.add_argument('--mask', required=True, help='掩模shapefile路径')
+    parser.add_argument('--bay-points', required=True, help='bay.txt点云文件路径')
+    parser.add_argument('--shenzhenhe-points', required=True, help='shenzhenhe.csv点云文件路径')
+    parser.add_argument('--output', required=True, help='输出DEM文件路径')
+    parser.add_argument('--resolution', type=float, default=4.0, help='输出分辨率（米）')
+    parser.add_argument('--max-triangle-area', type=float, default=8.0, help='最大三角形面积（平方米）')
+    parser.add_argument('--nodata', type=float, default=-9999.0, help='无数据值')
+
+    args = parser.parse_args()
+
+    # 确保输出目录存在
+    output_dir = os.path.dirname(args.output)
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
+    try:
+        fuse_dem_with_mask_replacement(
+            dem_path=args.dem,
+            mask_shp_path=args.mask,
+            bay_points_path=args.bay_points,
+            shenzhenhe_points_path=args.shenzhenhe_points,
+            output_path=args.output,
+            output_resolution=args.resolution,
+            max_triangle_area=args.max_triangle_area,
+            nodata_value=args.nodata
+        )
+
+    except Exception as e:
+        logger.error(f"脚本执行失败: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
