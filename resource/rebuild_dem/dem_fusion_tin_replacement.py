@@ -3,12 +3,13 @@
 DEM融合脚本（TIN替换方法）
 
 该脚本实现基于TIN（三角不规则网络）的DEM融合算法，用于替换研究区域内的原始DEM数据。
-算法流程：
+算法流程（6步）：
 1. 读取研究区域掩膜和输入DEM
 2. 从研究区域边界和内部均匀采样点
 3. 构建TIN（三角不规则网络）
-4. 在TIN表面进行插值，替换研究区域内的DEM值
-5. 保存融合后的DEM
+4. 在TIN表面进行插值
+5. 替换研究区域内的DEM值
+6. 保存融合后的DEM
 
 作者: Claude Code
 日期: 2026-03-31
@@ -25,6 +26,7 @@ import rasterio
 from rasterio.transform import Affine
 import geopandas as gpd
 from shapely.geometry import Polygon, Point
+import triangle
 
 # 添加项目根目录到路径
 project_root = Path(__file__).parent.parent.parent
@@ -43,9 +45,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# 初始化Taichi
-init_taichi()
-
 # 导入TIN工具模块
 try:
     from tin_utils import build_tin, sample_tin_points, interpolate_tin
@@ -59,85 +58,64 @@ except ImportError as e:
 def load_mask(mask_path: str) -> gpd.GeoDataFrame:
     """加载研究区域掩膜"""
     logger.info(f"加载研究区域掩膜: {mask_path}")
-    try:
-        gdf = gpd.read_file(mask_path)
-        logger.info(f"掩膜包含 {len(gdf)} 个多边形")
-        return gdf
-    except Exception as e:
-        logger.error(f"加载掩膜失败: {e}")
-        raise
+    # TODO: 实现掩膜加载逻辑
+    pass
 
 
 def load_dem(dem_path: str) -> Tuple[np.ndarray, Affine, dict]:
     """加载DEM数据"""
     logger.info(f"加载DEM数据: {dem_path}")
-    try:
-        with rasterio.open(dem_path) as src:
-            dem_array = src.read(1)
-            transform = src.transform
-            crs = src.crs
-            profile = src.profile.copy()
-            logger.info(f"DEM尺寸: {dem_array.shape}, 分辨率: {transform[0]}m")
-            logger.info(f"坐标系: {crs}")
-            return dem_array, transform, profile
-    except Exception as e:
-        logger.error(f"加载DEM失败: {e}")
-        raise
+    # TODO: 实现DEM加载逻辑
+    pass
 
 
 def extract_mask_geometry(mask_gdf: gpd.GeoDataFrame) -> Polygon:
     """从GeoDataFrame中提取掩膜多边形"""
-    if len(mask_gdf) == 0:
-        raise ValueError("掩膜文件中没有多边形")
-
-    # 取第一个多边形（假设只有一个研究区域）
-    geometry = mask_gdf.iloc[0].geometry
-    if geometry.geom_type != 'Polygon':
-        raise ValueError(f"期望多边形几何类型，实际得到: {geometry.geom_type}")
-
-    logger.info(f"掩膜多边形面积: {geometry.area:.2f} 平方米")
-    return geometry
+    logger.info("提取掩膜几何")
+    # TODO: 实现掩膜几何提取逻辑
+    pass
 
 
 def sample_boundary_points(geometry: Polygon, spacing: float = 10.0) -> np.ndarray:
     """沿多边形边界采样点"""
     logger.info(f"沿边界采样点，间距: {spacing}m")
-
-    boundary = geometry.boundary
-    if boundary.geom_type == 'LineString':
-        lines = [boundary]
-    elif boundary.geom_type == 'MultiLineString':
-        lines = list(boundary.geoms)
-    else:
-        raise ValueError(f"意外的边界类型: {boundary.geom_type}")
-
-    points = []
-    for line in lines:
-        length = line.length
-        num_points = max(2, int(length / spacing) + 1)
-
-        for i in range(num_points):
-            distance = (i / (num_points - 1)) * length if num_points > 1 else 0
-            point = line.interpolate(distance)
-            points.append([point.x, point.y])
-
-    boundary_points = np.array(points)
-    logger.info(f"边界采样点数量: {len(boundary_points)}")
-    return boundary_points
+    # TODO: 实现边界点采样逻辑
+    pass
 
 
-def create_output_profile(original_profile: dict, nodata_value: float = -9999.0) -> dict:
-    """创建输出DEM的profile"""
-    profile = original_profile.copy()
-    profile.update({
-        'dtype': 'float32',
-        'nodata': nodata_value,
-        'compress': 'lzw',
-        'tiled': True,
-        'blockxsize': 256,
-        'blockysize': 256,
-    })
-    return profile
+def sample_interior_points(geometry: Polygon, spacing: float = 5.0) -> np.ndarray:
+    """在多边形内部均匀采样点"""
+    logger.info(f"在内部均匀采样点，间距: {spacing}m")
+    # TODO: 实现内部点采样逻辑
+    pass
+
+
+def build_tin_surface(boundary_points: np.ndarray, interior_points: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """构建TIN表面"""
+    logger.info("构建TIN表面")
+    # TODO: 调用TIN构建函数
+    pass
+
+
+def interpolate_tin_surface(vertices: np.ndarray, triangles: np.ndarray, query_points: np.ndarray) -> np.ndarray:
+    """在TIN表面进行插值"""
+    logger.info("TIN表面插值")
+    # TODO: 调用TIN插值函数
+    pass
+
+
+def replace_dem_values(dem_array: np.ndarray, mask_geometry: Polygon, tin_values: np.ndarray) -> np.ndarray:
+    """替换DEM中的值"""
+    logger.info("替换DEM值")
+    # TODO: 实现DEM值替换逻辑
+    pass
+
+
+def save_output_dem(output_path: str, dem_array: np.ndarray, profile: dict) -> None:
+    """保存输出DEM"""
+    logger.info(f"保存输出DEM到: {output_path}")
+    # TODO: 实现DEM保存逻辑
+    pass
 
 
 def main():
@@ -166,24 +144,19 @@ def main():
         # 3. 采样边界点
         boundary_points = sample_boundary_points(geometry)
 
-        # 4. 采样内部点（均匀网格）
-        # TODO: 实现内部点采样
+        # 4. 采样内部点
+        interior_points = sample_interior_points(geometry)
 
         # 5. 构建TIN
-        # TODO: 调用TIN构建函数
+        vertices, triangles = build_tin_surface(boundary_points, interior_points)
 
-        # 6. 插值替换DEM
-        # TODO: 调用TIN插值函数
+        # 6. 插值并替换DEM值
+        query_points = None  # TODO: 生成查询点
+        tin_values = interpolate_tin_surface(vertices, triangles, query_points)
+        modified_dem = replace_dem_values(dem_array, geometry, tin_values)
 
         # 7. 保存结果
-        logger.info(f"保存融合后的DEM到: {output_path}")
-
-        # 创建输出profile
-        output_profile = create_output_profile(profile)
-
-        # 保存DEM
-        with rasterio.open(output_path, 'w', **output_profile) as dst:
-            dst.write(dem_array.astype(np.float32), 1)
+        save_output_dem(output_path, modified_dem, profile)
 
         logger.info("DEM融合完成")
 
