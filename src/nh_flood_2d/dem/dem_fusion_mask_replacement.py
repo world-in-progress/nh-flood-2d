@@ -322,3 +322,135 @@ def create_tin_from_points(points: np.ndarray, max_triangle_area: float = 8.0) -
                f"最小面积={np.min(areas):.2f}m²")
 
     return tin, xy_points
+
+
+def interpolate_mask_area(mask_raster: np.ndarray, dem_meta: dict,
+                         tin: Delaunay, points: np.ndarray,
+                         z_values: np.ndarray,
+                         batch_size: int = 100000) -> np.ndarray:
+    """
+    对掩模区域进行TIN插值
+
+    Args:
+        mask_raster: 掩模栅格（1=掩模内）
+        dem_meta: DEM元数据
+        tin: 三角网对象
+        points: 点云XY坐标
+        z_values: 点云Z值
+        batch_size: 批处理大小
+
+    Returns:
+        np.ndarray: 插值后的高程数组（与mask_raster相同形状）
+    """
+    logger.info(f"对掩模区域进行TIN插值，掩模像素={np.sum(mask_raster):,}")
+
+    # 创建插值器
+    from scipy.interpolate import LinearNDInterpolator
+    interpolator = LinearNDInterpolator(points, z_values, fill_value=np.nan)
+
+    # 获取掩模内像素的坐标
+    mask_indices = np.where(mask_raster == 1)
+    if len(mask_indices[0]) == 0:
+        logger.warning("掩模内没有像素需要插值")
+        return np.full_like(mask_raster, np.nan, dtype=np.float32)
+
+    # 将像素索引转换为地理坐标
+    rows, cols = mask_indices
+    xs, ys = rasterio.transform.xy(dem_meta['transform'], rows, cols)
+    mask_coords = np.column_stack([xs, ys])
+
+    # 分批插值以避免内存问题
+    num_points = len(mask_coords)
+    num_batches = (num_points + batch_size - 1) // batch_size
+
+    interpolated_values = np.full(num_points, np.nan, dtype=np.float32)
+
+    for batch_idx in range(num_batches):
+        start_idx = batch_idx * batch_size
+        end_idx = min(start_idx + batch_size, num_points)
+
+        batch_coords = mask_coords[start_idx:end_idx]
+        batch_interp = interpolator(batch_coords)
+
+        interpolated_values[start_idx:end_idx] = batch_interp
+
+        if (batch_idx + 1) % 10 == 0 or batch_idx == num_batches - 1:
+            valid_count = np.sum(~np.isnan(batch_interp))
+            logger.info(f"  批处理 {batch_idx+1}/{num_batches}: {start_idx:,}-{end_idx:,}, "
+                       f"有效插值={valid_count:,}")
+
+    # 创建输出数组
+    output_array = np.full_like(mask_raster, np.nan, dtype=np.float32)
+    output_array[mask_raster == 1] = interpolated_values
+
+    valid_total = np.sum(~np.isnan(output_array))
+    logger.info(f"插值完成: 有效值={valid_total:,}/{np.sum(mask_raster):,}个掩模像素")
+
+    return output_array
+
+
+def extract_non_mask_pixels(dem_array: np.ndarray, mask_raster: np.ndarray) -> np.ndarray:
+    """
+    提取掩模外的像元
+
+    Args:
+        dem_array: DEM高程数组
+        mask_raster: 掩模栅格（1=掩模内）
+
+    Returns:
+        np.ndarray: 掩模外像元的高程数组（与dem_array相同形状）
+    """
+    logger.info("提取掩模外像元")
+
+    # 创建输出数组（掩模外保留原值，掩模内设为NaN）
+    output_array = np.full_like(dem_array, np.nan, dtype=dem_array.dtype)
+    non_mask_mask = (mask_raster == 0)
+    output_array[non_mask_mask] = dem_array[non_mask_mask]
+
+    non_mask_count = np.sum(non_mask_mask)
+    total_pixels = dem_array.size
+    logger.info(f"掩模外像元: {non_mask_count:,}/{total_pixels:,} ({100*non_mask_count/total_pixels:.1f}%)")
+
+    return output_array
+
+
+def merge_dem_layers(non_mask_layer: np.ndarray, mask_interp_layer: np.ndarray,
+                    nodata_value: float = -9999.0) -> np.ndarray:
+    """
+    合并掩模外层和掩模内插值层
+
+    Args:
+        non_mask_layer: 掩模外像元层
+        mask_interp_layer: 掩模内插值层
+        nodata_value: 无数据值
+
+    Returns:
+        np.ndarray: 合并后的DEM
+    """
+    logger.info("合并DEM图层")
+
+    # 创建输出数组
+    output_dem = np.full_like(non_mask_layer, nodata_value, dtype=np.float32)
+
+    # 首先填充掩模外像元（优先）
+    non_mask_mask = ~np.isnan(non_mask_layer)
+    output_dem[non_mask_mask] = non_mask_layer[non_mask_mask]
+
+    # 然后填充掩模内插值像元
+    mask_interp_mask = ~np.isnan(mask_interp_layer)
+    # 只填充掩模外没有值的区域
+    fill_mask = mask_interp_mask & ~non_mask_mask
+    output_dem[fill_mask] = mask_interp_layer[fill_mask]
+
+    # 统计
+    non_mask_count = np.sum(non_mask_mask)
+    mask_interp_count = np.sum(fill_mask)
+    nodata_count = np.sum(np.isclose(output_dem, nodata_value) | np.isnan(output_dem))
+    total_pixels = output_dem.size
+
+    logger.info(f"合并完成: 掩模外={non_mask_count:,}, "
+               f"掩模内插值={mask_interp_count:,}, "
+               f"无数据={nodata_count:,}, "
+               f"总计={total_pixels:,}")
+
+    return output_dem
