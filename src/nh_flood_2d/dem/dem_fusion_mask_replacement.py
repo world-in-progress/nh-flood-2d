@@ -152,3 +152,125 @@ def rasterize_mask(mask_shp_path: str, target_transform: Affine,
     logger.info(f"掩模栅格化完成: {mask_pixels}/{total_pixels}像素在掩模内 ({100*mask_pixels/total_pixels:.1f}%)")
 
     return mask_raster
+
+
+def read_bay_points(bay_txt_path: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    读取bay.txt格式的点云数据（制表符分隔，第一列为索引）
+
+    Args:
+        bay_txt_path: bay.txt文件路径
+
+    Returns:
+        Tuple[x_coords, y_coords, z_coords]: 三个一维数组
+    """
+    logger.info(f"读取bay.txt点云: {bay_txt_path}")
+
+    x_list, y_list, z_list = [], [], []
+
+    with open(bay_txt_path, 'r') as f:
+        for line_num, line in enumerate(f):
+            line = line.strip()
+            if not line:
+                continue
+
+            try:
+                parts = line.split()
+                if len(parts) >= 4:  # 索引 + x y z
+                    # 跳过索引，取后三个值
+                    x, y, z = parts[1], parts[2], parts[3]
+                elif len(parts) == 3:  # 可能没有索引
+                    x, y, z = parts[0], parts[1], parts[2]
+                else:
+                    logger.warning(f"跳过格式不正确的行 {line_num}: {line[:50]}...")
+                    continue
+
+                x_list.append(float(x))
+                y_list.append(float(y))
+                z_list.append(float(z))
+
+            except (ValueError, IndexError) as e:
+                logger.warning(f"解析错误行 {line_num}: {e}")
+                continue
+
+    logger.info(f"从bay.txt读取 {len(x_list):,} 个点")
+    return np.array(x_list), np.array(y_list), np.array(z_list)
+
+
+def read_shenzhenhe_points(csv_path: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    读取shenzhenhe.csv格式的点云数据（逗号分隔，有标题行）
+
+    Args:
+        csv_path: CSV文件路径
+
+    Returns:
+        Tuple[x_coords, y_coords, z_coords]: 三个一维数组
+    """
+    logger.info(f"读取shenzhenhe.csv点云: {csv_path}")
+
+    x_list, y_list, z_list = [], [], []
+    header_skipped = False
+
+    with open(csv_path, 'r') as f:
+        for line_num, line in enumerate(f):
+            line = line.strip()
+            if not line:
+                continue
+
+            # 跳过标题行
+            if not header_skipped and ('x,' in line.lower() or 'x,y,z' in line.lower()):
+                header_skipped = True
+                continue
+
+            try:
+                # 移除可能的引号并分割
+                line = line.replace('"', '').replace("'", "")
+                parts = line.split(',')
+
+                if len(parts) >= 3:
+                    x, y, z = parts[0], parts[1], parts[2]
+                    x_list.append(float(x))
+                    y_list.append(float(y))
+                    z_list.append(float(z))
+                else:
+                    logger.warning(f"跳过格式不正确的行 {line_num}: {line[:50]}...")
+                    continue
+
+            except (ValueError, IndexError) as e:
+                logger.warning(f"解析错误行 {line_num}: {e}")
+                continue
+
+    logger.info(f"从shenzhenhe.csv读取 {len(x_list):,} 个点")
+    return np.array(x_list), np.array(y_list), np.array(z_list)
+
+
+def merge_point_clouds(bay_points: Tuple[np.ndarray, np.ndarray, np.ndarray],
+                      shenzhenhe_points: Tuple[np.ndarray, np.ndarray, np.ndarray]) -> np.ndarray:
+    """
+    合并两个点云数据集
+
+    Args:
+        bay_points: bay.txt点云 (x, y, z)
+        shenzhenhe_points: shenzhenhe.csv点云 (x, y, z)
+
+    Returns:
+        np.ndarray: 合并后的Nx3点云数组
+    """
+    bay_x, bay_y, bay_z = bay_points
+    szh_x, szh_y, szh_z = shenzhenhe_points
+
+    # 合并点云
+    all_x = np.concatenate([bay_x, szh_x])
+    all_y = np.concatenate([bay_y, szh_y])
+    all_z = np.concatenate([bay_z, szh_z])
+
+    # 创建Nx3数组
+    merged_points = np.column_stack([all_x, all_y, all_z])
+
+    logger.info(f"合并点云完成: bay={len(bay_x):,} + shenzhenhe={len(szh_x):,} = {len(merged_points):,}点")
+    logger.info(f"合并后范围: X[{all_x.min():.1f}, {all_x.max():.1f}], "
+               f"Y[{all_y.min():.1f}, {all_y.max():.1f}], "
+               f"Z[{all_z.min():.1f}, {all_z.max():.1f}]")
+
+    return merged_points

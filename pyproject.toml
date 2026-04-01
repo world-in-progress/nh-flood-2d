@@ -13,6 +13,7 @@ dependencies = [
     "pandas>=2.3.3",
     "pillow>=10.0",
     "pydantic>=2.12.5",
+    "pytest>=8.0.0",
     "rasterio>=1.4.4",
     "scipy>=1.15.3",
     "taichi>=1.7.4",
@@ -21,6 +22,4 @@ dependencies = [
 ]
 
 [tool.uv.workspace]
-members = [
-    "resource/rebuild_dem",
-]
+members = []

@@ -17,7 +17,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # 导入待测试模块
-from src.nh_flood_2d.dem.dem_fusion_mask_replacement import resample_dem_to_4m, rasterize_mask
+from src.nh_flood_2d.dem.dem_fusion_mask_replacement import resample_dem_to_4m, rasterize_mask, read_bay_points, read_shenzhenhe_points, merge_point_clouds
 
 
 def test_resample_dem_to_4m():
@@ -26,10 +26,12 @@ def test_resample_dem_to_4m():
     import rasterio
     from rasterio.transform import from_origin
 
-    # 创建临时TIFF文件
-    with tempfile.NamedTemporaryFile(suffix='.tif', delete=False) as tmp:
-        tmp_path = tmp.name
+    # 创建临时文件名
+    import tempfile
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix='.tif')
+    os.close(tmp_fd)  # 关闭文件描述符
 
+    try:
         # 创建测试DEM（100x100，10米分辨率）
         transform = from_origin(0, 1000, 10, 10)
         data = np.random.rand(100, 100).astype(np.float32)
@@ -42,27 +44,27 @@ def test_resample_dem_to_4m():
                           nodata=-9999) as dst:
             dst.write(data, 1)
 
-        try:
-            # 测试重采样到4米
-            dem_array, dem_meta = resample_dem_to_4m(tmp_path, 4.0)
+        # 测试重采样到4米
+        dem_array, dem_meta = resample_dem_to_4m(tmp_path, 4.0)
 
-            # 验证结果
-            assert dem_array is not None
-            assert 'width' in dem_meta
-            assert 'height' in dem_meta
-            assert 'resolution' in dem_meta
-            assert dem_meta['resolution'] == 4.0
+        # 验证结果
+        assert dem_array is not None
+        assert 'width' in dem_meta
+        assert 'height' in dem_meta
+        assert 'resolution' in dem_meta
+        assert dem_meta['resolution'] == 4.0
 
-            # 计算预期尺寸：100*10/4 = 250
-            expected_width = int(np.ceil(100 * 10 / 4))
-            expected_height = int(np.ceil(100 * 10 / 4))
+        # 计算预期尺寸：100*10/4 = 250
+        expected_width = int(np.ceil(100 * 10 / 4))
+        expected_height = int(np.ceil(100 * 10 / 4))
 
-            assert dem_meta['width'] == expected_width
-            assert dem_meta['height'] == expected_height
-            assert dem_array.shape == (expected_height, expected_width)
+        assert dem_meta['width'] == expected_width
+        assert dem_meta['height'] == expected_height
+        assert dem_array.shape == (expected_height, expected_width)
 
-        finally:
-            # 清理
+    finally:
+        # 清理
+        if os.path.exists(tmp_path):
             os.unlink(tmp_path)
 
 
@@ -118,3 +120,66 @@ def test_rasterize_mask():
                     os.unlink(file)
                 except:
                     pass
+
+
+def test_read_bay_points():
+    """测试bay.txt点云读取"""
+    # 创建测试数据
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as tmp:
+        tmp.write("1 100.0 200.0 10.5\n")
+        tmp.write("2 101.0 201.0 11.2\n")
+        tmp.write("3 102.0 202.0 12.8\n")
+        tmp.write("\n")  # 空行
+        tmp.write("4 103.0 203.0 13.1\n")
+        tmp_path = tmp.name
+
+    try:
+        # 导入并测试函数
+        from src.nh_flood_2d.dem.dem_fusion_mask_replacement import read_bay_points
+
+        x, y, z = read_bay_points(tmp_path)
+
+        # 验证结果
+        assert len(x) == 4
+        assert len(y) == 4
+        assert len(z) == 4
+
+        assert x[0] == 100.0
+        assert y[1] == 201.0
+        assert z[2] == 12.8
+        assert x[3] == 103.0
+
+    finally:
+        os.unlink(tmp_path)
+
+
+def test_read_shenzhenhe_points():
+    """测试shenzhenhe.csv点云读取"""
+    # 创建测试数据
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as tmp:
+        tmp.write("x,y,z\n")
+        tmp.write("100.0,200.0,10.5\n")
+        tmp.write("101.0,201.0,11.2\n")
+        tmp.write("102.0,202.0,12.8\n")
+        tmp.write("\n")  # 空行
+        tmp.write("103.0,203.0,13.1\n")
+        tmp_path = tmp.name
+
+    try:
+        # 导入并测试函数
+        from src.nh_flood_2d.dem.dem_fusion_mask_replacement import read_shenzhenhe_points
+
+        x, y, z = read_shenzhenhe_points(tmp_path)
+
+        # 验证结果
+        assert len(x) == 4
+        assert len(y) == 4
+        assert len(z) == 4
+
+        assert x[0] == 100.0
+        assert y[1] == 201.0
+        assert z[2] == 12.8
+        assert x[3] == 103.0
+
+    finally:
+        os.unlink(tmp_path)
