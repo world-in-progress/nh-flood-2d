@@ -19,6 +19,8 @@ dependencies = [
     "taichi>=1.7.4",
     "triangle>=2023.11.28",
     "shapely>=2.1.2",
+    "pygmt>=0.13.0",
+    "xarray>=2025.6.1",
 ]
 
 [tool.uv.workspace]

@@ -4,10 +4,8 @@ import numpy as np
 import taichi as ti
 import fastdb4py as fdb
 from pathlib import Path
-import matplotlib.pyplot as plt
-from typing import no_type_check
-import matplotlib.dates as mdates
 from datetime import datetime, timezone
+from typing import no_type_check
 from rasterio.transform import from_origin
 
 from ..input import DomainConfig, ForceConfig
@@ -20,13 +18,15 @@ TILE_SIZE = 4096
 
 @ti.kernel
 @no_type_check
-def compute_depth(h: ti.template(), z: ti.template(), depth: ti.template()):
+def compute_depth(h: ti.template(), z: ti.template(), depth: ti.template(), min_h: float, invalid_data: float):
     """
     Compute water depth for each element.
     Water depth = max(h - z, 0)
     """
     for i in h:
         depth[i] = ti.max(h[i] - z[i], 0.0)
+        if depth[i] < min_h:
+            depth[i] = invalid_data  # mark as invalid if depth < threshold
         # depth[i] = h[i]
         # if (h[i] - z[i]) < 0.2:  # if depth < 0.2m, consider it dry
         #     depth[i] = -9999.0  # mark as invalid if max depth < threshold
@@ -98,6 +98,9 @@ def generate_flood_map(cfg: DomainConfig):
     """
     init_taichi()
     
+    no_data = -9999.0  # nodata value for dry pixels or outside domain
+    
+    min_h = cfg.min_h
     ne_fdb_fn = cfg.ne_fdb
     ns_fdb_fn = cfg.ns_fdb
     uvhs_dir = cfg.uvh_dir
@@ -164,7 +167,7 @@ def generate_flood_map(cfg: DomainConfig):
         # Compute water depth on GPU
         h_field = copy_to_taichi(uvhs.column.h[1:], ti.f32, None)
         depth_field = ti.field(dtype=ti.f32, shape=e_cnt)
-        compute_depth(h_field, z_field, depth_field)
+        compute_depth(h_field, z_field, depth_field, min_h=min_h, invalid_data=no_data)
         
         # Calculate geotransform
         transform = from_origin(min_x, max_y, hr_np, vr_np)
@@ -178,7 +181,7 @@ def generate_flood_map(cfg: DomainConfig):
             dtype=rasterio.float32,
             crs=rasterio.crs.CRS.from_epsg(epsg_code),
             transform=transform,
-            nodata=-9999.0,
+            nodata=no_data,
             compress='lzw', # good for sparse data
             tiled=True,
             blockxsize=512, blockysize=512
@@ -646,6 +649,8 @@ def plot_spatial_mae_curve(
     -------
     List of per-timestep spatial MAE values (metres), in chronological order.
     """
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
 
     init_taichi()
 
@@ -803,6 +808,7 @@ def plot_spatial_mae_curve(
                 )
 
                 # MAE reduction on CPU; tiles are small (≤ TILE_SIZE²) so this is fast.
+                # Avoids ti.f64 / ti.i64 which are unsupported on Metal (macOS GPU).
                 tr_np = tile_ref.to_numpy()[:t_rows, :t_cols]
                 tc_np = tile_cmp.to_numpy()[:t_rows, :t_cols]
                 mask  = (tr_np > -9000.0) & (tc_np > -9000.0)
@@ -822,7 +828,7 @@ def plot_spatial_mae_curve(
 
     ax1.plot(time_axis, mae_list, color='steelblue', linewidth=2, label='Spatial MAE (m)')
     ax1.set_xlabel('Time', fontweight='bold')
-    ax1.set_ylabel('Spatial MAE of WSE (m)', color='steelblue', fontweight='bold', fontsize=16)
+    ax1.set_ylabel('Spatial MAE of WSE (m)', color='steelblue', fontweight='bold')
     ax1.tick_params(axis='y', labelcolor='steelblue')
     ax1.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d %H:%M'))
     fig.autofmt_xdate()
@@ -842,22 +848,118 @@ def plot_spatial_mae_curve(
                 width=bar_w, align='edge',
                 alpha=0.35, color='dimgray', label='Rainfall (mm)',
             )
-            ax2.set_ylabel('Rainfall (mm)', color='dimgray', fontweight='bold', fontsize=16)
+            ax2.set_ylabel('Rainfall (mm)', color='dimgray', fontweight='bold')
             ax2.tick_params(axis='y', labelcolor='dimgray')
-            ax2.invert_yaxis()      # meteorological convention: bars grow downward from top
+            ax2.invert_yaxis()   # meteorological convention: bars grow downward from top
             ax2.legend(loc='upper right')
 
     ref_label = Path(cfg_ref.domain_dir).name
     cmp_label = Path(cfg_cmp.domain_dir).name
-    # ax1.set_title(f'Spatial MAE of WSE — {ref_label}  vs  {cmp_label}  (min_depth = {min_depth} m)', fontweight='bold')
+    ax1.set_title(f'Spatial MAE of WSE — {ref_label}  vs  {cmp_label}  (min_depth = {min_depth} m)', fontweight='bold')
     ax1.legend(loc='upper left')
     plt.tight_layout()
 
     if output_path:
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
         print(f'Saved figure to: {output_path}')
     if show:
         plt.show()
     plt.close(fig)
 
     return mae_list
+
+
+def generate_flood_video(
+    cfg: DomainConfig,
+    output_path: str,
+    interval_second: float = 0.2,
+) -> None:
+    """
+    Generate an MP4 animation from all GeoTIFF flood maps produced by generate_flood_map.
+
+    Each frame corresponds to one flood_map_*.tif file.  noData pixels (and pixels outside
+    the domain) are rendered as black; inundated pixels are rendered as dodger-blue
+    (RGB 30, 144, 255).  The current simulation timestamp is drawn in the top-right corner
+    of every frame, extracted from the TIF filename.  The video resolution matches the
+    TIFFs exactly.
+
+    Parameters
+    ----------
+    cfg             : DomainConfig — used to locate the flood_maps directory.
+    output_path     : Destination file path for the output MP4 (e.g. 'output/flood.mp4').
+    interval_second : Duration of each frame in seconds (default 0.2 → 5 fps).
+    """
+    import imageio
+    from PIL import Image, ImageDraw, ImageFont
+    from datetime import datetime
+
+    flood_map_dir = Path(cfg.flood_map_dir)
+    tif_paths = sorted(
+        flood_map_dir.glob('flood_map_*.tif'),
+        key=lambda p: int(p.stem.split('_')[2]),  # sort by embedded frame index
+    )
+
+    if not tif_paths:
+        print(f'No flood map TIFFs found in {flood_map_dir}. Run generate_flood_map first.')
+        return
+
+    fps = 1.0 / interval_second
+
+    # Read the first frame to determine video resolution
+    with rasterio.open(str(tif_paths[0])) as src:
+        nodata = src.nodata
+        height, width = src.height, src.width
+
+    print(f'Generating flood video: {len(tif_paths)} frames, {width}x{height} px, {fps:.1f} fps')
+
+    out_path = Path(output_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    blue = np.array([30, 144, 255], dtype=np.uint8)  # dodger blue for inundated pixels
+
+    # Scale font size relative to image width (roughly 1.5% of width, min 14px)
+    font_size = max(14, int(width * 0.015))
+    try:
+        font = ImageFont.truetype('arial.ttf', font_size)
+    except OSError:
+        font = ImageFont.load_default()
+
+    padding = max(6, font_size // 3)
+
+    with imageio.get_writer(str(out_path), fps=fps, codec='libx264', quality=8) as writer:
+        for idx, tif_path in enumerate(tif_paths):
+            with rasterio.open(str(tif_path)) as src:
+                data = src.read(1)  # shape (H, W), float32
+
+            # Build RGB frame: black background, blue for valid (wet) pixels
+            frame = np.zeros((height, width, 3), dtype=np.uint8)
+            if nodata is not None:
+                valid_mask = (data != nodata) & np.isfinite(data)
+            else:
+                valid_mask = np.isfinite(data)
+            frame[valid_mask] = blue
+
+            # Parse timestamp from filename: flood_map_{idx}_{YYYYMMDD-HHMMSS}.tif
+            ts_str = tif_path.stem.split('_')[-1]
+            dt = datetime.strptime(ts_str, '%Y%m%d-%H%M%S')
+            label = dt.strftime('%Y-%m-%d  %H:%M:%S')
+
+            # Draw timestamp in top-right corner using Pillow
+            img = Image.fromarray(frame)
+            draw = ImageDraw.Draw(img)
+            bbox = draw.textbbox((0, 0), label, font=font)
+            text_w = bbox[2] - bbox[0]
+            text_h = bbox[3] - bbox[1]
+            x = width - text_w - padding * 2
+            y = padding
+            # Semi-transparent dark background behind text for readability
+            draw.rectangle([x - padding, y - padding, x + text_w + padding, y + text_h + padding], fill=(0, 0, 0, 160))
+            draw.text((x, y), label, font=font, fill=(255, 255, 255))
+            frame = np.array(img)
+
+            writer.append_data(frame)
+
+            if (idx + 1) % 10 == 0 or idx == len(tif_paths) - 1:
+                print(f'  Encoded frame {idx + 1}/{len(tif_paths)} ...')
+
+    print(f'Saved flood video to: {out_path}')

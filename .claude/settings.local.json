@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(python -c \"import tin_fusion; print\\(''tin_fusion module loaded successfully''\\)\")",
+      "Bash(python test_import.py)",
+      "Bash(python -c \":*)",
+      "Bash(python run_fusion.py)",
+      "Bash(python run_final_fusion.py)",
+      "Bash(python -c \"import run_fusion; print\\(''run_fusion imports successfully''\\)\")",
+      "Bash(python -c \"import run_final_fusion; print\\(''run_final_fusion imports successfully''\\)\")",
+      "Bash(python -c \"import sys; print\\(sys.path[:3]\\)\")",
+      "Read(//d D:/codespace/wzp/**)",
+      "Bash(python -c \"import test_dem_tin_fusion; print\\(''TIN fusion test imports successfully''\\)\")",
+      "Bash(python -c \"import test_dem_fusion; print\\(''DEM fusion test imports successfully''\\)\")",
+      "Bash(git show:*)",
+      "Bash(ls -la resource/rebuild_dem/*.py resource/rebuild_dem/*.toml resource/rebuild_dem/*.md)",
+      "Bash(grep:*)",
+      "Bash(python -m pytest test_dem_tin_fusion.py::TestTinUtils::test_build_delaunay_triangulation -v)",
+      "Bash(python -c \"print\\(''测试结构验证:''\\)\")",
+      "Bash(python tests/test_dem_fusion_mask_replacement.py)",
+      "Bash(python -m pytest tests/test_dem_fusion_mask_replacement.py::test_triangle_area -v)",
+      "Bash(python -m pytest tests/test_dem_fusion_mask_replacement.py::test_create_constrained_tin -v)",
+      "Bash(python -m pytest tests/test_dem_fusion_mask_replacement.py::test_create_tin_from_points -v)",
+      "Bash(python -m pytest tests/test_dem_fusion_mask_replacement.py -v)",
+      "Bash(cd:*)",
+      "Bash(python -m py_compile src/nh_flood_2d/dem/tin_utils.py src/nh_flood_2d/dem/dem_fusion_mask_replacement.py)",
+      "Bash(python test_split_simple.py)",
+      "Bash(python test_fixed_split.py)",
+      "Bash(python debug_split.py)",
+      "Bash(python test_final_split.py)",
+      "Bash(python test_original_issue.py)",
+      "Bash(python test_final_verification.py)",
+      "Bash(python verify_fix_final.py)",
+      "mcp__ide__executeCode",
+      "Bash(python -m py_compile \"src/nh_flood_2d/dem/dem_fusion_mask_replacement.py\")",
+      "Bash(python test_task5_functions.py)",
+      "Bash(python:*)"
+    ]
+  }
+}

@@ -24,7 +24,11 @@ import rasterio.features
 from scipy.interpolate import LinearNDInterpolator
 from scipy.spatial import Delaunay
 from shapely.geometry import Point, Polygon
-from .tin_utils import create_constrained_tin, triangle_area
+try:
+    from .tin_utils import create_constrained_tin, triangle_area
+except ImportError:
+    # 尝试绝对导入
+    from tin_utils import create_constrained_tin, triangle_area
 import geopandas as gpd
 import logging
 import sys
@@ -87,6 +91,8 @@ def resample_dem_to_4m(dem_path: str, output_resolution: float = 4.0) -> Tuple[n
         # 获取NoData值
         nodata = src.nodatavals[0]
         if nodata is not None:
+            # 先将数据类型转换为float32以支持NaN
+            dem_array = dem_array.astype(np.float32)
             dem_array[dem_array == nodata] = np.nan
 
         logger.info(f"重采样完成: {dst_width}x{dst_height} (原: {src.width}x{src.height})")
@@ -97,7 +103,7 @@ def resample_dem_to_4m(dem_path: str, output_resolution: float = 4.0) -> Tuple[n
             'transform': dst_transform,
             'width': dst_width,
             'height': dst_height,
-            'dtype': str(dem_array.dtype),
+            'dtype': 'float32',  # 确保使用float32以支持NaN
             'nodata': nodata,
             'bounds': src.bounds,  # 保持原始范围
             'resolution': output_resolution
@@ -277,116 +283,554 @@ def merge_point_clouds(bay_points: Tuple[np.ndarray, np.ndarray, np.ndarray],
     return merged_points
 
 
-def create_tin_from_points(points: np.ndarray, max_triangle_area: float = 8.0) -> Tuple[Delaunay, np.ndarray]:
+
+
+def save_tin_as_ply(tri: Delaunay, points: np.ndarray, output_path: str) -> None:
     """
-    从点云创建带面积约束的TIN
+    将TIN保存为PLY文件
 
     Args:
-        points: Nx3点云数组 (x, y, z)
-        max_triangle_area: 最大三角形面积（平方米）
+        tri: Delaunay三角剖分对象
+        points: 点云坐标 (Nx3, 包含z值)
+        output_path: 输出PLY文件路径
+    """
+    logger.info(f"保存TIN为PLY文件: {output_path}")
+
+    try:
+        # 确保输出目录存在
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+
+        # 获取三角形索引（Delaunay.simplices）
+        triangles = tri.simplices
+
+        # 准备点云数据（包含x,y,z）
+        vertices = points
+
+        # 写入PLY文件
+        with open(output_path, 'w') as f:
+            # PLY头部
+            f.write("ply\n")
+            f.write("format ascii 1.0\n")
+            f.write(f"element vertex {len(vertices)}\n")
+            f.write("property float x\n")
+            f.write("property float y\n")
+            f.write("property float z\n")
+            f.write(f"element face {len(triangles)}\n")
+            f.write("property list uchar int vertex_index\n")
+            f.write("end_header\n")
+
+            # 写入顶点数据
+            for v in vertices:
+                f.write(f"{v[0]} {v[1]} {v[2]}\n")
+
+            # 写入三角形数据（每个三角形3个顶点索引）
+            for tri_indices in triangles:
+                f.write(f"3 {tri_indices[0]} {tri_indices[1]} {tri_indices[2]}\n")
+
+        logger.info(f"TIN已保存到PLY文件: {output_path}, {len(vertices)}个顶点, {len(triangles)}个三角形")
+
+    except Exception as e:
+        logger.error(f"保存PLY文件失败: {e}")
+        raise
+
+
+def create_quality_tin(points: np.ndarray, mask_coords: np.ndarray,
+                       target_resolution: float = 4.0) -> Tuple[Delaunay, np.ndarray]:
+    """
+    创建高质量TIN（避免细长三角形，确保覆盖掩模区域）
+
+    策略：
+    1. 添加边界点以确保完全覆盖
+    2. 添加内部格网点以改善三角形形状
+    3. 使用约束条件控制三角形质量
+
+    Args:
+        points: 原始点云XY坐标
+        mask_coords: 需要覆盖的掩模区域坐标
+        target_resolution: 目标分辨率（用于生成内部点）
 
     Returns:
-        Tuple[Delaunay, np.ndarray]: 三角网对象和点云数组
+        Tuple[Delaunay, np.ndarray]: 三角剖分对象和增强后的点云（包含Z值占位符）
     """
-    logger.info(f"从{len(points):,}个点创建TIN，最大三角形面积={max_triangle_area}m²")
+    logger.info("创建高质量TIN...")
 
-    # 提取XY坐标
+    # 1. 获取掩模区域的边界框
+    mask_min = mask_coords.min(axis=0)
+    mask_max = mask_coords.max(axis=0)
+    mask_width = mask_max[0] - mask_min[0]
+    mask_height = mask_max[1] - mask_min[1]
 
-    xy_points = points[:, :2]
+    logger.info(f"掩模区域尺寸: {mask_width:.1f}x{mask_height:.1f}米")
 
-    # 创建带约束的三角网
+    # 2. 添加边界点（在掩模边界上均匀采样）
+    boundary_spacing = target_resolution * 2  # 边界点间距
 
-    tin = create_constrained_tin(xy_points, max_triangle_area)
+    # 计算每条边需要的点数
+    num_x_points = max(3, int(mask_width / boundary_spacing))
+    num_y_points = max(3, int(mask_height / boundary_spacing))
 
-    # 验证TIN覆盖范围
+    boundary_points = []
 
-    if len(tin.simplices) == 0:
-        raise ValueError("无法创建有效的三角网")
+    # 底部边界 (y = min_y)
+    y_bottom = mask_min[1]
+    for i in range(num_x_points):
+        x = mask_min[0] + (mask_width * i / (num_x_points - 1)) if num_x_points > 1 else mask_min[0] + mask_width / 2
+        boundary_points.append([x, y_bottom])
 
-    # 计算三角形统计信息
+    # 顶部边界 (y = max_y)
+    y_top = mask_max[1]
+    for i in range(num_x_points):
+        x = mask_min[0] + (mask_width * i / (num_x_points - 1)) if num_x_points > 1 else mask_min[0] + mask_width / 2
+        boundary_points.append([x, y_top])
 
-    areas = []
-    for simplex in tin.simplices:
-        tri_points = xy_points[simplex]
+    # 左侧边界 (x = min_x)
+    x_left = mask_min[0]
+    for i in range(1, num_y_points - 1):  # 跳过角点（已添加）
+        y = mask_min[1] + (mask_height * i / (num_y_points - 1))
+        boundary_points.append([x_left, y])
 
-        area = triangle_area(tri_points[0], tri_points[1], tri_points[2])
+    # 右侧边界 (x = max_x)
+    x_right = mask_max[0]
+    for i in range(1, num_y_points - 1):  # 跳过角点（已添加）
+        y = mask_min[1] + (mask_height * i / (num_y_points - 1))
+        boundary_points.append([x_right, y])
 
-        areas.append(area)
+    boundary_points = np.array(boundary_points)
+    logger.info(f"添加边界点: {len(boundary_points):,}个")
 
-    logger.info(f"TIN统计: {len(tin.simplices):,}个三角形，"
+    # 3. 添加内部格网点以改善三角形形状
+    internal_spacing = target_resolution * 4  # 内部点间距（更大以获得更胖的三角形）
 
-               f"平均面积={np.mean(areas):.2f}m²，"
+    # 创建内部网格
+    x_grid = np.arange(mask_min[0] + internal_spacing/2, mask_max[0], internal_spacing)
+    y_grid = np.arange(mask_min[1] + internal_spacing/2, mask_max[1], internal_spacing)
 
-               f"最大面积={np.max(areas):.2f}m²，"
+    if len(x_grid) > 0 and len(y_grid) > 0:
+        xx, yy = np.meshgrid(x_grid, y_grid)
+        internal_points = np.column_stack([xx.flatten(), yy.flatten()])
+        logger.info(f"添加内部格网点: {len(internal_points):,}个")
+    else:
+        internal_points = np.array([])
+        logger.info("内部区域太小，不添加内部格网点")
 
-               f"最小面积={np.min(areas):.2f}m²")
+    # 4. 合并所有点
+    enhanced_points = points.copy()  # 原始点云
+    if len(boundary_points) > 0:
+        enhanced_points = np.vstack([enhanced_points, boundary_points])
+    if len(internal_points) > 0:
+        enhanced_points = np.vstack([enhanced_points, internal_points])
 
-    return tin, xy_points
+    logger.info(f"点云增强: {len(points):,}原始点 + {len(boundary_points):,}边界点 + {len(internal_points):,}内部点 = {len(enhanced_points):,}总点数")
+
+    # 5. 去重（避免重复点）
+    enhanced_points = np.unique(enhanced_points, axis=0)
+    logger.info(f"去重后点数: {len(enhanced_points):,}")
+
+    # 6. 创建Delaunay三角剖分
+    logger.info("创建增强的Delaunay三角剖分...")
+    tri = Delaunay(enhanced_points)
+
+    # 7. 分析三角形质量
+    simplices = tri.simplices
+    triangles = enhanced_points[simplices]
+
+    # 计算三角形的长宽比（aspect ratio）
+    aspect_ratios = []
+    for tri_vertices in triangles:
+        # 计算三条边的长度
+        edges = [
+            np.linalg.norm(tri_vertices[1] - tri_vertices[0]),
+            np.linalg.norm(tri_vertices[2] - tri_vertices[1]),
+            np.linalg.norm(tri_vertices[0] - tri_vertices[2])
+        ]
+        edges = np.array(edges)
+        if np.min(edges) > 0:
+            aspect_ratio = np.max(edges) / np.min(edges)
+            aspect_ratios.append(aspect_ratio)
+
+    if aspect_ratios:
+        aspect_ratios = np.array(aspect_ratios)
+        logger.info(f"三角形质量统计: 平均长宽比={np.mean(aspect_ratios):.2f}, 最大长宽比={np.max(aspect_ratios):.2f}")
+        logger.info(f"优质三角形比例（长宽比<5）: {np.sum(aspect_ratios < 5)/len(aspect_ratios)*100:.1f}%")
+
+    logger.info(f"高质量TIN创建完成: {len(tri.simplices):,}个三角形")
+
+    return tri, enhanced_points
+
+
+def check_tin_coverage(tri: Delaunay, mask_coords: np.ndarray, tolerance: float = 1e-6) -> Tuple[bool, np.ndarray]:
+    """
+    检查TIN是否完全覆盖掩模区域
+
+    Args:
+        tri: Delaunay三角剖分对象
+        mask_coords: 需要覆盖的掩模区域坐标
+        tolerance: 容差
+
+    Returns:
+        Tuple[bool, np.ndarray]: (是否完全覆盖, 未覆盖点的坐标)
+    """
+    logger.info("检查TIN覆盖情况...")
+
+    # 创建插值器来检查覆盖情况
+    # 对于覆盖检查，我们只需要知道点是否在凸包内，不需要实际值
+    from scipy.interpolate import LinearNDInterpolator
+
+    # 为增强点创建一个简单的测试值（全部为1）
+    test_values = np.ones(len(tri.points))
+
+    # 创建插值器（fill_value=-1表示凸包外的点）
+    interpolator = LinearNDInterpolator(tri, test_values, fill_value=-1)
+
+    # 检查所有掩模坐标点
+    values = interpolator(mask_coords)
+
+    # 找出未覆盖的点（值为-1）
+    uncovered_mask = values == -1
+    uncovered_count = np.sum(uncovered_mask)
+
+    if uncovered_count > 0:
+        logger.warning(f"TIN未完全覆盖掩模区域: {uncovered_count:,}/{len(mask_coords):,}个点未覆盖")
+        uncovered_coords = mask_coords[uncovered_mask]
+
+        # 计算未覆盖区域的比例
+        uncovered_ratio = uncovered_count / len(mask_coords)
+        logger.warning(f"未覆盖比例: {uncovered_ratio*100:.2f}%")
+
+        return False, uncovered_coords
+    else:
+        logger.info("TIN完全覆盖掩模区域")
+        return True, np.array([])
 
 
 def interpolate_mask_area(mask_raster: np.ndarray, dem_meta: dict,
-                         tin: Delaunay, points: np.ndarray,
+                         points: np.ndarray,
                          z_values: np.ndarray,
-                         batch_size: int = 100000) -> np.ndarray:
+                         batch_size: int = 1000000,
+                         nodata_value: float = -9999.0,
+                         tin_output_path: Optional[str] = None) -> np.ndarray:
     """
-    对掩模区域进行TIN插值
+    对掩模区域进行TIN插值（改进版：生成高质量三角形并确保完全覆盖）
+
+    步骤：
+    1. 生成高质量TIN（添加边界点和内部点，避免细长三角形）
+    2. 检查TIN是否完全覆盖掩模区域，验证覆盖
+    3. 使用TIN插值所有掩模栅格
 
     Args:
         mask_raster: 掩模栅格（1=掩模内）
         dem_meta: DEM元数据
-        tin: 三角网对象
         points: 点云XY坐标
         z_values: 点云Z值
         batch_size: 批处理大小
+        nodata_value: 无数据值
+        tin_output_path: TIN输出为PLY文件的路径（可选）
 
     Returns:
         np.ndarray: 插值后的高程数组（与mask_raster相同形状）
     """
-    logger.info(f"对掩模区域进行TIN插值，掩模像素={np.sum(mask_raster):,}")
+    logger.info(f"开始TIN插值（改进版）：点云数量={len(points):,}，掩模像素={np.sum(mask_raster):,}")
 
-    # 创建插值器
-    from scipy.interpolate import LinearNDInterpolator
-    interpolator = LinearNDInterpolator(points, z_values, fill_value=np.nan)
+    # 检查是否有足够的点进行插值
+    if len(points) < 3:
+        logger.warning("点云数量不足，无法进行三角剖分插值")
+        return np.full_like(mask_raster, nodata_value, dtype=np.float32)
 
-    # 获取掩模内像素的坐标
-    mask_indices = np.where(mask_raster == 1)
-    if len(mask_indices[0]) == 0:
-        logger.warning("掩模内没有像素需要插值")
-        return np.full_like(mask_raster, np.nan, dtype=np.float32)
+    try:
+        # 获取原始DEM的变换和尺寸
+        target_transform = dem_meta['transform']
+        target_width = dem_meta['width']
+        target_height = dem_meta['height']
+        resolution = dem_meta.get('resolution', 4.0)
 
-    # 将像素索引转换为地理坐标
-    rows, cols = mask_indices
-    xs, ys = rasterio.transform.xy(dem_meta['transform'], rows, cols)
-    mask_coords = np.column_stack([xs, ys])
+        logger.info(f"目标网格尺寸: {target_width}x{target_height}，分辨率: {resolution}米")
 
-    # 分批插值以避免内存问题
-    num_points = len(mask_coords)
-    num_batches = (num_points + batch_size - 1) // batch_size
+        # 获取掩模内像素的坐标
+        mask_indices = np.where(mask_raster == 1)
+        if len(mask_indices[0]) == 0:
+            logger.warning("掩模内没有像素需要插值")
+            return np.full_like(mask_raster, nodata_value, dtype=np.float32)
 
-    interpolated_values = np.full(num_points, np.nan, dtype=np.float32)
+        rows, cols = mask_indices
+        xs, ys = rasterio.transform.xy(target_transform, rows, cols)
+        mask_coords = np.column_stack([xs, ys])
 
-    for batch_idx in range(num_batches):
-        start_idx = batch_idx * batch_size
-        end_idx = min(start_idx + batch_size, num_points)
+        logger.info(f"需要插值的掩模像素坐标数量: {len(mask_coords):,}")
 
-        batch_coords = mask_coords[start_idx:end_idx]
-        batch_interp = interpolator(batch_coords)
+        # 1. 生成高质量TIN（添加边界点和内部点）
+        logger.info("步骤1/4: 生成高质量TIN（避免细长三角形）")
+        tri, enhanced_points = create_quality_tin(points, mask_coords, resolution)
 
-        interpolated_values[start_idx:end_idx] = batch_interp
+        # 为增强点云创建对应的Z值（原始点用真实Z值，新增点用插值估计）
+        # 首先创建一个临时的插值器用于估算新增点的Z值
+        temp_interpolator = LinearNDInterpolator(points, z_values, fill_value=np.nan)
 
-        if (batch_idx + 1) % 10 == 0 or batch_idx == num_batches - 1:
-            valid_count = np.sum(~np.isnan(batch_interp))
-            logger.info(f"  批处理 {batch_idx+1}/{num_batches}: {start_idx:,}-{end_idx:,}, "
-                       f"有效插值={valid_count:,}")
+        # 为增强点云创建Z值数组
+        enhanced_z_values = np.empty(len(enhanced_points))
 
-    # 创建输出数组
-    output_array = np.full_like(mask_raster, np.nan, dtype=np.float32)
-    output_array[mask_raster == 1] = interpolated_values
+        # 为原始点分配真实的Z值
+        # 创建一个映射：查找原始点在增强点云中的位置
+        enhanced_z_values[:] = np.nan
 
-    valid_total = np.sum(~np.isnan(output_array))
-    logger.info(f"插值完成: 有效值={valid_total:,}/{np.sum(mask_raster):,}个掩模像素")
+        # 对于每个原始点，找到在增强点云中的对应位置
+        for i in range(len(points)):
+            # 查找距离最近的点（应该就是同一个点）
+            dists = np.linalg.norm(enhanced_points - points[i], axis=1)
+            closest_idx = np.argmin(dists)
+            enhanced_z_values[closest_idx] = z_values[i]
 
-    return output_array
+        # 为新增点插值Z值
+        nan_mask = np.isnan(enhanced_z_values)
+        if np.any(nan_mask):
+            estimated_z = temp_interpolator(enhanced_points[nan_mask])
+            enhanced_z_values[nan_mask] = estimated_z
+
+        # 2. 检查TIN是否完全覆盖掩模区域
+        logger.info("步骤2/4: 验证TIN覆盖情况")
+        is_covered, uncovered_coords = check_tin_coverage(tri, mask_coords)
+
+        if not is_covered:
+            logger.warning(f"TIN未完全覆盖掩模区域，有{len(uncovered_coords):,}个点未覆盖")
+            logger.info("尝试添加额外点来改善覆盖...")
+
+            # 为未覆盖的点找到最近的点
+            for i, coord in enumerate(uncovered_coords[:10]):  # 只添加前10个（避免太多点）
+                # 计算坐标到所有增强点的距离
+                dists = np.linalg.norm(enhanced_points - coord, axis=1)
+
+                # 找到最近的点
+                min_dist_idx = np.argmin(dists)
+                nearest_point = enhanced_points[min_dist_idx]
+
+                # 在最近点和未覆盖点之间添加一个新点
+                new_point = (coord + nearest_point) / 2
+
+                # 添加到增强点云
+                enhanced_points = np.vstack([enhanced_points, new_point])
+
+                # 为这个新点插值Z值
+                new_z = temp_interpolator([new_point])[0]
+                enhanced_z_values = np.append(enhanced_z_values, new_z)
+
+            # 重新生成TIN
+            logger.info("重新生成TIN...")
+            tri = Delaunay(enhanced_points)
+
+            # 再次检查覆盖
+            is_covered, uncovered_coords = check_tin_coverage(tri, mask_coords)
+
+            if not is_covered:
+                logger.error(f"即使添加额外点，仍有{len(uncovered_coords):,}个点未覆盖")
+                logger.warning("将继续处理，但部分区域可能无法正确插值")
+
+        # 3. 输出TIN为PLY文件（如果指定了路径）
+        if tin_output_path:
+            logger.info(f"步骤3/4: 将TIN输出为PLY文件: {tin_output_path}")
+            combined_points = np.column_stack([enhanced_points, enhanced_z_values])
+            save_tin_as_ply(tri, combined_points, tin_output_path)
+
+        # 4. 使用TIN插值所有掩模栅格
+        logger.info("步骤4/4: 使用高质量TIN插值所有掩模栅格")
+
+        # 使用增强点云创建最终的插值器
+        final_interpolator = LinearNDInterpolator(enhanced_points, enhanced_z_values, fill_value=nodata_value)
+
+        # 分批处理以防止内存溢出
+        num_batches = int(np.ceil(len(mask_coords) / batch_size))
+        interpolated_values = np.full(len(mask_coords), nodata_value)
+
+        for batch_idx in range(num_batches):
+            start_idx = batch_idx * batch_size
+            end_idx = min((batch_idx + 1) * batch_size, len(mask_coords))
+
+            batch_coords = mask_coords[start_idx:end_idx]
+            interpolated_values[start_idx:end_idx] = final_interpolator(batch_coords)
+
+            if (batch_idx + 1) % 10 == 0 or batch_idx == num_batches - 1:
+                # 统计有效插值
+                valid_count = np.sum(interpolated_values[start_idx:end_idx] != nodata_value)
+                logger.info(f"插值进度: {batch_idx + 1}/{num_batches}批次 "
+                          f"({end_idx:,}/{len(mask_coords):,}点), 有效插值={valid_count:,}")
+
+        # 检查插值结果
+        failed_count = np.sum(interpolated_values == nodata_value)
+        if failed_count > 0:
+            logger.warning(f"有{failed_count:,}个像素无法插值，将保持为nodata值")
+        else:
+            logger.info("所有掩模像素都成功插值")
+
+        # 创建输出数组
+        output_array = np.full_like(mask_raster, nodata_value, dtype=np.float32)
+        output_array[mask_raster == 1] = interpolated_values
+
+        # 处理NaN值
+        nan_mask = np.isnan(output_array)
+        output_array[nan_mask] = nodata_value
+
+        # 统计有效值
+        valid_total = np.sum(output_array != nodata_value)
+        logger.info(f"插值完成: 有效值={valid_total:,}/{np.sum(mask_raster):,}个掩模像素")
+
+        logger.info(f"最终TIN统计: {len(tri.simplices):,}个三角形, {len(enhanced_points):,}个顶点")
+
+        # 报告三角形质量
+        if len(tri.simplices) > 0:
+            # 简单计算三角形边长统计
+            triangles = enhanced_points[tri.simplices]
+            edge_lengths = []
+            for tri_vertices in triangles:
+                edges = [
+                    np.linalg.norm(tri_vertices[1] - tri_vertices[0]),
+                    np.linalg.norm(tri_vertices[2] - tri_vertices[1]),
+                    np.linalg.norm(tri_vertices[0] - tri_vertices[2])
+                ]
+                edge_lengths.extend(edges)
+
+            if edge_lengths:
+                edge_lengths = np.array(edge_lengths)
+                logger.info(f"三角形边长统计: 平均={np.mean(edge_lengths):.2f}米, 最小={np.min(edge_lengths):.2f}米, 最大={np.max(edge_lengths):.2f}米")
+
+        return output_array
+
+    except Exception as e:
+        logger.error(f"插值过程中发生错误: {e}")
+        raise
+    """
+    对掩模区域进行TIN插值（按照用户要求的新方法）
+
+    步骤：
+    1. 依据点云生成Delaunay三角网（TIN）
+    2. 确保生成的TIN覆盖所有掩模栅格（1=掩模内）
+    3. 将TIN输出成PLY文件（可选）
+    4. 使用TIN插值所有的掩模栅格
+
+    Args:
+        mask_raster: 掩模栅格（1=掩模内）
+        dem_meta: DEM元数据
+        points: 点云XY坐标
+        z_values: 点云Z值
+        batch_size: 批处理大小
+        nodata_value: 无数据值
+        tin_output_path: TIN输出为PLY文件的路径（可选）
+
+    Returns:
+        np.ndarray: 插值后的高程数组（与mask_raster相同形状）
+    """
+    logger.info(f"开始TIN插值：点云数量={len(points):,}，掩模像素={np.sum(mask_raster):,}")
+
+    # 检查是否有足够的点进行插值
+    if len(points) < 3:
+        logger.warning("点云数量不足，无法进行三角剖分插值")
+        return np.full_like(mask_raster, nodata_value, dtype=np.float32)
+
+    try:
+        # 获取原始DEM的变换和尺寸
+        target_transform = dem_meta['transform']
+        target_width = dem_meta['width']
+        target_height = dem_meta['height']
+        resolution = dem_meta.get('resolution', 4.0)
+
+        logger.info(f"目标网格尺寸: {target_width}x{target_height}，分辨率: {resolution}米")
+
+        # 1. 生成Delaunay三角网
+        logger.info("步骤1/4: 生成Delaunay三角网（TIN）")
+        combined_points = np.column_stack([points, z_values])  # 组合成完整的点云数据
+
+        # 创建Delaunay三角剖分
+        logger.info("创建Delaunay三角剖分...")
+        tri = Delaunay(points)
+
+        logger.info(f"TIN生成完成: {len(tri.simplices):,}个三角形，{len(combined_points):,}个顶点")
+
+        # 2. 检查TIN是否覆盖所有掩模栅格
+        logger.info("步骤2/4: 检查TIN是否覆盖所有掩模栅格")
+
+        # 获取掩模内像素的坐标
+        mask_indices = np.where(mask_raster == 1)
+        if len(mask_indices[0]) == 0:
+            logger.warning("掩模内没有像素需要插值")
+            return np.full_like(mask_raster, nodata_value, dtype=np.float32)
+
+        rows, cols = mask_indices
+        xs, ys = rasterio.transform.xy(target_transform, rows, cols)
+        mask_coords = np.column_stack([xs, ys])
+
+        logger.info(f"需要插值的掩模像素坐标数量: {len(mask_coords):,}")
+
+        # 检查点云是否覆盖掩模区域
+        points_min = points.min(axis=0)
+        points_max = points.max(axis=0)
+        mask_coords_min = mask_coords.min(axis=0)
+        mask_coords_max = mask_coords.max(axis=0)
+
+        logger.info(f"点云范围: X[{points_min[0]:.1f}, {points_max[0]:.1f}], Y[{points_min[1]:.1f}, {points_max[1]:.1f}]")
+        logger.info(f"掩模范围: X[{mask_coords_min[0]:.1f}, {mask_coords_max[0]:.1f}], Y[{mask_coords_min[1]:.1f}, {mask_coords_max[1]:.1f}]")
+
+        # 检查点云范围是否包含掩模范围
+        coverage_x = (mask_coords_min[0] >= points_min[0] and mask_coords_max[0] <= points_max[0])
+        coverage_y = (mask_coords_min[1] >= points_min[1] and mask_coords_max[1] <= points_max[1])
+
+        if coverage_x and coverage_y:
+            logger.info("点云范围完全覆盖掩模区域")
+        else:
+            logger.warning("点云范围不完全覆盖掩模区域，可能需要额外处理")
+            logger.info(f"X方向覆盖: {coverage_x}, Y方向覆盖: {coverage_y}")
+
+        # 3. 输出TIN为PLY文件（如果指定了路径）
+        if tin_output_path:
+            logger.info(f"步骤3/4: 将TIN输出为PLY文件: {tin_output_path}")
+            save_tin_as_ply(tri, combined_points, tin_output_path)
+
+        # 4. 使用TIN插值所有掩模栅格
+        logger.info("步骤4/4: 使用TIN插值所有掩模栅格")
+
+        # 使用LinearNDInterpolator进行基于TIN的插值
+        logger.info("使用Delaunay三角网进行线性插值...")
+        interpolator = LinearNDInterpolator(points, z_values, fill_value=nodata_value)
+
+        # 分批处理以防止内存溢出
+        num_batches = int(np.ceil(len(mask_coords) / batch_size))
+        interpolated_values = np.full(len(mask_coords), nodata_value)
+
+        for batch_idx in range(num_batches):
+            start_idx = batch_idx * batch_size
+            end_idx = min((batch_idx + 1) * batch_size, len(mask_coords))
+
+            batch_coords = mask_coords[start_idx:end_idx]
+            interpolated_values[start_idx:end_idx] = interpolator(batch_coords)
+
+            if (batch_idx + 1) % 10 == 0 or batch_idx == num_batches - 1:
+                # 统计有效插值
+                valid_count = np.sum(interpolated_values[start_idx:end_idx] != nodata_value)
+                logger.info(f"插值进度: {batch_idx + 1}/{num_batches}批次 "
+                          f"({end_idx:,}/{len(mask_coords):,}点), 有效插值={valid_count:,}")
+
+        # 检查插值结果
+        failed_count = np.sum(interpolated_values == nodata_value)
+        if failed_count > 0:
+            logger.warning(f"有{failed_count:,}个像素无法插值（可能位于TIN凸包外），将保持为nodata值")
+        else:
+            logger.info("所有掩模像素都成功插值")
+
+        # 创建输出数组
+        output_array = np.full_like(mask_raster, nodata_value, dtype=np.float32)
+        output_array[mask_raster == 1] = interpolated_values
+
+        # 处理NaN值
+        nan_mask = np.isnan(output_array)
+        output_array[nan_mask] = nodata_value
+
+        # 统计有效值
+        valid_total = np.sum(output_array != nodata_value)
+        logger.info(f"插值完成: 有效值={valid_total:,}/{np.sum(mask_raster):,}个掩模像素")
+
+        return output_array
+
+    except Exception as e:
+        logger.error(f"插值过程中发生错误: {e}")
+        raise
 
 
 def extract_non_mask_pixels(dem_array: np.ndarray, mask_raster: np.ndarray) -> np.ndarray:
@@ -476,8 +920,14 @@ def write_dem(output_path: str, dem_array: np.ndarray, dem_meta: dict):
         'nodata': dem_meta.get('nodata', -9999.0)
     })
 
-    # 确保数据类型匹配
+    # 确保数据类型匹配，处理NaN值
     output_dtype = dem_meta.get('dtype', 'float32')
+    nodata = dem_meta.get('nodata', -9999.0)
+
+    # 先将NaN值替换为nodata值
+    nan_mask = np.isnan(dem_array)
+    dem_array[nan_mask] = nodata
+
     if output_dtype == 'int32':
         dem_array = dem_array.astype(np.int32)
     elif output_dtype == 'float32':
@@ -499,8 +949,8 @@ def fuse_dem_with_mask_replacement(
     shenzhenhe_points_path: str,
     output_path: str,
     output_resolution: float = 4.0,
-    max_triangle_area: float = 8.0,
-    nodata_value: float = -9999.0
+    nodata_value: float = -9999.0,
+    tin_output_path: Optional[str] = None
 ) -> None:
     """
     主函数：使用分块掩模替换法融合DEM
@@ -512,8 +962,8 @@ def fuse_dem_with_mask_replacement(
         shenzhenhe_points_path: shenzhenhe.csv点云文件路径
         output_path: 输出DEM文件路径
         output_resolution: 输出分辨率（米）
-        max_triangle_area: 最大三角形面积（平方米）
         nodata_value: 无数据值
+        tin_output_path: TIN输出为PLY文件的路径（可选）
     """
     start_time = time.time()
     logger.info("开始DEM融合处理（分块掩模替换法）")
@@ -523,15 +973,17 @@ def fuse_dem_with_mask_replacement(
     logger.info(f"shenzhenhe.csv点云: {shenzhenhe_points_path}")
     logger.info(f"输出文件: {output_path}")
     logger.info(f"输出分辨率: {output_resolution}米")
-    logger.info(f"最大三角形面积: {max_triangle_area}平方米")
+    if tin_output_path:
+        logger.info(f"TIN输出文件: {tin_output_path}")
+    # 注意：已移除最大三角形面积参数，直接使用点云进行插值
 
     try:
         # 步骤1: 重采样DEM到目标分辨率
-        logger.info("步骤1/8: 重采样DEM")
+        logger.info("步骤1/7: 重采样DEM")
         dem_array, dem_meta = resample_dem_to_4m(dem_path, output_resolution)
 
         # 步骤2: 栅格化掩模
-        logger.info("步骤2/8: 栅格化掩模")
+        logger.info("步骤2/7: 栅格化掩模")
         mask_raster = rasterize_mask(
             mask_shp_path,
             dem_meta['transform'],
@@ -541,31 +993,32 @@ def fuse_dem_with_mask_replacement(
         )
 
         # 步骤3: 提取掩模外像元
-        logger.info("步骤3/8: 提取掩模外像元")
+        logger.info("步骤3/7: 提取掩模外像元")
         non_mask_layer = extract_non_mask_pixels(dem_array, mask_raster)
 
         # 步骤4: 读取和合并高精度点云
-        logger.info("步骤4/8: 读取高精度点云")
+        logger.info("步骤4/7: 读取高精度点云")
         bay_points = read_bay_points(bay_points_path)
         shenzhenhe_points = read_shenzhenhe_points(shenzhenhe_points_path)
         highres_points = merge_point_clouds(bay_points, shenzhenhe_points)
 
-        # 步骤5: 创建带面积约束的TIN
-        logger.info("步骤5/8: 创建带面积约束的TIN")
-        tin, xy_points = create_tin_from_points(highres_points, max_triangle_area)
-
-        # 步骤6: 对掩模区域进行TIN插值
-        logger.info("步骤6/8: 对掩模区域进行TIN插值")
+        # 步骤5: 对掩模区域进行TIN插值（直接使用点云，不先创建TIN）
+        logger.info("步骤5/7: 对掩模区域进行TIN插值")
+        # 提取点云的XY坐标和Z值
+        xy_points = highres_points[:, :2]
+        z_values = highres_points[:, 2]
         mask_interp_layer = interpolate_mask_area(
-            mask_raster, dem_meta, tin, xy_points, highres_points[:, 2]
+            mask_raster, dem_meta, xy_points, z_values,
+            nodata_value=nodata_value,
+            tin_output_path=tin_output_path
         )
 
-        # 步骤7: 合并图层
-        logger.info("步骤7/8: 合并DEM图层")
+        # 步骤6: 合并图层
+        logger.info("步骤6/7: 合并DEM图层")
         fused_dem = merge_dem_layers(non_mask_layer, mask_interp_layer, nodata_value)
 
-        # 步骤8: 写入输出文件
-        logger.info("步骤8/8: 写入输出DEM")
+        # 步骤7: 写入输出文件
+        logger.info("步骤7/7: 写入输出DEM")
         # 更新元数据中的NoData值
         dem_meta['nodata'] = nodata_value
         write_dem(output_path, fused_dem, dem_meta)
@@ -596,8 +1049,8 @@ def main():
     parser.add_argument('--shenzhenhe-points', required=True, help='shenzhenhe.csv点云文件路径')
     parser.add_argument('--output', required=True, help='输出DEM文件路径')
     parser.add_argument('--resolution', type=float, default=4.0, help='输出分辨率（米）')
-    parser.add_argument('--max-triangle-area', type=float, default=8.0, help='最大三角形面积（平方米）')
     parser.add_argument('--nodata', type=float, default=-9999.0, help='无数据值')
+    parser.add_argument('--tin-output', help='TIN输出为PLY文件的路径（可选）')
 
     args = parser.parse_args()
 
@@ -614,8 +1067,8 @@ def main():
             shenzhenhe_points_path=args.shenzhenhe_points,
             output_path=args.output,
             output_resolution=args.resolution,
-            max_triangle_area=args.max_triangle_area,
-            nodata_value=args.nodata
+            nodata_value=args.nodata,
+            tin_output_path=args.tin_output
         )
 
     except Exception as e:
