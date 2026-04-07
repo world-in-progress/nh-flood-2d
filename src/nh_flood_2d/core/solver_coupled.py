@@ -851,11 +851,11 @@ def solver_coupled(
     print(f'[coupled] 2D pid={p2d.pid}  1D pid={p1d.pid}')
 
     try:
-        # Both _run_2d and _run_1d_pipe set shared['stop'] in their finally
-        # blocks, so we wait on this event instead of polling p2d.join().
-        shared['stop'].wait()
-        p2d.join(timeout=30.0)
-        p1d.join(timeout=30.0)
+        # join() with no timeout uses os.waitpid() — instant wake on exit,
+        # no overflow risk, no Manager proxy issues.
+        p2d.join()
+        shared['stop'].set()
+        p1d.join(timeout=120.0)
     except KeyboardInterrupt:
         print('[coupled] KeyboardInterrupt – signalling stop.')
         shared['stop'].set()
