@@ -21,7 +21,9 @@ dependencies = [
     "shapely>=2.1.2",
     "pygmt>=0.13.0",
     "xarray>=2025.6.1",
+    "swmm-toolkit>=0.16",
+    "pyswmm>=2.1.0",
 ]
 
-[tool.uv.workspace]
-members = []
+[project.scripts]
+fix-macos-codesign = "fix_macos_codesign:main"
