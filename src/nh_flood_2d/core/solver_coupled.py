@@ -851,13 +851,11 @@ def solver_coupled(
     print(f'[coupled] 2D pid={p2d.pid}  1D pid={p1d.pid}')
 
     try:
-        # Poll p2d with short join intervals to avoid macOS timeout overflow.
-        # The 2D loop exits naturally when tide data is exhausted or duration is
-        # reached; we just need to wait without a hard cap.
-        while p2d.is_alive():
-            p2d.join(timeout=60.0)
-        shared['stop'].set()
-        p1d.join(timeout=120.0)
+        # Both _run_2d and _run_1d_pipe set shared['stop'] in their finally
+        # blocks, so we wait on this event instead of polling p2d.join().
+        shared['stop'].wait()
+        p2d.join(timeout=30.0)
+        p1d.join(timeout=30.0)
     except KeyboardInterrupt:
         print('[coupled] KeyboardInterrupt – signalling stop.')
         shared['stop'].set()
