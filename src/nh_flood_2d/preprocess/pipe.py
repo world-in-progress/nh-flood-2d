@@ -131,30 +131,30 @@ def _build_weak_topo(
     """
     n_nodes = len(node_list)
     topo_ptr = np.zeros(n_nodes + 1, dtype=np.int32)
-    topo_rows: list[list[int]] = []
+    topo_rows: list[np.ndarray] = []
+
+    # Pre-slice arrays (skip virtual element 0)
+    ex1 = ex[1:]
+    ey1 = ey[1:]
+    half1 = esl_arr[1:] * 0.5
+    dist_sq = dist_thresh ** 2
 
     for i, node in enumerate(node_list):
-        row: list[int] = []
-        if not node.is_outfall:
-            p_ei = int(primary_ei_arr[i])
-            for k in range(1, len(ex)):
-                if k == p_ei:
-                    continue
-                dx = ex[k] - node.x
-                dy = ey[k] - node.y
-                half = float(esl_arr[k]) * 0.5
-                # use bbox + distance fallback
-                if abs(dx) <= half and abs(dy) <= half:
-                    row.append(k)
-                elif (dx*dx + dy*dy) <= dist_thresh**2:
-                    row.append(k)
+        if node.is_outfall:
+            topo_ptr[i + 1] = topo_ptr[i]
+            continue
+        dx = ex1 - node.x
+        dy = ey1 - node.y
+        mask = ((np.abs(dx) <= half1) & (np.abs(dy) <= half1)) | ((dx * dx + dy * dy) <= dist_sq)
+        p_ei = int(primary_ei_arr[i])
+        if p_ei > 0:
+            mask[p_ei - 1] = False
+        row = np.where(mask)[0] + 1  # +1 to restore 1-based ei
         topo_rows.append(row)
         topo_ptr[i + 1] = topo_ptr[i] + len(row)
 
-    topo_ei_flat = np.array(
-        [ei for row in topo_rows for ei in row], dtype=np.uint32
-    )
-    return topo_ei_flat, topo_ptr
+    topo_ei_flat = np.concatenate(topo_rows) if topo_rows else np.array([], dtype=np.uint32)
+    return topo_ei_flat.astype(np.uint32), topo_ptr
 
 
 # ─── main entry ────────────────────────────────────────────────────────────────
@@ -205,6 +205,7 @@ def prepare_pipe(
     n_nodes   = len(node_list)
     if n_nodes == 0:
         raise ValueError(f'No nodes found in SWMM .inp: {pipe_cfg.inp}')
+    print(f'[prepare_pipe] parsed {n_nodes} nodes from .inp', flush=True)
 
     # ── GPU nearest-neighbour: find primary_ei per node ───────────────────────
     weak_dist_thresh = pipe_cfg.weak_dist_thresh
@@ -223,6 +224,7 @@ def prepare_pipe(
     node_x_f.from_numpy(np.array([n.x for n in node_list], dtype=np.float32))
     node_y_f.from_numpy(np.array([n.y for n in node_list], dtype=np.float32))
 
+    print('[prepare_pipe] running GPU nearest-neighbour kernel ...', flush=True)
     _find_nearest_kernel(
         e_num, nx_field, ny_field, nz_field, esl_field,
         n_nodes, node_x_f, node_y_f,
@@ -230,11 +232,13 @@ def prepare_pipe(
         pei_field,
     )
     primary_ei_arr = pei_field.to_numpy()  # shape (n_nodes,), 1-based ei
+    print('[prepare_pipe] nearest-neighbour done', flush=True)
 
     # ── build weak (secondary) CSR topology ───────────────────────────────────
     topo_ei_flat, topo_ptr = _build_weak_topo(
         node_list, ex_np, ey_np, esl_np, primary_ei_arr, weak_dist_thresh
     )
+    print(f'[prepare_pipe] weak topo built, {len(topo_ei_flat)} secondary entries', flush=True)
 
     # ── node_count_per_ei ─────────────────────────────────────────────────────
     nc_per_ei = np.zeros(e_num, dtype=np.uint32)
@@ -250,6 +254,7 @@ def prepare_pipe(
     # ── write pipe.fdb ────────────────────────────────────────────────────────
     # Node has STR field → fdb.ORM.truncate() doesn't support it.
     # Use create()+push() for all tables.
+    print('[prepare_pipe] writing pipe.fdb ...', flush=True)
 
     Path(pipe_cfg.pipe_fdb).parent.mkdir(parents=True, exist_ok=True)
     db = fdb.ORM.create()
