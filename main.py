@@ -8,11 +8,11 @@ from src.nh_flood_2d.input.pipe import load_pipe_config, PipeConfig
 from src.nh_flood_2d.output.flood_map import generate_flood_map, generate_max_inundation_extent_map, plot_spatial_mae_curve, generate_flood_video
 
 df7_cfg = load_force_config('./resource/df7.json')
+pipe_cfg   = load_pipe_config('./resource/pipe.json')
 # df11_cfg = load_force_config('./resource/df11.json')
 # domain_4 = load_domain_config('./resource/domain_4.json')
 # domain_mrcg = load_domain_config('./resource/domain_mrcg.json')
 domain_alt = load_domain_config('./resource/domain_alt.json')
-pipe_cfg   = load_pipe_config('./resource/pipe.json')
 # domain_mrcg_gw = load_domain_config('./resource/domain_mrcg_gw.json')
 # domain_basic = load_domain_config('./resource/domain_basic.json')
 
@@ -37,8 +37,8 @@ if __name__ == '__main__':
     # evolve_domain_coupled(domain_alt, df7_cfg, pipe_cfg)
     
     # draw_hydrograph(domain_alt, 'D74', True, -3600)
-    # generate_flood_map(domain_alt)
-    # generate_flood_video(domain_alt, output_path='./resource/flood_video.mp4')
+    generate_flood_map(domain_alt)
+    generate_flood_video(domain_alt, output_path='./resource/flood_video.mp4')
     
     # preprocess(domain_mrcg, df7_cfg)
     # generate_max_inundation_extent_map(domain_4)

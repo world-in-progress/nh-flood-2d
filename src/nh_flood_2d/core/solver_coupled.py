@@ -800,7 +800,10 @@ def solver_coupled(
     p1d.start()
     print(f'[coupled] 2D pid={p2d.pid}  1D pid={p1d.pid}')
 
-    timeout_2d = (float(domain_cfg.duration) + 3600.0) if domain_cfg.duration != -1 else 86400.0 * 30
+    timeout_2d = min(
+        (float(domain_cfg.duration) + 3600.0) if domain_cfg.duration > 0 else 86400.0,
+        86400.0,  # cap at 24h to avoid platform overflow
+    )
     try:
         p2d.join(timeout=timeout_2d)
         shared['stop'].set()
