@@ -177,6 +177,7 @@ def prepare_pipe(
     init_taichi()
 
     # ── load ne.fdb ───────────────────────────────────────────────────────────
+    print('[prepare_pipe] loading NE/NS ...', flush=True)
     from ..schema.feature import Ne, Ns
     ne_db = fdb.ORM.load(domain_cfg.ne_fdb, from_file=True)
     nes   = ne_db[Ne][Ne]
@@ -184,7 +185,7 @@ def prepare_pipe(
     ey_np  = nes.column.y.copy()
     e_num  = len(ex_np)  # includes virtual slot 0
 
-    # compute esl (side length) per element:
+    # compute esl (side length) per element (vectorised):
     # matches solver_compact.py L232-233: esl[ei] = (ex[ei] - sx[isl_data[isl_ptr_l[ei]]]) * 2
     ns_db = fdb.ORM.load(domain_cfg.ns_fdb, from_file=True)
     sx_np = ns_db[Ns][Ns].column.x.copy()
@@ -192,12 +193,12 @@ def prepare_pipe(
     isl_data  = ne_db[IndexLike]['isl_data'].column.index.copy()
     isl_ptr_l = ne_db[IndexLike]['isl_ptr_l'].column.index.copy()
 
+    lsi0_indices = isl_data[isl_ptr_l[1:e_num].astype(np.intp)]
     esl_np = np.zeros(e_num, dtype=np.float32)
-    for ei in range(1, e_num):
-        lsi0 = int(isl_data[int(isl_ptr_l[ei])])
-        esl_np[ei] = max((float(ex_np[ei]) - float(sx_np[lsi0])) * 2.0, 0.0001)
+    esl_np[1:] = np.maximum((ex_np[1:] - sx_np[lsi0_indices.astype(np.intp)]) * 2.0, 0.0001)
 
     del ne_db, ns_db
+    print(f'[prepare_pipe] esl computed, e_num={e_num}', flush=True)
 
     # ── parse SWMM .inp ───────────────────────────────────────────────────────
     node_list = _parse_inp_nodes(pipe_cfg.inp)
