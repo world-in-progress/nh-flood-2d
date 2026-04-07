@@ -23,6 +23,7 @@ level semantics in 2d_data:
 import gc
 import math
 import shutil
+import time
 import multiprocessing
 import numpy as np
 from pathlib import Path
@@ -47,6 +48,31 @@ def _lerp(a: float, b: float, t: float) -> float:
     return a + (b - a) * t
 
 
+class CouplingTimer:
+    """Wall-clock timing statistics for the coupled solver."""
+
+    def __init__(self):
+        self.wall_start    = time.perf_counter()
+        self.exchange_count = 0
+        self.total_2d_step  = 0.0  # total wall time for 2D steps within exchange windows
+        self.total_exchange = 0.0  # total wall time for exchange operations
+        self.total_1d_step  = 0.0  # total wall time for 1D SWMM steps
+
+    def report(self, prefix: str = '[timer]') -> None:
+        elapsed = time.perf_counter() - self.wall_start
+        n = max(self.exchange_count, 1)
+        print(f'{prefix} ────────────── Coupling Statistics ──────────────')
+        print(f'{prefix}   Exchange windows completed : {self.exchange_count}')
+        print(f'{prefix}   Total wall time            : {elapsed:.1f} s')
+        print(f'{prefix}   2D per exchange-step (avg)  : {self.total_2d_step / n:.3f} s')
+        print(f'{prefix}   1D per exchange-step (avg)  : {self.total_1d_step / n:.3f} s')
+        print(f'{prefix}   Exchange overhead (avg)     : {self.total_exchange / n:.3f} s')
+        print(f'{prefix}   2D total                    : {self.total_2d_step:.1f} s')
+        print(f'{prefix}   1D total                    : {self.total_1d_step:.1f} s')
+        print(f'{prefix}   Exchange total              : {self.total_exchange:.1f} s')
+        print(f'{prefix} ────────────────────────────────────────────────')
+
+
 # ─── exchange function ──────────────────────────────────────────────────────────
 
 def _exchange_with_1d(
@@ -61,7 +87,9 @@ def _exchange_with_1d(
     node_names: list,
     node_is_outfall: np.ndarray,
     name_to_idx: dict,
+    timer: CouplingTimer | None = None,
 ) -> None:
+    t_exc_start = time.perf_counter()
     pi = math.pi
     ci = window_dt  # use actual window, not nominal coupling_interval
 
@@ -120,6 +148,11 @@ def _exchange_with_1d(
         pipe_data = dict(shared['1d_data'])
         shared['1d_ready'].clear()
 
+    # Extract 1D timing if present
+    t_1d_elapsed = 0.0
+    if '__1d_elapsed__' in pipe_data:
+        t_1d_elapsed = float(pipe_data.pop('__1d_elapsed__'))
+
     # ── merge drain + flood → ssq_t (rebuilt from zero each window) ────────
     ssq_np = np.zeros(len(h_np), dtype=np.float32)
     ssq_np += q_drain   # drain: negative (m³/s)
@@ -136,6 +169,11 @@ def _exchange_with_1d(
         ssq_np[ei] += float(d.get('flow', 0.0))  # flood return: positive (m³/s)
 
     ssq_t.from_numpy(ssq_np)
+
+    if timer is not None:
+        timer.total_exchange += time.perf_counter() - t_exc_start
+        timer.total_1d_step  += t_1d_elapsed
+        timer.exchange_count += 1
 
 
 # ─── Taichi helper ──────────────────────────────────────────────────────────────
@@ -413,6 +451,8 @@ def _run_2d(
         # ── Main simulation loop ──────────────────────────────────────────────
         pipe_exchange_acc = 0.0
         coupling_interval = float(pipe_cfg.coupling_interval)
+        timer = CouplingTimer()
+        t_2d_window_start = time.perf_counter()
 
         while domain_cfg.duration == -1 or current_time - evolve_start_time < domain_cfg.duration:
             if shared['stop'].is_set():
@@ -439,6 +479,7 @@ def _run_2d(
             pipe_exchange_acc += dt
 
             if pipe_exchange_acc >= coupling_interval:
+                timer.total_2d_step += time.perf_counter() - t_2d_window_start
                 window_dt = pipe_exchange_acc
                 _exchange_with_1d(
                     shared=shared,
@@ -452,8 +493,10 @@ def _run_2d(
                     node_names=node_names,
                     node_is_outfall=node_is_outfall,
                     name_to_idx=name_to_idx,
+                    timer=timer,
                 )
                 pipe_exchange_acc -= coupling_interval
+                t_2d_window_start = time.perf_counter()
 
             if current_time - last_output_time >= domain_cfg.yield_step:
                 last_output_time += domain_cfg.yield_step
@@ -468,6 +511,8 @@ def _run_2d(
                 uvh_fn = output_uvh_fn / f'uvh_{time_str}.fdb'
                 uvh_db.save(str(uvh_fn))
                 uvh_db.unlink()
+
+        timer.report('[2D]')
 
     finally:
         shared['stop'].set()
@@ -697,6 +742,8 @@ def _run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
 
             window_dt = float(raw_2d.get('__window_dt__', {}).get('level', pipe_cfg.coupling_interval))
 
+            t_1d_start = time.perf_counter()
+
             _update_junction_surdepth(inp_runtime, raw_2d, s1, e1)
             _update_inflows(inp_runtime, raw_2d, junction_names, s2, e2)
             _fixed_level(inp_runtime, raw_2d, s3, e3)
@@ -741,9 +788,12 @@ def _run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
                     'flow': flow_m3s,
                 }
 
+            t_1d_elapsed = time.perf_counter() - t_1d_start
+
             with shared['lock']:
                 shared['1d_data'].clear()
                 shared['1d_data'].update(data_1d)
+                shared['1d_data']['__1d_elapsed__'] = t_1d_elapsed
                 shared['1d_ready'].set()
                 shared['2d_ready'].clear()
 
@@ -800,12 +850,12 @@ def solver_coupled(
     p1d.start()
     print(f'[coupled] 2D pid={p2d.pid}  1D pid={p1d.pid}')
 
-    timeout_2d = min(
-        (float(domain_cfg.duration) + 3600.0) if domain_cfg.duration > 0 else 86400.0,
-        86400.0,  # cap at 24h to avoid platform overflow
-    )
     try:
-        p2d.join(timeout=timeout_2d)
+        # Poll p2d with short join intervals to avoid macOS timeout overflow.
+        # The 2D loop exits naturally when tide data is exhausted or duration is
+        # reached; we just need to wait without a hard cap.
+        while p2d.is_alive():
+            p2d.join(timeout=60.0)
         shared['stop'].set()
         p1d.join(timeout=120.0)
     except KeyboardInterrupt:
