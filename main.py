@@ -1,7 +1,10 @@
 from src.nh_flood_2d.preprocess import preprocess
+from src.nh_flood_2d.preprocess.pipe import prepare_pipe
 from src.nh_flood_2d.core.solver_compact import solver, warmup_solver
+from src.nh_flood_2d.core.solver_coupled import solver_coupled
 from src.nh_flood_2d.output.hydrograph import draw_hydrograph, compare_hydrograph
 from src.nh_flood_2d.input import load_domain_config, DomainConfig, load_force_config, ForceConfig
+from src.nh_flood_2d.input.pipe import load_pipe_config, PipeConfig
 from src.nh_flood_2d.output.flood_map import generate_flood_map, generate_max_inundation_extent_map, plot_spatial_mae_curve, generate_flood_video
 
 df7_cfg = load_force_config('./resource/df7.json')
@@ -16,6 +19,17 @@ def evolve_domain(domain_cfg: DomainConfig, force_cfg: ForceConfig):
     preprocess(domain_cfg, force_cfg)
     # warmup_solver(domain_cfg, force_cfg)
     solver(domain_cfg, force_cfg)
+
+def evolve_domain_coupled(
+    domain_cfg: DomainConfig,
+    force_cfg: ForceConfig,
+    pipe_cfg: PipeConfig,
+    start_time_step: int = 0,
+):
+    """Preprocess domain, force, and pipe data, then run the coupled 2D/1D solver."""
+    preprocess(domain_cfg, force_cfg)
+    prepare_pipe(pipe_cfg, domain_cfg)
+    solver_coupled(domain_cfg, force_cfg, pipe_cfg, start_time_step)
 
 if __name__ == '__main__':
     # evolve_domain(domain_alt, df7_cfg)
