@@ -162,7 +162,6 @@ def _build_weak_topo(
 def prepare_pipe(
     pipe_cfg: PipeConfig,
     domain_cfg: DomainConfig,
-    weak_dist_thresh: float = 50.0,
 ) -> None:
     """
     Build pipe.fdb from SWMM .inp + ne.fdb.
@@ -222,6 +221,7 @@ def prepare_pipe(
         raise ValueError(f'No nodes found in SWMM .inp: {pipe_cfg.inp}')
 
     # ── GPU nearest-neighbour: find primary_ei per node ───────────────────────
+    weak_dist_thresh = pipe_cfg.weak_dist_thresh
     nx_field    = ti.field(dtype=ti.f32, shape=e_num)
     ny_field    = ti.field(dtype=ti.f32, shape=e_num)
     nz_field    = ti.field(dtype=ti.f32, shape=e_num)
