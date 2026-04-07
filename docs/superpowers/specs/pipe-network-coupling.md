@@ -68,10 +68,7 @@ class PipeConfig(BaseModel):
 
     coupling_interval: float = 300.0      # 2D-1D 数据交换间隔（秒）
     exchange_timeout: float  = 300.0      # 进程间等待超时（秒）
-
-    # 空间耦合参数（对应 re_coo.CouplingConfig）
-    low_relation_distance: float  = 600.0  # 弱相关搜索半径（m）
-    high_relation_elevation: float = 3.0   # 强相关高程阈值（m）
+    weak_dist_thresh: float  = 50.0       # 弱相关搜索半径（m）
 
     @property
     def pipe_fdb(self) -> str:
@@ -81,6 +78,10 @@ class PipeConfig(BaseModel):
     def inp_runtime(self) -> str:
         """运行时临时 .inp 副本（避免污染原始文件）"""
         return str(Path(self.pipe_dir) / 'runtime.inp')
+
+    @property
+    def hotstart_dir(self) -> str:
+        return str(Path(self.pipe_dir) / 'hotstart')
 
 def load_pipe_config(config_path: str) -> PipeConfig:
     return PipeConfig.model_validate_json(Path(config_path).read_text())
@@ -383,31 +384,41 @@ def _run_1d_pipe(shared, pipe_cfg):
     out_file  = str(Path(pipe_cfg.pipe_dir) / f'{out_stem}.out')
     rpt_file  = str(Path(pipe_cfg.pipe_dir) / f'{out_stem}.rpt')
     step_idx  = 0
-    prev_total_flood = 0.0   # 累计 flooding volume 差分基准（m³）
+    prev_total_flood = {}   # 逐节点累计 flooding volume 差分基准（ML）
 ```
 
-### 7.2 主循环（与 `pipe_NH801.py` 一致）
+### 7.2 主循环
 
 ```
 try:
     while True:
-        # 每次 wait 带 timeout，并在循环头检查 stop，防止 set(stop) 时死锁
         if shared['stop'].is_set():
             break
-        if not shared['2d_ready'].wait(timeout=2.0):
-            continue
+
+        # 短超时轮询：每 2s 检查 stop，超过 exchange_timeout 则 raise
+        waited = 0.0
+        while not shared['2d_ready'].is_set():
+            if shared['stop'].is_set():
+                break
+            shared['2d_ready'].wait(timeout=2.0)
+            waited += 2.0
+            if waited >= pipe_cfg.exchange_timeout:
+                raise TimeoutError('[1D] Timeout waiting for 2D data')
 
         ① 读 external_data = shared['2d_data']，clear 2d_ready
            window_dt = external_data.get('__window_dt__', {}).get('level', pipe_cfg.coupling_interval)
         ② _update_junction_surdepth(inp, external_data, st1, en1)
            _update_inflows(inp, external_data, node_id_list, st2, en2)
            _fixed_level(inp, external_data, outfall_id_list, st3, en3)
+           _set_inp_duration(inp, window_dt)  # 动态设置 SWMM 单窗口运行时长
         ③ 热启动恢复 + Simulation(inp_file) 运行
-        ④ 从 Output() 读节点水位
-           total_flood_now = _total_inflow_from_rpt(rpt_file)  # 累计总量（m³）
-           delta_flood = total_flood_now - prev_total_flood      # 本窗口增量
-           prev_total_flood = total_flood_now
-        ⑤ 构建 data_dict = {name: {level, flow}}，flow = delta_flood / window_dt（m³/s）
+        ④ 从 Output() 读节点水位（node_result 的 index 1 = depth/head）
+           raw_flood = _total_inflow_from_rpt(rpt_file)  # 逐节点累计量（ML）
+           delta = raw_flood[name] - prev_total_flood[name]  # 本窗口增量
+           prev_total_flood[name] = raw_flood[name]
+        ⑤ 构建 data_dict = {name: {level, flow}}
+           level = Output() 读到的节点水位（非 0.0）
+           flow = delta * 1000 / window_dt（ML → m³ → m³/s）
         ⑥ shared['1d_data'] ← data_dict，set 1d_ready
         step_idx += 1
 finally:
@@ -426,7 +437,8 @@ finally:
 | `_update_junction_surdepth(inp, data, s, e)` | 用 2D 水位更新 surcharge depth |
 | `_update_inflows(inp, data, nodes, s, e)` | 用 2D 流量更新 INFLOWS 段 |
 | `_fixed_level(inp, data, s, e)` | 固定出水口水位 |
-| `_total_inflow_from_rpt(rpt)` | 从 .rpt 报告提取 flooding volume |
+| `_total_inflow_from_rpt(rpt)` | 从 .rpt 报告提取逐节点 flooding volume（ML，cumulative） |
+| `_set_inp_duration(inp, window_dt)` | 动态修改 .inp 的 END_DATE/END_TIME，使 SWMM 只运行一个耦合窗口 |
 
 ---
 
@@ -448,9 +460,12 @@ $$q_{\text{drain},k} = \min\!\left(0.85\,\pi\cdot 0.8\cdot d_k^{1.5},\; \frac{d_
 
 ### 8.2 1D → 2D（管网溢出回地面）
 
-SWMM 报告的节点 flooding volume $V_f$（m³）转换为流率：
+SWMM 报告的节点 flooding volume $V_f$（10^6 litres = 1 ML = 1000 m³，SI 模式 .rpt 单位）转换为流率：
 
-$$q_{\text{flood},i} = \frac{V_f}{\Delta t_{\text{exch}}}$$
+$$q_{\text{flood},i} = \frac{\Delta V_{f,i} \times 1000}{\Delta t_{\text{exch}}} \quad \text{(m³/s)}$$
+
+其中 $\Delta V_{f,i}$ 为本窗口内第 $i$ 个节点的累计 flooding volume 增量（ML）；
+`prev_total_flood` 为逐节点字典（非标量），跟踪每个节点的累计基准。
 
 对主网格：$\text{ssq}\_t[\text{primary\_ei}[i]] \mathrel{+}= q_{\text{flood},i}$
 
@@ -469,7 +484,7 @@ $$q_{\text{flood},i} = \frac{V_f}{\Delta t_{\text{exch}}}$$
 | 3 | `multiprocessing` 必须显式使用 `spawn` 模式，禁止依赖平台默认值（Linux 默认 `fork` 会继承 `_TI_INITIALIZED`，导致子进程跳过 GPU 初始化） | 使用 `multiprocessing.get_context("spawn")` 创建 Manager/Process |
 | 4 | `fdb.STR` 字段无 numpy 批量访问，需逐条迭代读取节点 name | 只在预处理/启动阶段执行一次，性能可接受 |
 | 5 | 热启动 `.hsf` 路径：`pipe_dir/hotstart/hsf_{step}.hsf` | `_run_1d_pipe()` 内管理 |
-| 6 | `_total_inflow_from_rpt()` 需返回**本交换窗口增量体积**（m³），不是累计量；由 1D 侧差分历史值得出 | 见 §10 错误处理 |
+| 6 | `_total_inflow_from_rpt()` 返回**逐节点累计量字典**（ML），由 `_run_1d_pipe()` 逐节点差分得本窗口增量 | 见 §7.2 步骤④⑤ |
 | 7 | **出水口节点（is_outfall=True）不参与排水**：只向 1D 传递水位作为边界条件；若排水则水从 2D 消失而不进入 1D，造成静默质量损失 | `_exchange_with_1d()` 中出水口节点 `flow=0.0`，`level` 传绝对水位 |
 
 ---
@@ -530,9 +545,10 @@ solver_coupled(domain_cfg, force_cfg, pipe_cfg)
 
 | 路径 | 修改内容 |
 |---|---|
-| `src/nh_flood_2d/schema/feature.py` | 新增 `PipeTopo` Feature 类 |
+| `src/nh_flood_2d/schema/feature.py` | 新增 `PipeTopo`、`Node` Feature 类 |
 | `src/nh_flood_2d/input/__init__.py` | 导出 `PipeConfig`、`load_pipe_config` |
 | `src/nh_flood_2d/preprocess/__init__.py` | 导出 `prepare_pipe` |
+| `src/nh_flood_2d/core/__init__.py` | 导出 `solver_coupled` |
 
 ### 不修改文件
 

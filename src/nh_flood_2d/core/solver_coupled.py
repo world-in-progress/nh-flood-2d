@@ -581,7 +581,11 @@ def _fixed_level(inp_path: str, data_dict: dict, s3: int, e3: int) -> None:
 
 
 def _total_inflow_from_rpt(rpt_path: str) -> dict:
-    """Parse SWMM .rpt; returns {node_name: cumulative_flood_volume_megalitres}."""
+    """Parse SWMM .rpt Node Flooding Summary; returns {node_name: cumulative_flood_volume}.
+
+    SWMM SI (CMS) reports 'Total Flood Volume' in 10^6 litres (= 1 ML = 1000 m³).
+    Caller must diff successive calls and convert: flow_m3s = delta_ML * 1000 / window_dt.
+    """
     with open(rpt_path, 'r', encoding='utf-8') as f:
         rows = [ln.strip().split() for ln in f.readlines()]
     result: dict = {}
@@ -596,12 +600,55 @@ def _total_inflow_from_rpt(rpt_path: str) -> dict:
     return result
 
 
+def _set_inp_duration(inp_path: str, duration_sec: float) -> None:
+    """Rewrite [OPTIONS] END_DATE/END_TIME so SWMM runs exactly `duration_sec` seconds.
+
+    The .inp must have START_DATE, START_TIME, END_DATE, END_TIME lines.
+    We parse START and set END = START + duration_sec.
+    """
+    import re
+    from datetime import datetime as _dt, timedelta
+
+    with open(inp_path, 'r') as f:
+        lines = f.readlines()
+
+    start_date = start_time = None
+    for line in lines:
+        m = re.match(r'^START_DATE\s+(\S+)', line)
+        if m:
+            start_date = m.group(1)
+        m = re.match(r'^START_TIME\s+(\S+)', line)
+        if m:
+            start_time = m.group(1)
+
+    if start_date is None or start_time is None:
+        return  # cannot rewrite, let SWMM use original times
+
+    # Parse MM/DD/YYYY HH:MM:SS
+    start_dt = _dt.strptime(f'{start_date} {start_time}', '%m/%d/%Y %H:%M:%S')
+    end_dt   = start_dt + timedelta(seconds=duration_sec)
+    end_date_str = end_dt.strftime('%m/%d/%Y')
+    end_time_str = end_dt.strftime('%H:%M:%S')
+
+    new_lines = []
+    for line in lines:
+        if re.match(r'^END_DATE\s', line):
+            new_lines.append(f'END_DATE             {end_date_str}\n')
+        elif re.match(r'^END_TIME\s', line):
+            new_lines.append(f'END_TIME             {end_time_str}\n')
+        else:
+            new_lines.append(line)
+
+    with open(inp_path, 'w') as f:
+        f.writelines(new_lines)
+
+
 # ─── 1D subprocess ───────────────────────────────────────────────────────────────
 
 def _run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
     """1D SWMM pipe-network loop; runs in a subprocess spawned by solver_coupled()."""
     import shutil as _shutil
-    from pyswmm import Simulation
+    from pyswmm import Simulation, Output
 
     try:
         inp_runtime = str(pipe_cfg.inp_runtime)
@@ -631,8 +678,15 @@ def _run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
             if shared['stop'].is_set():
                 break
 
-            if not shared['2d_ready'].wait(timeout=float(pipe_cfg.exchange_timeout)):
-                raise TimeoutError('[1D] Timeout waiting for 2D data')
+            # Short-poll loop: check stop every 2s, raise after exchange_timeout
+            waited = 0.0
+            while not shared['2d_ready'].is_set():
+                if shared['stop'].is_set():
+                    break
+                shared['2d_ready'].wait(timeout=2.0)
+                waited += 2.0
+                if waited >= float(pipe_cfg.exchange_timeout):
+                    raise TimeoutError('[1D] Timeout waiting for 2D data')
 
             if shared['stop'].is_set():
                 break
@@ -646,6 +700,7 @@ def _run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
             _update_junction_surdepth(inp_runtime, raw_2d, s1, e1)
             _update_inflows(inp_runtime, raw_2d, junction_names, s2, e2)
             _fixed_level(inp_runtime, raw_2d, s3, e3)
+            _set_inp_duration(inp_runtime, window_dt)
 
             hsf_in  = hotstart_dir / f'step_{window_step}.hsf'
             hsf_out = hotstart_dir / f'step_{window_step + 1}.hsf'
@@ -656,6 +711,20 @@ def _run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
                     pass
                 sim.save_hotstart(str(hsf_out))
 
+            # Read node levels from SWMM output
+            out_path = str(Path(inp_runtime).with_suffix('.out'))
+            node_levels: dict = {}
+            try:
+                with Output(out_path) as out:
+                    for name in node_names:
+                        try:
+                            result = out.node_result(name, out.end)
+                            node_levels[name] = float(list(result.values())[1])  # index 1 = depth/head
+                        except Exception:
+                            node_levels[name] = 0.0
+            except Exception:
+                pass  # output file may not exist on first step
+
             rpt_path = str(Path(inp_runtime).with_suffix('.rpt'))
             raw_flood = _total_inflow_from_rpt(rpt_path)
 
@@ -663,10 +732,14 @@ def _run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
             for name in node_names:
                 total_now = float(raw_flood.get(name, 0.0))
                 prev_val  = prev_total_flood.get(name, 0.0)
-                delta     = max(total_now - prev_val, 0.0)          # Megalitres cumulative
+                delta     = max(total_now - prev_val, 0.0)
                 prev_total_flood[name] = total_now
-                flow_m3s = delta * 1000.0 / max(window_dt, 1.0)    # Megalitres → m³/s
-                data_1d[name] = {'level': 0.0, 'flow': flow_m3s}
+                # 10^6 litres (ML) → m³ → m³/s
+                flow_m3s = delta * 1000.0 / max(window_dt, 1.0)
+                data_1d[name] = {
+                    'level': node_levels.get(name, 0.0),
+                    'flow': flow_m3s,
+                }
 
             with shared['lock']:
                 shared['1d_data'].clear()

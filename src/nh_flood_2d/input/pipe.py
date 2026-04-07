@@ -10,6 +10,7 @@ class PipeConfig(BaseModel):
 
     coupling_interval: float = 300.0  # 交换周期（s）
     exchange_timeout: float  = 300.0  # 等待对端数据的超时（s）
+    weak_dist_thresh: float  = 50.0   # 节点–网格弱相关搜索半径（m）
 
     @property
     def _pipe_path(self) -> Path:
