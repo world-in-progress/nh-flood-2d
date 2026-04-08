@@ -39,12 +39,12 @@ def evolve_domain_coupled(
 
 if __name__ == '__main__':
     # evolve_domain(domain_alt, df7_cfg)
-    # evolve_domain_coupled(domain_alt, df7_cfg, None)
+    # evolve_domain_coupled(domain_alt, df7_cfg)
     evolve_domain_coupled(domain_alt, df7_cfg, pipe_cfg)
     
     # draw_hydrograph(domain_alt, 'D74', True, -3600)
-    # generate_flood_map(domain_alt)
-    # generate_flood_video(domain_alt, output_path='./resource/flood_video.mp4')
+    generate_flood_map(domain_alt)
+    generate_flood_video(domain_alt, output_path='./resource/flood_video.mp4')
     
     # preprocess(domain_mrcg, df7_cfg)
     # generate_max_inundation_extent_map(domain_4)
