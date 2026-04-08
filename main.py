@@ -24,12 +24,17 @@ def evolve_domain(domain_cfg: DomainConfig, force_cfg: ForceConfig):
 def evolve_domain_coupled(
     domain_cfg: DomainConfig,
     force_cfg: ForceConfig,
-    pipe_cfg: PipeConfig,
+    pipe_cfg: PipeConfig | None = None,
     start_time_step: int = 0,
 ):
-    """Preprocess domain, force, and pipe data, then run the coupled 2D/1D solver."""
+    """Preprocess domain & force data, optionally preprocess pipe data, then run solver.
+    
+    When pipe_cfg is None, runs as a 2D-only solver (equivalent to evolve_domain
+    but uses the solver_coupled code path).
+    """
     preprocess(domain_cfg, force_cfg)
-    prepare_pipe(pipe_cfg, domain_cfg)
+    if pipe_cfg is not None:
+        prepare_pipe(pipe_cfg, domain_cfg)
     solver_coupled(domain_cfg, force_cfg, pipe_cfg, start_time_step)
 
 if __name__ == '__main__':
@@ -37,8 +42,8 @@ if __name__ == '__main__':
     # evolve_domain_coupled(domain_alt, df7_cfg, pipe_cfg)
     
     # draw_hydrograph(domain_alt, 'D74', True, -3600)
-    generate_flood_map(domain_alt)
-    generate_flood_video(domain_alt, output_path='./resource/flood_video.mp4')
+    # generate_flood_map(domain_alt)
+    # generate_flood_video(domain_alt, output_path='./resource/flood_video.mp4')
     
     # preprocess(domain_mrcg, df7_cfg)
     # generate_max_inundation_extent_map(domain_4)

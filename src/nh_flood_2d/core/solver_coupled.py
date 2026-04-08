@@ -190,7 +190,7 @@ def _run_2d(
     shared,
     domain_cfg: DomainConfig,
     force_cfg: ForceConfig,
-    pipe_cfg: PipeConfig,
+    pipe_cfg: PipeConfig | None,
     start_time_step: int = 0,
 ) -> None:
     """2D GPU hydrodynamic loop; runs in a subprocess spawned by solver_coupled()."""
@@ -407,20 +407,22 @@ def _run_2d(
                 u_t[ei] = ti.select(depth < min_h, 0.0, (eq_t[ei, 0] + eq_t[ei, 1]) / esl / depth / 2.0)
                 v_t[ei] = ti.select(depth < min_h, 0.0, (eq_t[ei, 2] + eq_t[ei, 3]) / esl / depth / 2.0)
 
-        # ── Load pipe topology ────────────────────────────────────────────────
-        pipe_fdb    = fdb.ORM.load(str(pipe_cfg.pipe_fdb), from_file=True)
-        n_nodes     = int(pipe_fdb[IndexLike]['node_count'][0].index)
-        nodes_tbl   = pipe_fdb[Node]['Node']
-        primary_ei  = pipe_fdb[IndexLike]['node_primary_ei'].column.index.copy()
-        nc_per_ei   = pipe_fdb[IndexLike]['node_count_per_ei'].column.index.copy()
-        topo_ei     = pipe_fdb[PipeTopo]['PipeTopo'].column.ei.copy()
-        topo_ptr    = pipe_fdb[IndexLike]['topo_ptr'].column.index.copy()
-        node_is_outfall = np.array(
-            [bool(nodes_tbl[i].is_outfall) for i in range(n_nodes)], dtype=bool
-        )
-        node_names = [str(nodes_tbl[i].name) for i in range(n_nodes)]
-        del pipe_fdb
-        name_to_idx = {name: i for i, name in enumerate(node_names)}
+        # ── Load pipe topology (only when coupled) ─────────────────────────────
+        has_pipe = pipe_cfg is not None
+        if has_pipe:
+            pipe_fdb    = fdb.ORM.load(str(pipe_cfg.pipe_fdb), from_file=True)
+            n_nodes     = int(pipe_fdb[IndexLike]['node_count'][0].index)
+            nodes_tbl   = pipe_fdb[Node]['Node']
+            primary_ei  = pipe_fdb[IndexLike]['node_primary_ei'].column.index.copy()
+            nc_per_ei   = pipe_fdb[IndexLike]['node_count_per_ei'].column.index.copy()
+            topo_ei     = pipe_fdb[PipeTopo]['PipeTopo'].column.ei.copy()
+            topo_ptr    = pipe_fdb[IndexLike]['topo_ptr'].column.index.copy()
+            node_is_outfall = np.array(
+                [bool(nodes_tbl[i].is_outfall) for i in range(n_nodes)], dtype=bool
+            )
+            node_names = [str(nodes_tbl[i].name) for i in range(n_nodes)]
+            del pipe_fdb
+            name_to_idx = {name: i for i, name in enumerate(node_names)}
 
         # ── Initialise GPU state ──────────────────────────────────────────────
         tide_step   = round((tts[1] - tts[0]) / 60.0)
@@ -450,7 +452,7 @@ def _run_2d(
 
         # ── Main simulation loop ──────────────────────────────────────────────
         pipe_exchange_acc = 0.0
-        coupling_interval = float(pipe_cfg.coupling_interval)
+        coupling_interval = float(pipe_cfg.coupling_interval) if has_pipe else 0.0
         timer = CouplingTimer()
         t_2d_window_start = time.perf_counter()
 
@@ -476,27 +478,28 @@ def _run_2d(
 
             dt = tick(tide, rainq)
             current_time      += dt
-            pipe_exchange_acc += dt
 
-            if pipe_exchange_acc >= coupling_interval:
-                timer.total_2d_step += time.perf_counter() - t_2d_window_start
-                window_dt = pipe_exchange_acc
-                _exchange_with_1d(
-                    shared=shared,
-                    pipe_cfg=pipe_cfg,
-                    window_dt=window_dt,
-                    h_t=h_t, ssq_t=ssq_t, ez_t=ez_t, esl_t=esl_t,
-                    primary_ei=primary_ei,
-                    topo_ei=topo_ei,
-                    topo_ptr=topo_ptr,
-                    nc_per_ei=nc_per_ei,
-                    node_names=node_names,
-                    node_is_outfall=node_is_outfall,
-                    name_to_idx=name_to_idx,
-                    timer=timer,
-                )
-                pipe_exchange_acc -= coupling_interval
-                t_2d_window_start = time.perf_counter()
+            if has_pipe:
+                pipe_exchange_acc += dt
+                if pipe_exchange_acc >= coupling_interval:
+                    timer.total_2d_step += time.perf_counter() - t_2d_window_start
+                    window_dt = pipe_exchange_acc
+                    _exchange_with_1d(
+                        shared=shared,
+                        pipe_cfg=pipe_cfg,
+                        window_dt=window_dt,
+                        h_t=h_t, ssq_t=ssq_t, ez_t=ez_t, esl_t=esl_t,
+                        primary_ei=primary_ei,
+                        topo_ei=topo_ei,
+                        topo_ptr=topo_ptr,
+                        nc_per_ei=nc_per_ei,
+                        node_names=node_names,
+                        node_is_outfall=node_is_outfall,
+                        name_to_idx=name_to_idx,
+                        timer=timer,
+                    )
+                    pipe_exchange_acc -= coupling_interval
+                    t_2d_window_start = time.perf_counter()
 
             if current_time - last_output_time >= domain_cfg.yield_step:
                 last_output_time += domain_cfg.yield_step
@@ -512,10 +515,12 @@ def _run_2d(
                 uvh_db.save(str(uvh_fn))
                 uvh_db.unlink()
 
-        timer.report('[2D]')
+        if has_pipe:
+            timer.report('[2D]')
 
     finally:
-        shared['stop'].set()
+        if has_pipe:
+            shared['stop'].set()
 
 
 # ─── SWMM .inp file helpers ──────────────────────────────────────────────────────
@@ -808,30 +813,42 @@ def _run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
 def solver_coupled(
     domain_cfg: DomainConfig,
     force_cfg: ForceConfig,
-    pipe_cfg: PipeConfig,
+    pipe_cfg: PipeConfig | None = None,
     start_time_step: int = 0,
 ) -> None:
     """
     Coupled 2D/1D solver entry point.
 
-    Spawns two subprocesses using the 'spawn' context (required for Taichi GPU):
+    When *pipe_cfg* is provided, spawns two subprocesses using the 'spawn'
+    context (required for Taichi GPU):
       _run_2d()      – GPU 2D hydrodynamic simulation (mirrors solver_compact)
       _run_1d_pipe() – CPU SWMM pipe-network simulation
-
     The two processes exchange data every coupling_interval seconds via shared
     multiprocessing.Manager dicts and Events.
-    """
-    ctx = multiprocessing.get_context('spawn')
-    mgr = ctx.Manager()
 
-    shared = {
-        '2d_data':  mgr.dict(),
-        '1d_data':  mgr.dict(),
-        '2d_ready': mgr.Event(),
-        '1d_ready': mgr.Event(),
-        'lock':     mgr.Lock(),
-        'stop':     mgr.Event(),
-    }
+    When *pipe_cfg* is None, runs 2D-only mode — a single subprocess with no
+    IPC infrastructure.
+    """
+    has_pipe = pipe_cfg is not None
+    ctx = multiprocessing.get_context('spawn')
+
+    if has_pipe:
+        mgr = ctx.Manager()
+        shared = {
+            '2d_data':  mgr.dict(),
+            '1d_data':  mgr.dict(),
+            '2d_ready': mgr.Event(),
+            '1d_ready': mgr.Event(),
+            'lock':     mgr.Lock(),
+            'stop':     mgr.Event(),
+        }
+    else:
+        # 2D-only: lightweight shared dict with a multiprocessing Event for stop
+        shared = {
+            '2d_data':  {},
+            '1d_data':  {},
+            'stop':     ctx.Event(),
+        }
 
     p2d = ctx.Process(
         target=_run_2d,
@@ -839,32 +856,40 @@ def solver_coupled(
         daemon=False,
         name='solver-2d',
     )
-    p1d = ctx.Process(
-        target=_run_1d_pipe,
-        args=(shared, pipe_cfg),
-        daemon=False,
-        name='solver-1d',
-    )
+
+    p1d = None
+    if has_pipe:
+        p1d = ctx.Process(
+            target=_run_1d_pipe,
+            args=(shared, pipe_cfg),
+            daemon=False,
+            name='solver-1d',
+        )
 
     p2d.start()
-    p1d.start()
-    print(f'[coupled] 2D pid={p2d.pid}  1D pid={p1d.pid}')
+    if p1d is not None:
+        p1d.start()
+        print(f'[coupled] 2D pid={p2d.pid}  1D pid={p1d.pid}')
+    else:
+        print(f'[2D-only] pid={p2d.pid}')
 
     try:
-        # join() with no timeout uses os.waitpid() — instant wake on exit,
-        # no overflow risk, no Manager proxy issues.
         p2d.join()
-        shared['stop'].set()
-        p1d.join(timeout=120.0)
+        if has_pipe:
+            shared['stop'].set()
+        if p1d is not None:
+            p1d.join(timeout=120.0)
     except KeyboardInterrupt:
         print('[coupled] KeyboardInterrupt – signalling stop.')
-        shared['stop'].set()
+        if has_pipe:
+            shared['stop'].set()
         p2d.join(timeout=30.0)
-        p1d.join(timeout=30.0)
+        if p1d is not None:
+            p1d.join(timeout=30.0)
     finally:
         if p2d.is_alive():
             p2d.terminate()
-        if p1d.is_alive():
+        if p1d is not None and p1d.is_alive():
             p1d.terminate()
         mgr.shutdown()
         print('[coupled] Both processes terminated.')
