@@ -164,42 +164,36 @@ def _total_inflow_from_rpt(rpt_path: str) -> dict:
     return result
 
 
-def _set_inp_duration(inp_path: str, duration_sec: float) -> None:
-    """Rewrite [OPTIONS] END_DATE/END_TIME so SWMM runs exactly `duration_sec` seconds."""
+def _get_inp_duration(inp_path: str) -> float:
+    """Read the .inp's native simulation duration (END − START) in seconds.
+
+    The reference never modifies the .inp duration; we read it once at
+    startup and use it as the volume→rate divisor so the conversion
+    automatically aligns with whatever the user's .inp specifies.
+    """
     import re
-    from datetime import datetime as _dt, timedelta
+    from datetime import datetime as _dt
 
     with open(inp_path, 'r') as f:
         lines = f.readlines()
 
-    start_date = start_time = None
+    vals: dict = {}
     for line in lines:
-        m = re.match(r'^START_DATE\s+(\S+)', line)
-        if m:
-            start_date = m.group(1)
-        m = re.match(r'^START_TIME\s+(\S+)', line)
-        if m:
-            start_time = m.group(1)
+        for key in ('START_DATE', 'START_TIME', 'END_DATE', 'END_TIME'):
+            m = re.match(rf'^{key}\s+(\S+)', line)
+            if m:
+                vals[key] = m.group(1)
 
-    if start_date is None or start_time is None:
-        return
+    try:
+        start = _dt.strptime(f"{vals['START_DATE']} {vals['START_TIME']}", '%m/%d/%Y %H:%M:%S')
+        end = _dt.strptime(f"{vals['END_DATE']} {vals['END_TIME']}", '%m/%d/%Y %H:%M:%S')
+        dur = (end - start).total_seconds()
+        if dur > 0:
+            return dur
+    except (KeyError, ValueError):
+        pass
 
-    start_dt = _dt.strptime(f'{start_date} {start_time}', '%m/%d/%Y %H:%M:%S')
-    end_dt = start_dt + timedelta(seconds=duration_sec)
-    end_date_str = end_dt.strftime('%m/%d/%Y')
-    end_time_str = end_dt.strftime('%H:%M:%S')
-
-    new_lines = []
-    for line in lines:
-        if re.match(r'^END_DATE\s', line):
-            new_lines.append(f'END_DATE             {end_date_str}\n')
-        elif re.match(r'^END_TIME\s', line):
-            new_lines.append(f'END_TIME             {end_time_str}\n')
-        else:
-            new_lines.append(line)
-
-    with open(inp_path, 'w') as f:
-        f.writelines(new_lines)
+    return 300.0  # fallback: 5 minutes (reference default)
 
 
 # ─── 1D subprocess entry point ───────────────────────────────────────────────────
@@ -224,6 +218,10 @@ def run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
         del pipe_fdb
 
         junction_names = [n for n, f in zip(node_names, is_outfall) if not f]
+
+        # Read the .inp's native duration ONCE — used as the volume→rate
+        # divisor so the conversion always matches the actual SWMM window.
+        inp_duration = _get_inp_duration(inp_runtime)
 
         _update_start(inp_runtime, junction_names, s2, e2)
         _initialize_junction_surdepth(inp_runtime, s1, e1)
@@ -260,7 +258,8 @@ def run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
             _update_junction_surdepth(inp_runtime, raw_2d, s1, e1)
             _update_inflows(inp_runtime, raw_2d, junction_names, s2, e2)
             _fixed_level(inp_runtime, raw_2d, s3, e3)
-            _set_inp_duration(inp_runtime, window_dt)
+            # No _set_inp_duration — SWMM keeps its native .inp duration,
+            # matching reference behavior (pipe_NH801.py never modifies it).
 
             hsf_in = hotstart_dir / f'step_{window_step}.hsf'
             hsf_out = hotstart_dir / f'step_{window_step + 1}.hsf'
@@ -290,9 +289,10 @@ def run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
             data_1d: dict = {}
             for name in node_names:
                 vol_ml = float(raw_flood.get(name, 0.0))
-                # Reference uses fixed 10/6 (=1000/600) regardless of window_dt.
-                # The .inp runs for 300 s but divides by 600 — matches reference exactly.
-                flow_m3s = vol_ml * 10.0 / 6.0
+                # Convert ML → m³/s using the .inp's native duration.
+                # Reference: vol * 10/6 = vol * 1000/600 (for a 300 s .inp).
+                # Dynamic: reads duration from .inp so conversion auto-aligns.
+                flow_m3s = vol_ml * 1000.0 / inp_duration
                 data_1d[name] = {
                     'level': node_levels.get(name, 0.0),
                     'flow': flow_m3s,
