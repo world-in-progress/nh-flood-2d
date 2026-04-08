@@ -231,7 +231,6 @@ def run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
         hotstart_dir = Path(pipe_cfg.hotstart_dir)
         hotstart_dir.mkdir(parents=True, exist_ok=True)
 
-        prev_total_flood: dict = {}
         window_step = 0
 
         while True:
@@ -290,11 +289,8 @@ def run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
 
             data_1d: dict = {}
             for name in node_names:
-                total_now = float(raw_flood.get(name, 0.0))
-                prev_val = prev_total_flood.get(name, 0.0)
-                delta = max(total_now - prev_val, 0.0)
-                prev_total_flood[name] = total_now
-                flow_m3s = delta * 1000.0 / max(window_dt, 1.0)
+                vol_ml = float(raw_flood.get(name, 0.0))
+                flow_m3s = vol_ml * 10.0 / 6.0
                 data_1d[name] = {
                     'level': node_levels.get(name, 0.0),
                     'flow': flow_m3s,
