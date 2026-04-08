@@ -26,7 +26,7 @@ from ...schema.feature import (
     U8Value, UVH, Node, PipeTopo,
 )
 from .timer import CouplingTimer
-from .exchange import exchange_with_1d
+from .exchange import compute_drainage, send_to_1d, receive_from_1d, apply_sources
 
 
 def _lerp(a: float, b: float, t: float) -> float:
@@ -323,11 +323,13 @@ def _run_2d_impl(
         shutil.rmtree(output_uvh_fn)
     output_uvh_fn.mkdir(parents=True, exist_ok=True)
 
-    # ── Main simulation loop ──────────────────────────────────────────────
+    # ── Main simulation loop (async lag-1 coupling) ─────────────────────────
     pipe_exchange_acc = 0.0
     coupling_interval = float(pipe_cfg.coupling_interval) if has_pipe else 0.0
     timer = CouplingTimer()
     t_2d_window_start = time.perf_counter()
+    prev_flood_return: dict = {}
+    exchange_sent = False
 
     while domain_cfg.duration == -1 or current_time - evolve_start_time < domain_cfg.duration:
         if shared['stop'].is_set():
@@ -357,20 +359,33 @@ def _run_2d_impl(
             if pipe_exchange_acc >= coupling_interval:
                 timer.total_2d_step += time.perf_counter() - t_2d_window_start
                 window_dt = pipe_exchange_acc
-                exchange_with_1d(
-                    shared=shared,
-                    pipe_cfg=pipe_cfg,
-                    window_dt=window_dt,
-                    h_t=h_t, ssq_t=ssq_t, ez_t=ez_t, esl_t=esl_t,
-                    primary_ei=primary_ei,
-                    topo_ei=topo_ei,
-                    topo_ptr=topo_ptr,
-                    nc_per_ei=nc_per_ei,
-                    node_names=node_names,
-                    node_is_outfall=node_is_outfall,
-                    name_to_idx=name_to_idx,
-                    timer=timer,
+
+                t_exc_start = time.perf_counter()
+                prev_1d_wait = timer.total_1d_wait
+
+                # receive previous 1D results (should be near-instant
+                # since 1D finishes during the 2D stepping window)
+                if exchange_sent:
+                    prev_flood_return = receive_from_1d(shared, pipe_cfg, timer)
+
+                # compute fresh drainage from current 2D state
+                data_dict, q_drain = compute_drainage(
+                    window_dt, h_t, ez_t, esl_t,
+                    primary_ei, topo_ei, topo_ptr, nc_per_ei,
+                    node_names, node_is_outfall,
                 )
+
+                # apply: fresh drainage + lagged flood-return
+                apply_sources(q_drain, prev_flood_return, ssq_t, primary_ei, name_to_idx)
+
+                # send to 1D (non-blocking) — 1D runs in parallel with next 2D window
+                send_to_1d(shared, data_dict, window_dt)
+                exchange_sent = True
+
+                this_1d_wait = timer.total_1d_wait - prev_1d_wait
+                timer.total_exchange_overhead += (time.perf_counter() - t_exc_start) - this_1d_wait
+                timer.exchange_count += 1
+
                 pipe_exchange_acc -= coupling_interval
                 t_2d_window_start = time.perf_counter()
 
@@ -388,5 +403,10 @@ def _run_2d_impl(
             uvh_db.save(str(uvh_fn))
             uvh_db.unlink()
 
-    if has_pipe:
+    # drain final 1D result so the pipe process doesn't hang
+    if has_pipe and exchange_sent:
+        try:
+            receive_from_1d(shared, pipe_cfg, timer)
+        except (TimeoutError, OSError):
+            pass
         timer.report('[2D]')

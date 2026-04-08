@@ -1,11 +1,21 @@
 """
-2D ↔ 1D exchange protocol.
+2D ↔ 1D exchange protocol (async / lagged coupling).
 
-Called from the 2D process each coupling window to:
-  1. Compute surface drainage into pipe nodes
-  2. Send water-level / flow data to the 1D process
-  3. Wait for flood-return data from 1D
-  4. Merge drainage + flood into the ssq Taichi field
+Provides four composable phases so the 2D process can overlap stepping
+with 1D computation:
+
+  compute_drainage()  — GPU→CPU + orifice drainage per node
+  send_to_1d()        — push drainage dict to 1D (non-blocking)
+  receive_from_1d()   — wait for 1D flood-return data
+  apply_sources()     — merge drainage + flood-return → ssq_t
+
+Async main-loop pattern (lag-1):
+  At exchange point N:
+    1. IF N>0: receive_from_1d(results of window N-1)
+    2. compute_drainage(current state)
+    3. apply_sources(fresh drain + lagged flood-return)
+    4. send_to_1d(current drainage, non-blocking)
+    5. continue 2D stepping immediately
 """
 
 from __future__ import annotations
@@ -21,21 +31,21 @@ if TYPE_CHECKING:
     from .timer import CouplingTimer
 
 
-def exchange_with_1d(
-    shared,
-    pipe_cfg: PipeConfig,
+def compute_drainage(
     window_dt: float,
-    h_t, ssq_t, ez_t, esl_t,
+    h_t, ez_t, esl_t,
     primary_ei: np.ndarray,
     topo_ei: np.ndarray,
     topo_ptr: np.ndarray,
     nc_per_ei: np.ndarray,
     node_names: list,
     node_is_outfall: np.ndarray,
-    name_to_idx: dict,
-    timer: CouplingTimer | None = None,
-) -> None:
-    t_exc_start = time.perf_counter()
+) -> tuple:
+    """Compute surface drainage into pipe nodes (GPU→CPU).
+
+    Returns (data_dict, q_drain) where data_dict is sent to 1D and
+    q_drain is a numpy array of per-element source/sink rates.
+    """
     pi = math.pi
     ci = window_dt
 
@@ -46,7 +56,6 @@ def exchange_with_1d(
     data_dict: dict = {}
     q_drain = np.zeros(len(h_np), dtype=np.float32)
 
-    # ── primary-cell drainage (skip outfalls) ──────────────────────────────
     for i, name in enumerate(node_names):
         ei = int(primary_ei[i])
         if ei == 0 or node_is_outfall[i]:
@@ -60,7 +69,6 @@ def exchange_with_1d(
         q_drain[ei] -= q
         data_dict[name] = {'level': depth, 'flow': float(q)}
 
-    # ── secondary-cell drainage (CSR) ──────────────────────────────────────
     for i, name in enumerate(node_names):
         if node_is_outfall[i] or int(primary_ei[i]) == 0:
             continue
@@ -75,7 +83,11 @@ def exchange_with_1d(
             q_drain[ei] -= q
             data_dict[name]['flow'] += float(q)
 
-    # ── send to 1D ─────────────────────────────────────────────────────────
+    return data_dict, q_drain
+
+
+def send_to_1d(shared, data_dict: dict, window_dt: float) -> None:
+    """Push drainage data to the 1D process (non-blocking)."""
     data_dict['__window_dt__'] = {'level': float(window_dt), 'flow': 0.0}
     with shared['lock']:
         shared['2d_data'].clear()
@@ -83,11 +95,21 @@ def exchange_with_1d(
         shared['2d_ready'].set()
         shared['1d_ready'].clear()
 
-    # ── wait for 1D flood return ───────────────────────────────────────────
+
+def receive_from_1d(
+    shared,
+    pipe_cfg: PipeConfig,
+    timer: CouplingTimer | None = None,
+) -> dict:
+    """Wait for and receive 1D flood-return data.
+
+    Returns a dict {node_name: {'level': ..., 'flow': ...}}.
+    Updates *timer* with 1D-wait and 1D-step durations.
+    """
     t_wait_start = time.perf_counter()
 
     if shared['stop'].is_set():
-        return
+        return {}
     if not shared['1d_ready'].wait(timeout=pipe_cfg.exchange_timeout):
         raise TimeoutError('Timeout waiting for 1D pipe data')
 
@@ -95,19 +117,32 @@ def exchange_with_1d(
         pipe_data = dict(shared['1d_data'])
         shared['1d_ready'].clear()
 
-    t_wait_end = time.perf_counter()
+    t_wait = time.perf_counter() - t_wait_start
 
-    t_1d_elapsed = 0.0
+    t_1d = 0.0
     if '__1d_elapsed__' in pipe_data:
-        t_1d_elapsed = float(pipe_data.pop('__1d_elapsed__'))
+        t_1d = float(pipe_data.pop('__1d_elapsed__'))
+    pipe_data.pop('__window_dt__', None)
 
-    # ── merge drain + flood → ssq_t ───────────────────────────────────────
-    ssq_np = np.zeros(len(h_np), dtype=np.float32)
+    if timer is not None:
+        timer.total_1d_wait += t_wait
+        timer.total_1d_step += t_1d
+
+    return pipe_data
+
+
+def apply_sources(
+    q_drain: np.ndarray,
+    flood_return: dict,
+    ssq_t,
+    primary_ei: np.ndarray,
+    name_to_idx: dict,
+) -> None:
+    """Merge drainage + flood-return into ssq_t Taichi field."""
+    ssq_np = np.zeros(len(q_drain), dtype=np.float32)
     ssq_np += q_drain
 
-    for name, d in pipe_data.items():
-        if name == '__window_dt__':
-            continue
+    for name, d in flood_return.items():
         idx = name_to_idx.get(name)
         if idx is None:
             continue
@@ -117,11 +152,3 @@ def exchange_with_1d(
         ssq_np[ei] += float(d.get('flow', 0.0))
 
     ssq_t.from_numpy(ssq_np)
-
-    if timer is not None:
-        t_total = time.perf_counter() - t_exc_start
-        t_wait = t_wait_end - t_wait_start
-        timer.total_exchange_overhead += t_total - t_wait
-        timer.total_1d_wait += t_wait
-        timer.total_1d_step += t_1d_elapsed
-        timer.exchange_count += 1
