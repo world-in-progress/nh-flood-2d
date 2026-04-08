@@ -100,8 +100,7 @@ def run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
                 )
 
             # ── Manual start (don't use for/iter — it advances before body) ──
-            sim._model.swmm_start(True)
-            sim._isStarted = True
+            sim.start()
 
             window_step = 0
 
