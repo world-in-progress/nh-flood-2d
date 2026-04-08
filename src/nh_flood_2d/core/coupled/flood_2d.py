@@ -369,14 +369,14 @@ def _run_2d_impl(
                     prev_flood_return = receive_from_1d(shared, pipe_cfg, timer)
 
                 # compute fresh drainage from current 2D state
-                data_dict, q_drain = compute_drainage(
+                data_dict, q_source = compute_drainage(
                     window_dt, h_t, ez_t, esl_t,
                     primary_ei, topo_ei, topo_ptr, nc_per_ei,
                     node_names, node_is_outfall,
                 )
 
                 # apply: fresh drainage + lagged flood-return
-                apply_sources(q_drain, prev_flood_return, ssq_t, primary_ei, name_to_idx)
+                apply_sources(q_source, prev_flood_return, ssq_t, primary_ei, name_to_idx)
 
                 # send to 1D (non-blocking) — 1D runs in parallel with next 2D window
                 send_to_1d(shared, data_dict, window_dt)

@@ -43,47 +43,63 @@ def compute_drainage(
 ) -> tuple:
     """Compute surface drainage into pipe nodes (GPU→CPU).
 
-    Returns (data_dict, q_drain) where data_dict is sent to 1D and
-    q_drain is a numpy array of per-element source/sink rates.
+    Matches reference (Flood_new801.py L726-761):
+      1. Secondary cells first — SET (=) semantics, no /nc, all nodes
+      2. Primary cells second — accumulate (+=), /nc, node_type gating
+
+    Returns (data_dict, q_source) where data_dict is sent to 1D and
+    q_source is the per-element source/sink array (drainage part only;
+    1D return is added later by apply_sources).
     """
     pi = math.pi
     ci = window_dt
+    n_nodes = len(node_names)
 
     h_np = h_t.to_numpy()
     z_np = ez_t.to_numpy()
     esl_np = esl_t.to_numpy()
 
-    data_dict: dict = {}
-    q_drain = np.zeros(len(h_np), dtype=np.float32)
+    q_source = np.zeros(len(h_np), dtype=np.float32)
+    total_flow = np.zeros(n_nodes, dtype=np.float32)
 
-    for i, name in enumerate(node_names):
-        ei = int(primary_ei[i])
-        if ei == 0 or node_is_outfall[i]:
-            level = float(h_np[ei]) if ei != 0 else 0.0
-            data_dict[name] = {'level': level, 'flow': 0.0}
-            continue
-        depth = max(float(h_np[ei]) - float(z_np[ei]), 0.0)
-        area = float(esl_np[ei]) ** 2
-        nc = max(int(nc_per_ei[ei]), 1)
-        q = min(0.85 * pi * 0.8 * depth ** 1.5, depth * area / ci) / nc
-        q_drain[ei] -= q
-        data_dict[name] = {'level': depth, 'flow': float(q)}
-
-    for i, name in enumerate(node_names):
-        if node_is_outfall[i] or int(primary_ei[i]) == 0:
-            continue
+    # Step 1: secondary cells — SET (=), no /nc, ALL nodes incl. outfalls
+    for i in range(n_nodes):
         for j in range(int(topo_ptr[i]), int(topo_ptr[i + 1])):
             ei = int(topo_ei[j])
             if ei == 0:
                 continue
             depth = max(float(h_np[ei]) - float(z_np[ei]), 0.0)
             area = float(esl_np[ei]) ** 2
-            nc = max(int(nc_per_ei[ei]), 1)
-            q = min(0.85 * pi * 0.8 * depth ** 1.5, depth * area / ci) / nc
-            q_drain[ei] -= q
-            data_dict[name]['flow'] += float(q)
+            q = min(0.85 * pi * 0.8 * depth ** 1.5, depth * area / ci)
+            q_source[ei] = -q
+            total_flow[i] += q
 
-    return data_dict, q_drain
+    # Step 2: primary cells — accumulate (+=), /nc, node_type gating
+    data_dict: dict = {}
+    for i, name in enumerate(node_names):
+        ei = int(primary_ei[i])
+        if ei == 0:
+            data_dict[name] = {'level': 0.0, 'flow': 0.0}
+            continue
+
+        depth = max(float(h_np[ei]) - float(z_np[ei]), 0.0)
+        area = float(esl_np[ei]) ** 2
+        nc = max(int(nc_per_ei[ei]), 1)
+        node_type = 0 if node_is_outfall[i] else 1
+
+        # outfall level = WSE (h), junction level = depth
+        level = float(h_np[ei]) if node_is_outfall[i] else depth
+
+        q = min(0.85 * pi * 0.8 * depth ** 1.5, depth * area / ci) / nc
+        q_source[ei] += -(q * node_type)
+
+        primary_drain = q * node_type
+        data_dict[name] = {
+            'level': level,
+            'flow': float(primary_drain + total_flow[i]),
+        }
+
+    return data_dict, q_source
 
 
 def send_to_1d(shared, data_dict: dict, window_dt: float) -> None:
@@ -132,16 +148,18 @@ def receive_from_1d(
 
 
 def apply_sources(
-    q_drain: np.ndarray,
+    q_source: np.ndarray,
     flood_return: dict,
     ssq_t,
     primary_ei: np.ndarray,
     name_to_idx: dict,
 ) -> None:
-    """Merge drainage + flood-return into ssq_t Taichi field."""
-    ssq_np = np.zeros(len(q_drain), dtype=np.float32)
-    ssq_np += q_drain
+    """Add 1D flood-return to q_source and write to ssq_t.
 
+    q_source already contains drainage terms from compute_drainage().
+    This adds 1D return flows at primary cell locations, matching
+    reference: q_source[grid] += flows_np[i] (at primary cells).
+    """
     for name, d in flood_return.items():
         idx = name_to_idx.get(name)
         if idx is None:
@@ -149,6 +167,7 @@ def apply_sources(
         ei = int(primary_ei[idx])
         if ei == 0:
             continue
-        ssq_np[ei] += float(d.get('flow', 0.0))
+        q_source[ei] += float(d.get('flow', 0.0))
 
-    ssq_t.from_numpy(ssq_np)
+    q_source[0] = 0.0
+    ssq_t.from_numpy(q_source)
