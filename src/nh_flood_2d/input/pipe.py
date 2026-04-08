@@ -8,8 +8,8 @@ class PipeConfig(BaseModel):
     inp: str                          # SWMM .inp 原始文件路径
     pipe_dir: str                     # 管网预处理/运行输出目录
 
-    coupling_interval: float = 300.0  # 交换周期（s）
-    exchange_timeout: float  = 300.0  # 等待对端数据的超时（s）
+    coupling_interval: float = 600.0  # 交换周期（s），默认10分钟
+    exchange_timeout: float  = 600.0  # 等待对端数据的超时（s）
     weak_dist_thresh: float  = 50.0   # 节点–网格弱相关搜索半径（m）
 
     @property
