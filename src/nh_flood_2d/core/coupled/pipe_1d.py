@@ -212,9 +212,9 @@ def run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
                         level = solver.node_get_result(
                             swmm_idx, NodeResult.HEAD,
                         )
-                        flow = solver.node_get_result(
-                            swmm_idx, NodeResult.TOTAL_INFLOW,
-                        )
+                        # Outfalls discharge water OUT of the pipe system.
+                        # Don't return to 2D — it would recycle water.
+                        flow = 0.0
                     else:
                         depth_1d = solver.node_get_result(
                             swmm_idx, NodeResult.DEPTH,
