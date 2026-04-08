@@ -129,10 +129,29 @@ def _fixed_level(inp_path: str, data_dict: dict, s3: int, e3: int) -> None:
 
 
 def _total_inflow_from_rpt(rpt_path: str) -> dict:
-    """Parse SWMM .rpt Node Flooding Summary → {node_name: cumulative_flood_volume}."""
+    """Parse SWMM .rpt → {node_name: cumulative_volume_ML}.
+
+    Extracts two sections:
+      - "Node Inflow Summary"   → outfall discharge (column 7)
+      - "Node Flooding Summary" → junction flooding  (column 5)
+    Both volumes are in 10^6 litres (ML) under SI units.
+    """
     with open(rpt_path, 'r', encoding='utf-8') as f:
         rows = [ln.strip().split() for ln in f.readlines()]
     result: dict = {}
+
+    # --- Outfall discharge from "Node Inflow Summary" ---
+    try:
+        fi = rows.index(['Node', 'Inflow', 'Summary']) + 9
+        fe = rows.index(['Node', 'Surcharge', 'Summary']) - 4
+        for i in range(fi, fe + 1):
+            row = rows[i]
+            if len(row) > 7 and row[1] == 'OUTFALL':
+                result[row[0]] = float(row[7])
+    except (ValueError, IndexError):
+        pass
+
+    # --- Junction flooding from "Node Flooding Summary" ---
     try:
         fi = rows.index(['Node', 'Flooding', 'Summary']) + 10
         for row in rows[fi:]:
@@ -141,6 +160,7 @@ def _total_inflow_from_rpt(rpt_path: str) -> dict:
             result[row[0]] = float(row[5])
     except (ValueError, IndexError):
         pass
+
     return result
 
 
