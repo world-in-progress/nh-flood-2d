@@ -135,6 +135,23 @@ def run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
                     f'SWMM model: {sorted(missing)[:10]}...'
                 )
 
+            # Pre-compute junction rim elevations for virtual surcharge
+            # correction.  Reference sets SurDepth = 2D_water_depth each
+            # window; the SWMM API forbids this during a running sim, so
+            # we post-filter flood return using rim + 2D level instead.
+            nodes_obj = Nodes(sim)
+            junction_rim: dict = {}
+            for i, name in enumerate(node_names):
+                if is_outfall[i]:
+                    continue
+                try:
+                    nobj = nodes_obj[name]
+                    junction_rim[name] = (
+                        nobj.invert_elevation + nobj.full_depth
+                    )
+                except Exception:
+                    pass
+
             # ── Manual start (don't use for/iter — it advances before body) ──
             sim.start()
 
@@ -199,12 +216,35 @@ def run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
                             swmm_idx, NodeResult.TOTAL_INFLOW,
                         )
                     else:
-                        level = solver.node_get_result(
+                        depth_1d = solver.node_get_result(
                             swmm_idx, NodeResult.DEPTH,
                         )
-                        flow = solver.node_get_result(
+                        head = solver.node_get_result(
+                            swmm_idx, NodeResult.HEAD,
+                        )
+                        flood = solver.node_get_result(
                             swmm_idx, NodeResult.FLOOD,
                         )
+
+                        # Virtual surcharge correction: suppress flood
+                        # return that is below the 2D water surface.
+                        rim = junction_rim.get(name, 0.0)
+                        level_2d = float(
+                            raw_2d.get(name, {}).get('level', 0.0),
+                        )
+                        effective_rim = rim + level_2d
+
+                        if flood <= 0.0 or head <= effective_rim:
+                            flow = 0.0
+                        else:
+                            excess = head - effective_rim
+                            swmm_excess = head - rim
+                            if swmm_excess > 1e-6:
+                                flow = flood * (excess / swmm_excess)
+                            else:
+                                flow = 0.0
+
+                        level = depth_1d
 
                     data_1d[name] = {
                         'level': float(level),
