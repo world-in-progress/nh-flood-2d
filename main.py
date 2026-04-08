@@ -1,11 +1,15 @@
 from src.nh_flood_2d.preprocess import preprocess
+from src.nh_flood_2d.preprocess.pipe import prepare_pipe
 from src.nh_flood_2d.core.solver_compact import solver, warmup_solver
+from src.nh_flood_2d.core.coupled import solver_coupled
 from src.nh_flood_2d.output.hydrograph import draw_hydrograph, compare_hydrograph
 from src.nh_flood_2d.input import load_domain_config, DomainConfig, load_force_config, ForceConfig
+from src.nh_flood_2d.input.pipe import load_pipe_config, PipeConfig
 from src.nh_flood_2d.output.flood_map import generate_flood_map, generate_max_inundation_extent_map, plot_spatial_mae_curve, generate_flood_video
 
 df7_cfg = load_force_config('./resource/df7.json')
-df11_cfg = load_force_config('./resource/df11.json')
+pipe_cfg   = load_pipe_config('./resource/pipe.json')
+# df11_cfg = load_force_config('./resource/df11.json')
 # domain_4 = load_domain_config('./resource/domain_4.json')
 # domain_mrcg = load_domain_config('./resource/domain_mrcg.json')
 domain_alt = load_domain_config('./resource/domain_alt.json')
@@ -17,8 +21,26 @@ def evolve_domain(domain_cfg: DomainConfig, force_cfg: ForceConfig):
     # warmup_solver(domain_cfg, force_cfg)
     solver(domain_cfg, force_cfg)
 
+def evolve_domain_coupled(
+    domain_cfg: DomainConfig,
+    force_cfg: ForceConfig,
+    pipe_cfg: PipeConfig | None = None,
+    start_time_step: int = 0,
+):
+    """Preprocess domain & force data, optionally preprocess pipe data, then run solver.
+    
+    When pipe_cfg is None, runs as a 2D-only solver (equivalent to evolve_domain
+    but uses the solver_coupled code path).
+    """
+    preprocess(domain_cfg, force_cfg)
+    if pipe_cfg is not None:
+        prepare_pipe(pipe_cfg, domain_cfg)
+    solver_coupled(domain_cfg, force_cfg, pipe_cfg, start_time_step)
+
 if __name__ == '__main__':
     # evolve_domain(domain_alt, df7_cfg)
+    # evolve_domain_coupled(domain_alt, df7_cfg, None)
+    evolve_domain_coupled(domain_alt, df7_cfg, pipe_cfg)
     
     # draw_hydrograph(domain_alt, 'D74', True, -3600)
     # generate_flood_map(domain_alt)
