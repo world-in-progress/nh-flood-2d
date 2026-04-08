@@ -1,30 +1,26 @@
 """
-2D ↔ 1D exchange protocol (pressure coupling, async lag-1).
-
-Coupling model: pressure coupling (NOT drainage).
-  - 2D → 1D: water levels at node locations (pressure boundary)
-  - 1D → 2D: overflow / outfall discharge (flow injection)
-  - Pipe INFLOWS: from .inp file definition (not overridden)
+2D ↔ 1D exchange protocol (async / lagged coupling).
 
 Provides four composable phases so the 2D process can overlap stepping
 with 1D computation:
 
-  compute_node_levels()  — GPU→CPU water levels at pipe node locations
-  send_to_1d()           — push level dict to 1D (non-blocking)
-  receive_from_1d()      — wait for 1D flood-return data
-  apply_sources()        — flood-return → ssq_t
+  compute_drainage()  — GPU→CPU + orifice drainage per node
+  send_to_1d()        — push drainage dict to 1D (non-blocking)
+  receive_from_1d()   — wait for 1D flood-return data
+  apply_sources()     — merge drainage + flood-return → ssq_t
 
 Async main-loop pattern (lag-1):
   At exchange point N:
     1. IF N>0: receive_from_1d(results of window N-1)
-    2. compute_node_levels(current state)
-    3. apply_sources(lagged flood-return)
-    4. send_to_1d(current levels, non-blocking)
+    2. compute_drainage(current state)
+    3. apply_sources(fresh drain + lagged flood-return)
+    4. send_to_1d(current drainage, non-blocking)
     5. continue 2D stepping immediately
 """
 
 from __future__ import annotations
 
+import math
 import time
 from typing import TYPE_CHECKING
 
@@ -35,36 +31,64 @@ if TYPE_CHECKING:
     from .timer import CouplingTimer
 
 
-def compute_node_levels(
-    h_t, ez_t,
+def compute_drainage(
+    window_dt: float,
+    h_t, ez_t, esl_t,
     primary_ei: np.ndarray,
+    topo_ei: np.ndarray,
+    topo_ptr: np.ndarray,
+    nc_per_ei: np.ndarray,
     node_names: list,
     node_is_outfall: np.ndarray,
-) -> dict:
-    """Extract 2D water levels at pipe node locations for pressure coupling.
+) -> tuple:
+    """Compute surface drainage into pipe nodes (GPU→CPU).
 
-    For junctions: level = water depth above ground (for surcharge depth).
-    For outfalls:  level = water surface elevation (for backwater).
+    Returns (data_dict, q_drain) where data_dict is sent to 1D and
+    q_drain is a numpy array of per-element source/sink rates.
     """
+    pi = math.pi
+    ci = window_dt
+
     h_np = h_t.to_numpy()
     z_np = ez_t.to_numpy()
+    esl_np = esl_t.to_numpy()
 
     data_dict: dict = {}
+    q_drain = np.zeros(len(h_np), dtype=np.float32)
+
     for i, name in enumerate(node_names):
         ei = int(primary_ei[i])
         if ei == 0 or node_is_outfall[i]:
             level = float(h_np[ei]) if ei != 0 else 0.0
-            data_dict[name] = {'level': level}
+            data_dict[name] = {'level': level, 'flow': 0.0}
             continue
         depth = max(float(h_np[ei]) - float(z_np[ei]), 0.0)
-        data_dict[name] = {'level': depth}
+        area = float(esl_np[ei]) ** 2
+        nc = max(int(nc_per_ei[ei]), 1)
+        q = min(0.85 * pi * 0.8 * depth ** 1.5, depth * area / ci) / nc
+        q_drain[ei] -= q
+        data_dict[name] = {'level': depth, 'flow': float(q)}
 
-    return data_dict
+    for i, name in enumerate(node_names):
+        if node_is_outfall[i] or int(primary_ei[i]) == 0:
+            continue
+        for j in range(int(topo_ptr[i]), int(topo_ptr[i + 1])):
+            ei = int(topo_ei[j])
+            if ei == 0:
+                continue
+            depth = max(float(h_np[ei]) - float(z_np[ei]), 0.0)
+            area = float(esl_np[ei]) ** 2
+            nc = max(int(nc_per_ei[ei]), 1)
+            q = min(0.85 * pi * 0.8 * depth ** 1.5, depth * area / ci) / nc
+            q_drain[ei] -= q
+            data_dict[name]['flow'] += float(q)
+
+    return data_dict, q_drain
 
 
 def send_to_1d(shared, data_dict: dict, window_dt: float) -> None:
-    """Push water-level data to the 1D process (non-blocking)."""
-    data_dict['__window_dt__'] = {'level': float(window_dt)}
+    """Push drainage data to the 1D process (non-blocking)."""
+    data_dict['__window_dt__'] = {'level': float(window_dt), 'flow': 0.0}
     with shared['lock']:
         shared['2d_data'].clear()
         shared['2d_data'].update(data_dict)
@@ -108,14 +132,15 @@ def receive_from_1d(
 
 
 def apply_sources(
+    q_drain: np.ndarray,
     flood_return: dict,
     ssq_t,
     primary_ei: np.ndarray,
     name_to_idx: dict,
-    ne_count: int,
 ) -> None:
-    """Apply 1D flood-return / outfall flows as source terms in ssq_t."""
-    ssq_np = np.zeros(ne_count, dtype=np.float32)
+    """Merge drainage + flood-return into ssq_t Taichi field."""
+    ssq_np = np.zeros(len(q_drain), dtype=np.float32)
+    ssq_np += q_drain
 
     for name, d in flood_return.items():
         idx = name_to_idx.get(name)

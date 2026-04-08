@@ -23,10 +23,10 @@ from ...input.pipe import PipeConfig
 from ...util.ti import init_taichi, copy_to_taichi
 from ...schema.feature import (
     Ne, Ns, IndexLike, SideTopoInfo, Rainfall, Tide, Gate,
-    U8Value, UVH, Node,
+    U8Value, UVH, Node, PipeTopo,
 )
 from .timer import CouplingTimer
-from .exchange import compute_node_levels, send_to_1d, receive_from_1d, apply_sources
+from .exchange import compute_drainage, send_to_1d, receive_from_1d, apply_sources
 
 
 def _lerp(a: float, b: float, t: float) -> float:
@@ -287,6 +287,9 @@ def _run_2d_impl(
         n_nodes     = int(pipe_fdb[IndexLike]['node_count'][0].index)
         nodes_tbl   = pipe_fdb[Node]['Node']
         primary_ei  = pipe_fdb[IndexLike]['node_primary_ei'].column.index.copy()
+        nc_per_ei   = pipe_fdb[IndexLike]['node_count_per_ei'].column.index.copy()
+        topo_ei     = pipe_fdb[PipeTopo]['PipeTopo'].column.ei.copy()
+        topo_ptr    = pipe_fdb[IndexLike]['topo_ptr'].column.index.copy()
         node_is_outfall = np.array(
             [bool(nodes_tbl[i].is_outfall) for i in range(n_nodes)], dtype=bool
         )
@@ -365,14 +368,15 @@ def _run_2d_impl(
                 if exchange_sent:
                     prev_flood_return = receive_from_1d(shared, pipe_cfg, timer)
 
-                # extract water levels at pipe node locations (pressure coupling)
-                data_dict = compute_node_levels(
-                    h_t, ez_t,
-                    primary_ei, node_names, node_is_outfall,
+                # compute fresh drainage from current 2D state
+                data_dict, q_drain = compute_drainage(
+                    window_dt, h_t, ez_t, esl_t,
+                    primary_ei, topo_ei, topo_ptr, nc_per_ei,
+                    node_names, node_is_outfall,
                 )
 
-                # apply lagged flood-return as 2D source terms
-                apply_sources(prev_flood_return, ssq_t, primary_ei, name_to_idx, e_num)
+                # apply: fresh drainage + lagged flood-return
+                apply_sources(q_drain, prev_flood_return, ssq_t, primary_ei, name_to_idx)
 
                 # send to 1D (non-blocking) — 1D runs in parallel with next 2D window
                 send_to_1d(shared, data_dict, window_dt)
