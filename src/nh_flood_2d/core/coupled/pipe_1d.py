@@ -290,7 +290,9 @@ def run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
             data_1d: dict = {}
             for name in node_names:
                 vol_ml = float(raw_flood.get(name, 0.0))
-                flow_m3s = vol_ml * 1000.0 / window_dt
+                # Reference uses fixed 10/6 (=1000/600) regardless of window_dt.
+                # The .inp runs for 300 s but divides by 600 — matches reference exactly.
+                flow_m3s = vol_ml * 10.0 / 6.0
                 data_1d[name] = {
                     'level': node_levels.get(name, 0.0),
                     'flow': flow_m3s,
