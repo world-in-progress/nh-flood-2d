@@ -27,7 +27,7 @@ if __name__ == '__main__':
     # preprocess(domain_mrcg, df7_cfg)
     # generate_max_inundation_extent_map(domain_4)
     
-    mses = compare_hydrograph([domain_alt], 'D74', clampped=True, show=True, show_obs=True)
+    mses = compare_hydrograph([domain_alt], 'D80', clampped=True, show=True, show_obs=True)
     print(f'RMSEs: {mses}')
     
     # plot_spatial_mae_curve(domain_4, domain_mrcg, df7_cfg, output_path='./resource/spatial_mae_curve.png')

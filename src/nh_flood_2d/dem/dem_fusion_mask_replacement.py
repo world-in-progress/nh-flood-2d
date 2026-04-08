@@ -21,6 +21,8 @@ import rasterio
 from rasterio.transform import Affine
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 import rasterio.features
+import pandas as pd
+import pygmt
 from scipy.interpolate import LinearNDInterpolator
 from scipy.spatial import Delaunay
 from shapely.geometry import Point, Polygon
@@ -336,181 +338,159 @@ def save_tin_as_ply(tri: Delaunay, points: np.ndarray, output_path: str) -> None
         raise
 
 
-def create_quality_tin(points: np.ndarray, mask_coords: np.ndarray,
-                       target_resolution: float = 4.0) -> Tuple[Delaunay, np.ndarray]:
+
+
+def interpolate_mask_area(
+    mask_raster,      # 原掩膜栅格 (xarray.DataArray 或 numpy.ndarray)
+    dem_meta,         # 原DEM的元数据（可保留备用）
+    xy_points,        # 采样点坐标 (DataFrame 或 array，列为 x, y)
+    z_values,         # 采样点的高程值 (array 或 Series)
+    nodata_value,     # NoData 值
+    sea_output_path   # 输出路径（这里改为 surface 输出路径）
+):
     """
-    创建高质量TIN（避免细长三角形，确保覆盖掩模区域）
+    使用 pygmt.surface 对指定掩膜区域内的采样点进行高精度插值，
+    并生成与原 mask_raster 像素完全对齐的水下 DEM。
 
-    策略：
-    1. 添加边界点以确保完全覆盖
-    2. 添加内部格网点以改善三角形形状
-    3. 使用约束条件控制三角形质量
-
-    Args:
-        points: 原始点云XY坐标
-        mask_coords: 需要覆盖的掩模区域坐标
-        target_resolution: 目标分辨率（用于生成内部点）
-
-    Returns:
-        Tuple[Delaunay, np.ndarray]: 三角剖分对象和增强后的点云（包含Z值占位符）
+    参数说明：
+        mask_raster: xarray.DataArray 或 numpy.ndarray，掩膜栅格（值为1的区域为需要插值的区域）
+        xy_points:   采样点的 (x, y) 坐标
+        z_values:    对应的高程值
+        nodata_value: NoData 值（通常 -9999 或 np.nan）
+        sea_output_path: 输出 TIFF 文件路径
     """
-    logger.info("创建高质量TIN...")
+    logger.info("使用 pygmt.surface 进行插值...")
 
-    # 1. 获取掩模区域的边界框
-    mask_min = mask_coords.min(axis=0)
-    mask_max = mask_coords.max(axis=0)
-    mask_width = mask_max[0] - mask_min[0]
-    mask_height = mask_max[1] - mask_min[1]
-
-    logger.info(f"掩模区域尺寸: {mask_width:.1f}x{mask_height:.1f}米")
-
-    # 2. 添加边界点（在掩模边界上均匀采样）
-    boundary_spacing = target_resolution * 2  # 边界点间距
-
-    # 计算每条边需要的点数
-    num_x_points = max(3, int(mask_width / boundary_spacing))
-    num_y_points = max(3, int(mask_height / boundary_spacing))
-
-    boundary_points = []
-
-    # 底部边界 (y = min_y)
-    y_bottom = mask_min[1]
-    for i in range(num_x_points):
-        x = mask_min[0] + (mask_width * i / (num_x_points - 1)) if num_x_points > 1 else mask_min[0] + mask_width / 2
-        boundary_points.append([x, y_bottom])
-
-    # 顶部边界 (y = max_y)
-    y_top = mask_max[1]
-    for i in range(num_x_points):
-        x = mask_min[0] + (mask_width * i / (num_x_points - 1)) if num_x_points > 1 else mask_min[0] + mask_width / 2
-        boundary_points.append([x, y_top])
-
-    # 左侧边界 (x = min_x)
-    x_left = mask_min[0]
-    for i in range(1, num_y_points - 1):  # 跳过角点（已添加）
-        y = mask_min[1] + (mask_height * i / (num_y_points - 1))
-        boundary_points.append([x_left, y])
-
-    # 右侧边界 (x = max_x)
-    x_right = mask_max[0]
-    for i in range(1, num_y_points - 1):  # 跳过角点（已添加）
-        y = mask_min[1] + (mask_height * i / (num_y_points - 1))
-        boundary_points.append([x_right, y])
-
-    boundary_points = np.array(boundary_points)
-    logger.info(f"添加边界点: {len(boundary_points):,}个")
-
-    # 3. 添加内部格网点以改善三角形形状
-    internal_spacing = target_resolution * 4  # 内部点间距（更大以获得更胖的三角形）
-
-    # 创建内部网格
-    x_grid = np.arange(mask_min[0] + internal_spacing/2, mask_max[0], internal_spacing)
-    y_grid = np.arange(mask_min[1] + internal_spacing/2, mask_max[1], internal_spacing)
-
-    if len(x_grid) > 0 and len(y_grid) > 0:
-        xx, yy = np.meshgrid(x_grid, y_grid)
-        internal_points = np.column_stack([xx.flatten(), yy.flatten()])
-        logger.info(f"添加内部格网点: {len(internal_points):,}个")
+    # 1. 合并采样点为 pygmt.surface 需要的格式 (x, y, z)
+    if isinstance(xy_points, pd.DataFrame):
+        points_df = pd.DataFrame({
+            "x": xy_points.iloc[:, 0] if len(xy_points.columns) >= 2 else xy_points["x"],
+            "y": xy_points.iloc[:, 1] if len(xy_points.columns) >= 2 else xy_points["y"],
+            "z": z_values
+        })
     else:
-        internal_points = np.array([])
-        logger.info("内部区域太小，不添加内部格网点")
+        points_df = pd.DataFrame({"x": xy_points[:, 0], "y": xy_points[:, 1], "z": z_values})
 
-    # 4. 合并所有点
-    enhanced_points = points.copy()  # 原始点云
-    if len(boundary_points) > 0:
-        enhanced_points = np.vstack([enhanced_points, boundary_points])
-    if len(internal_points) > 0:
-        enhanced_points = np.vstack([enhanced_points, internal_points])
-
-    logger.info(f"点云增强: {len(points):,}原始点 + {len(boundary_points):,}边界点 + {len(internal_points):,}内部点 = {len(enhanced_points):,}总点数")
-
-    # 5. 去重（避免重复点）
-    enhanced_points = np.unique(enhanced_points, axis=0)
-    logger.info(f"去重后点数: {len(enhanced_points):,}")
-
-    # 6. 创建Delaunay三角剖分
-    logger.info("创建增强的Delaunay三角剖分...")
-    tri = Delaunay(enhanced_points)
-
-    # 7. 分析三角形质量
-    simplices = tri.simplices
-    triangles = enhanced_points[simplices]
-
-    # 计算三角形的长宽比（aspect ratio）
-    aspect_ratios = []
-    for tri_vertices in triangles:
-        # 计算三条边的长度
-        edges = [
-            np.linalg.norm(tri_vertices[1] - tri_vertices[0]),
-            np.linalg.norm(tri_vertices[2] - tri_vertices[1]),
-            np.linalg.norm(tri_vertices[0] - tri_vertices[2])
+    # 2. 提取原栅格的参数（确保完美对齐）
+    # 首先检查 mask_raster 的类型
+    if hasattr(mask_raster, 'x') and hasattr(mask_raster, 'y'):
+        # 如果 mask_raster 是 xarray.DataArray
+        region = [
+            mask_raster.x.min().item(),
+            mask_raster.x.max().item(),
+            mask_raster.y.min().item(),
+            mask_raster.y.max().item()
         ]
-        edges = np.array(edges)
-        if np.min(edges) > 0:
-            aspect_ratio = np.max(edges) / np.min(edges)
-            aspect_ratios.append(aspect_ratio)
 
-    if aspect_ratios:
-        aspect_ratios = np.array(aspect_ratios)
-        logger.info(f"三角形质量统计: 平均长宽比={np.mean(aspect_ratios):.2f}, 最大长宽比={np.max(aspect_ratios):.2f}")
-        logger.info(f"优质三角形比例（长宽比<5）: {np.sum(aspect_ratios < 5)/len(aspect_ratios)*100:.1f}%")
+        # spacing: 与原栅格完全一致的分辨率
+        dx = abs(mask_raster.x.diff("x").values[0])
+        dy = abs(mask_raster.y.diff("y").values[0])
+        spacing = f"{dx}/{dy}"
 
-    logger.info(f"高质量TIN创建完成: {len(tri.simplices):,}个三角形")
+        # 获取坐标参考系和变换
+        if hasattr(mask_raster, 'rio') and hasattr(mask_raster.rio, 'crs'):
+            crs = mask_raster.rio.crs
+            transform = mask_raster.rio.transform()
+        else:
+            crs = None
+            transform = None
 
-    return tri, enhanced_points
+        # 获取 mask 数组
+        mask = mask_raster.values.astype(bool)
 
-
-def check_tin_coverage(tri: Delaunay, mask_coords: np.ndarray, tolerance: float = 1e-6) -> Tuple[bool, np.ndarray]:
-    """
-    检查TIN是否完全覆盖掩模区域
-
-    Args:
-        tri: Delaunay三角剖分对象
-        mask_coords: 需要覆盖的掩模区域坐标
-        tolerance: 容差
-
-    Returns:
-        Tuple[bool, np.ndarray]: (是否完全覆盖, 未覆盖点的坐标)
-    """
-    logger.info("检查TIN覆盖情况...")
-
-    # 创建插值器来检查覆盖情况
-    # 对于覆盖检查，我们只需要知道点是否在凸包内，不需要实际值
-    from scipy.interpolate import LinearNDInterpolator
-
-    # 为增强点创建一个简单的测试值（全部为1）
-    test_values = np.ones(len(tri.points))
-
-    # 创建插值器（fill_value=-1表示凸包外的点）
-    interpolator = LinearNDInterpolator(tri, test_values, fill_value=-1)
-
-    # 检查所有掩模坐标点
-    values = interpolator(mask_coords)
-
-    # 找出未覆盖的点（值为-1）
-    uncovered_mask = values == -1
-    uncovered_count = np.sum(uncovered_mask)
-
-    if uncovered_count > 0:
-        logger.warning(f"TIN未完全覆盖掩模区域: {uncovered_count:,}/{len(mask_coords):,}个点未覆盖")
-        uncovered_coords = mask_coords[uncovered_mask]
-
-        # 计算未覆盖区域的比例
-        uncovered_ratio = uncovered_count / len(mask_coords)
-        logger.warning(f"未覆盖比例: {uncovered_ratio*100:.2f}%")
-
-        return False, uncovered_coords
     else:
-        logger.info("TIN完全覆盖掩模区域")
-        return True, np.array([])
+        # 如果 mask_raster 是 numpy.ndarray，使用 dem_meta 获取参数
+        logger.info("mask_raster 是 numpy.ndarray，使用 dem_meta 提取参数")
 
+        # 从 dem_meta 获取变换参数
+        target_transform = dem_meta['transform']
+        target_width = dem_meta['width']
+        target_height = dem_meta['height']
 
-def interpolate_mask_area(mask_raster: np.ndarray, dem_meta: dict,
-                         points: np.ndarray,
-                         z_values: np.ndarray,
-                         batch_size: int = 1000000,
-                         nodata_value: float = -9999.0,
-                         tin_output_path: Optional[str] = None) -> np.ndarray:
+        # 计算边界框
+        left, bottom = target_transform * (0, target_height)
+        right, top = target_transform * (target_width, 0)
+        region = [left, right, bottom, top]
+
+        # 获取分辨率
+        dx = abs(target_transform.a)
+        dy = abs(target_transform.e)
+        spacing = f"{dx}/{dy}"
+
+        # 从 dem_meta 获取 CRS
+        crs = dem_meta.get('crs')
+        transform = target_transform
+
+        # mask 数组
+        mask = mask_raster.astype(bool)
+
+    logger.info(f"插值区域: {region}")
+    logger.info(f"分辨率: {spacing}")
+
+    # 3. 核心插值：使用 pygmt.surface 生成水下网格
+    logger.info("正在进行 pygmt.surface 插值...")
+
+    try:
+        underwater_grid = pygmt.surface(
+            data=points_df,           # 输入点数据 (DataFrame 或文件路径)
+            region=region,
+            spacing=spacing,
+            tension=0.25,             # 张力参数，推荐 0.25~0.35（地形/水深常用）
+            # 可选参数：
+            # max_radius="0c",        # 如果采样点稀疏，可限制外推距离（单位：网格单元）
+            # verbose=True
+        )
+    except Exception as e:
+        logger.error(f"pygmt.surface 插值失败: {e}")
+        raise
+
+    # 4. 应用掩膜（只保留 mask_raster 中有效区域，其余设为 NoData）
+    # 创建最终输出数组
+    final_grid = underwater_grid.copy(deep=True)
+    final_grid.values[~mask] = nodata_value   # 或 np.nan，如果你希望用 NaN
+
+    # 5. 如果指定了输出路径，保存为 GeoTIFF（保留原坐标信息）
+    if sea_output_path:
+        logger.info(f"保存海底DEM到: {sea_output_path}")
+
+        # 确保输出目录存在
+        output_dir = os.path.dirname(sea_output_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+
+        try:
+            # 写入坐标参考系和变换
+            if crs:
+                final_grid.rio.write_crs(crs, inplace=True)
+            if transform:
+                final_grid.rio.write_transform(transform, inplace=True)
+
+            final_grid.rio.to_raster(sea_output_path, nodata=nodata_value)
+            logger.info(f"海底DEM已保存至: {sea_output_path}")
+
+        except Exception as e:
+            logger.error(f"保存海底DEM失败: {e}")
+            # 继续处理，不中断流程
+
+    # 6. 返回插值结果（作为 numpy 数组）
+    # 注意：为了与 merge_dem_layers 兼容，我们返回 numpy 数组
+    result_array = final_grid.values
+
+    # 确保结果形状与 mask_raster 一致
+    if result_array.shape != mask.shape:
+        logger.warning(f"插值结果形状不匹配: {result_array.shape} != {mask.shape}")
+        # 如果形状不匹配，调整结果形状
+        if result_array.shape[0] == mask.shape[0] and result_array.shape[1] == mask.shape[1]:
+            # 形状相同，直接返回
+            pass
+        else:
+            # 形状不同，尝试调整
+            logger.warning("无法调整形状，返回全nodata数组")
+            result_array = np.full_like(mask, nodata_value, dtype=np.float32)
+
+    logger.info(f"插值完成，返回数组形状: {result_array.shape}")
+
+    return result_array
     """
     对掩模区域进行TIN插值（改进版：生成高质量三角形并确保完全覆盖）
 
@@ -950,7 +930,8 @@ def fuse_dem_with_mask_replacement(
     output_path: str,
     output_resolution: float = 4.0,
     nodata_value: float = -9999.0,
-    tin_output_path: Optional[str] = None
+    tin_output_path: Optional[str] = None,
+    sea_output_path: Optional[str] = None
 ) -> None:
     """
     主函数：使用分块掩模替换法融合DEM
@@ -964,6 +945,7 @@ def fuse_dem_with_mask_replacement(
         output_resolution: 输出分辨率（米）
         nodata_value: 无数据值
         tin_output_path: TIN输出为PLY文件的路径（可选）
+        sea_output_path: 海底DEM输出路径（可选）
     """
     start_time = time.time()
     logger.info("开始DEM融合处理（分块掩模替换法）")
@@ -1010,7 +992,7 @@ def fuse_dem_with_mask_replacement(
         mask_interp_layer = interpolate_mask_area(
             mask_raster, dem_meta, xy_points, z_values,
             nodata_value=nodata_value,
-            tin_output_path=tin_output_path
+            sea_output_path=sea_output_path
         )
 
         # 步骤6: 合并图层
@@ -1051,6 +1033,7 @@ def main():
     parser.add_argument('--resolution', type=float, default=4.0, help='输出分辨率（米）')
     parser.add_argument('--nodata', type=float, default=-9999.0, help='无数据值')
     parser.add_argument('--tin-output', help='TIN输出为PLY文件的路径（可选）')
+    parser.add_argument('--sea-output', help='海底DEM输出路径（可选）')
 
     args = parser.parse_args()
 
@@ -1068,7 +1051,8 @@ def main():
             output_path=args.output,
             output_resolution=args.resolution,
             nodata_value=args.nodata,
-            tin_output_path=args.tin_output
+            tin_output_path=args.tin_output,
+            sea_output_path=args.sea_output
         )
 
     except Exception as e:
