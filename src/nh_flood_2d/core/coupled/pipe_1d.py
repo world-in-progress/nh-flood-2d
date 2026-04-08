@@ -55,6 +55,40 @@ def _set_inp_end_time(inp_path: str, total_seconds: float) -> None:
         f.writelines(new_lines)
 
 
+def _clear_inp_inflows(inp_path: str) -> None:
+    """Zero out all baseline flow values in the [INFLOWS] section.
+
+    SWMM adds .inp baseline inflows ON TOP of API-set inflows
+    (node_set_total_inflow). Clearing them prevents double-counting.
+    """
+    with open(inp_path, 'r') as f:
+        lines = f.readlines()
+
+    in_section = False
+    new_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped == '[INFLOWS]':
+            in_section = True
+            new_lines.append(line)
+            continue
+        if in_section and stripped.startswith('['):
+            in_section = False
+        if in_section and stripped and not stripped.startswith(';;'):
+            parts = line.split()
+            if len(parts) >= 7:
+                parts[-1] = '0'
+                new_lines.append(
+                    f'{parts[0]:<15} {parts[1]:<17}{parts[2]:<17}'
+                    f'{parts[3]:<9}{parts[4]:<9}{parts[5]:<9}{parts[6]}\n'
+                )
+                continue
+        new_lines.append(line)
+
+    with open(inp_path, 'w') as f:
+        f.writelines(new_lines)
+
+
 # ─── 1D subprocess entry point ───────────────────────────────────────────────────
 
 
@@ -80,6 +114,8 @@ def run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
 
         # Set END_TIME to 7 days ceiling; 2D controls actual stop
         _set_inp_end_time(inp_runtime, 7 * 24 * 3600)
+        # Clear .inp baseline inflows to prevent double-counting with API calls
+        _clear_inp_inflows(inp_runtime)
 
         coupling_interval = float(pipe_cfg.coupling_interval)
 
