@@ -84,6 +84,8 @@ def exchange_with_1d(
         shared['1d_ready'].clear()
 
     # ── wait for 1D flood return ───────────────────────────────────────────
+    t_wait_start = time.perf_counter()
+
     if shared['stop'].is_set():
         return
     if not shared['1d_ready'].wait(timeout=pipe_cfg.exchange_timeout):
@@ -92,6 +94,8 @@ def exchange_with_1d(
     with shared['lock']:
         pipe_data = dict(shared['1d_data'])
         shared['1d_ready'].clear()
+
+    t_wait_end = time.perf_counter()
 
     t_1d_elapsed = 0.0
     if '__1d_elapsed__' in pipe_data:
@@ -115,6 +119,9 @@ def exchange_with_1d(
     ssq_t.from_numpy(ssq_np)
 
     if timer is not None:
-        timer.total_exchange += time.perf_counter() - t_exc_start
+        t_total = time.perf_counter() - t_exc_start
+        t_wait = t_wait_end - t_wait_start
+        timer.total_exchange_overhead += t_total - t_wait
+        timer.total_1d_wait += t_wait
         timer.total_1d_step += t_1d_elapsed
         timer.exchange_count += 1
