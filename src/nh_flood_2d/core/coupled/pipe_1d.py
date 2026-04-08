@@ -259,7 +259,6 @@ def run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
             t_1d_start = time.perf_counter()
 
             _update_junction_surdepth(inp_runtime, raw_2d, s1, e1)
-            _update_inflows(inp_runtime, raw_2d, junction_names, s2, e2)
             _fixed_level(inp_runtime, raw_2d, s3, e3)
             _set_inp_duration(inp_runtime, window_dt)
 
