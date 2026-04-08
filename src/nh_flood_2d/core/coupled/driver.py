@@ -44,18 +44,16 @@ def solver_coupled(
     ctx = multiprocessing.get_context('spawn')
 
     if has_pipe:
-        # Align coupling_interval with the .inp's native duration so that
-        # the 2D exchange window, SWMM run length, and ML→m³/s conversion
-        # are all self-consistent.
+        # Derive coupling_interval from the .inp's native simulation
+        # duration — this is the single source of truth.  2D exchange
+        # window, SWMM run length, and ML→m³/s conversion all use it.
         from .pipe_1d import _get_inp_duration
         inp_dur = _get_inp_duration(pipe_cfg.inp)
-        if abs(pipe_cfg.coupling_interval - inp_dur) > 1.0:
-            print(f'[coupled] Overriding coupling_interval '
-                  f'{pipe_cfg.coupling_interval:.0f}s → {inp_dur:.0f}s '
-                  f'(aligned to .inp duration)')
-            pipe_cfg = pipe_cfg.model_copy(
-                update={'coupling_interval': inp_dur},
-            )
+        pipe_cfg = pipe_cfg.model_copy(
+            update={'coupling_interval': inp_dur},
+        )
+        print(f'[coupled] coupling_interval = {inp_dur:.0f}s '
+              f'(from .inp duration)')
 
         mgr = ctx.Manager()
         shared = {
