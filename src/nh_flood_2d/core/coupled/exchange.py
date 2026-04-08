@@ -9,6 +9,10 @@ with 1D computation:
   receive_from_1d()   — wait for 1D flood-return data
   apply_sources()     — merge drainage + flood-return → ssq_t
 
+Note: With stepping coupling, 1D return values are already in m³/s
+(read directly from SWMM solver API), so no volume→rate conversion
+is needed.
+
 Async main-loop pattern (lag-1):
   At exchange point N:
     1. IF N>0: receive_from_1d(results of window N-1)
