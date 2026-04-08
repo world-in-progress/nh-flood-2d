@@ -8,9 +8,7 @@ class PipeConfig(BaseModel):
     inp: str                          # SWMM .inp 原始文件路径
     pipe_dir: str                     # 管网预处理/运行输出目录
 
-    # coupling_interval is auto-derived from .inp duration at startup (see driver.py).
-    # Do NOT set this in JSON — it will be overwritten.
-    coupling_interval: float | None = None
+    coupling_interval: float = 600.0   # 2D↔1D exchange interval (seconds)
     exchange_timeout: float  = 600.0  # 等待对端数据的超时（s）
     weak_dist_thresh: float  = 50.0   # 节点–网格弱相关搜索半径（m）
 
@@ -28,12 +26,6 @@ class PipeConfig(BaseModel):
     def inp_runtime(self) -> str:
         """运行时 .inp 副本路径（预处理/求解器写入此文件，不修改原始文件）"""
         return str(self._pipe_path / Path(self.inp).name)
-
-    @property
-    def hotstart_dir(self) -> str:
-        p = self._pipe_path / 'hotstart'
-        p.mkdir(parents=True, exist_ok=True)
-        return str(p)
 
     @field_validator('inp')
     def validate_inp(cls, v):
