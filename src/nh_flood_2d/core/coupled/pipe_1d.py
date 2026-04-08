@@ -63,7 +63,7 @@ def run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
     import shutil
     from pyswmm import Simulation, Nodes
     from swmm.toolkit import solver
-    from swmm.toolkit.shared_enum import NodeResult, NodeProperty
+    from swmm.toolkit.shared_enum import NodeResult
 
     try:
         # ── Setup ──
@@ -138,12 +138,7 @@ def run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
                         level = float(d.get('level', 0.0))
                         solver.outfall_set_stage(swmm_idx, level)
                     else:
-                        surdepth = float(d.get('level', 0.0))
-                        solver.node_set_parameter(
-                            swmm_idx,
-                            NodeProperty.SURCHARGE_DEPTH,
-                            surdepth,
-                        )
+                        # Drainage inflow (m³/s) — no conversion needed
                         flow = float(d.get('flow', 0.0))
                         solver.node_set_total_inflow(swmm_idx, flow)
 
