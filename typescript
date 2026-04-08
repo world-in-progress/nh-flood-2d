@@ -304,4 +304,219 @@ RMSEs: ([0.5828694493646719], [-1.6853631078155953])
 [Taichi] Starting on arch=metal
 Clamping time range to 2023-09-07 17:30:00 - 2023-09-09 23:59:00
 RMSEs: ([0.2986707673879905], [0.5562998136775585])
+[1m[7m%[27m[1m[0m                                                                                                                                                                                                                                  ]2;soku@Dsssyc-MBP:~/Desktop/codespace/WorldInProgress/nh-flood-2d]1;..s/nh-flood-2d[0m[27m[24m[J[32m[1m[32m➜ [32m[1m[32m[35m[1m[35m[34m[1m[34mnh-flood-2d [36m[1m[36m(feature/pipe-network-coupling) [33m[1m[33m✗ [39m[0m[32m[1m[32m[39m[0m[K[0m[27m[24m[J[32m[1m[32m➜ [32m[1m[32m[35m[1m[35m[34m[1m[34mnh-flood-2d [36m[1m[36m(feature/pipe-network-coupling) [33m[1m[33m✗ [39m[0m[32m[1m[32m[39m[0m[K[?1h=[?2004h[0m[27m[24m[J[32m[1m[32m➜ [32m[1m[32m[35m[1m[35m[34m[1m[34mnh-flood-2d [36m[1m[36m(feature/pipe-network-coupling) [33m[1m[33m✗ [39m[0m[32m[1m[32m[39m[0m[K[38;5;84muv[39m [38;5;231mrun[39m [38;5;231mmain.py[39m[?1l>[?2004l
+]2;uv run main.py]1;uv[Taichi] version 1.7.4, llvm 15.0.7, commit b4b956fd, osx, python 3.10.17
+[Taichi] version 1.7.4, llvm 15.0.7, commit b4b956fd, osx, python 3.10.17
+[Taichi] version 1.7.4, llvm 15.0.7, commit b4b956fd, osx, python 3.10.17
+[Taichi] version 1.7.4, llvm 15.0.7, commit b4b956fd, osx, python 3.10.17
+[Taichi] version 1.7.4, llvm 15.0.7, commit b4b956fd, osx, python 3.10.17
+[Taichi] version 1.7.4, llvm 15.0.7, commit b4b956fd, osx, python 3.10.17
+Filtering NE/NS...
+  NE: ./resource/alt-mrcg/ne.txt
+  NS: ./resource/alt-mrcg/ns.txt
+^CTraceback (most recent call last):
+  File "/Users/soku/Desktop/codespace/WorldInProgress/nh-flood-2d/main.py", line 42, in <module>
+    evolve_domain_coupled(domain_alt, df7_cfg, None)
+  File "/Users/soku/Desktop/codespace/WorldInProgress/nh-flood-2d/main.py", line 35, in evolve_domain_coupled
+    preprocess(domain_cfg, force_cfg)
+  File "/Users/soku/Desktop/codespace/WorldInProgress/nh-flood-2d/src/nh_flood_2d/preprocess/__init__.py", line 9, in preprocess
+    prepare_domain(domain_cfg)
+  File "/Users/soku/Desktop/codespace/WorldInProgress/nh-flood-2d/src/nh_flood_2d/preprocess/domain.py", line 656, in prepare_domain
+    _filter_ne_ns(cfg.ne, cfg.ns, cfg.tmp_ne, cfg.tmp_ns)
+  File "/Users/soku/Desktop/codespace/WorldInProgress/nh-flood-2d/src/nh_flood_2d/preprocess/domain.py", line 243, in _filter_ne_ns
+    z_val = float(parts[-2])
+KeyboardInterrupt
+[1m[7m%[27m[1m[0m                                                                                                                                                                                                                                  ]2;soku@Dsssyc-MBP:~/Desktop/codespace/WorldInProgress/nh-flood-2d]1;..s/nh-flood-2d[0m[27m[24m[J[31m[1m[31m➜ [32m[1m[32m[35m[1m[35m[34m[1m[34mnh-flood-2d [36m[1m[36m(feature/pipe-network-coupling) [33m[1m[33m✗ [39m[0m[31m[1m[31m[39m[0m[K[0m[27m[24m[J[31m[1m[31m➜ [32m[1m[32m[35m[1m[35m[34m[1m[34mnh-flood-2d [36m[1m[36m(feature/pipe-network-coupling) [33m[1m[33m✗ [39m[0m[31m[1m[31m[39m[0m[K[?1h=[?2004h[0m[27m[24m[J[31m[1m[31m➜ [32m[1m[32m[35m[1m[35m[34m[1m[34mnh-flood-2d [36m[1m[36m(feature/pipe-network-coupling) [33m[1m[33m✗ [39m[0m[31m[1m[31m[39m[0m[K[38;5;84muv[39m [38;5;231mrun[39m [38;5;231mmain.py[39m[?1l>[?2004l
+]2;uv run main.py]1;uv[Taichi] version 1.7.4, llvm 15.0.7, commit b4b956fd, osx, python 3.10.17
+[Taichi] version 1.7.4, llvm 15.0.7, commit b4b956fd, osx, python 3.10.17
+[Taichi] version 1.7.4, llvm 15.0.7, commit b4b956fd, osx, python 3.10.17
+[Taichi] version 1.7.4, llvm 15.0.7, commit b4b956fd, osx, python 3.10.17
+[Taichi] version 1.7.4, llvm 15.0.7, commit b4b956fd, osx, python 3.10.17
+[Taichi] version 1.7.4, llvm 15.0.7, commit b4b956fd, osx, python 3.10.17
+Filtering NE/NS...
+  NE: ./resource/alt-mrcg/ne.txt
+  NS: ./resource/alt-mrcg/ns.txt
+  NE: Reduced from 589576 to 589576 elements.
+  NS: Reduced from 1189543 to 1189543 sides.
+[Taichi] version 1.7.4, llvm 15.0.7, commit b4b956fd, osx, python 3.10.17
+[Taichi] Starting on arch=metal
+Boundary element count: 108
+[2D-only] pid=70105
+[Taichi] version 1.7.4, llvm 15.0.7, commit b4b956fd, osx, python 3.10.17
+[Taichi] Starting on arch=metal
+[2D] FDB freed, simulation starting.
+[2D] t=1800.1 s  dt=0.2969 s
+[2D] t=3600.1 s  dt=0.2965 s
+[2D] t=5400.1 s  dt=0.2957 s
+[2D] t=7200.2 s  dt=0.2995 s
+[2D] t=9000.0 s  dt=0.3068 s
+[2D] t=10800.2 s  dt=0.3129 s
+[2D] t=12600.3 s  dt=0.3190 s
+[2D] t=14400.1 s  dt=0.3216 s
+[2D] t=16200.0 s  dt=0.3163 s
+[2D] t=18000.3 s  dt=0.3175 s
+[2D] t=19800.3 s  dt=0.3126 s
+[2D] t=21600.3 s  dt=0.3086 s
+[2D] t=23400.0 s  dt=0.3051 s
+[2D] t=25200.2 s  dt=0.2998 s
+[2D] t=27000.2 s  dt=0.2972 s
+[2D] t=28800.0 s  dt=0.2903 s
+[2D] t=30600.0 s  dt=0.2849 s
+[2D] t=32400.0 s  dt=0.2882 s
+[2D] t=34200.2 s  dt=0.2886 s
+[2D] t=36000.1 s  dt=0.2860 s
+[2D] t=37800.1 s  dt=0.2843 s
+[2D] t=39600.1 s  dt=0.2867 s
+[2D] t=41400.1 s  dt=0.2909 s
+[2D] t=43200.3 s  dt=0.2948 s
+[2D] t=45000.1 s  dt=0.2970 s
+[2D] t=46800.1 s  dt=0.2946 s
+[2D] t=48600.2 s  dt=0.2929 s
+[2D] t=50400.1 s  dt=0.2909 s
+[2D] t=52200.0 s  dt=0.2912 s
+[2D] t=54000.2 s  dt=0.2928 s
+[2D] t=55800.3 s  dt=0.2951 s
+[2D] t=57600.2 s  dt=0.2982 s
+[2D] t=59400.2 s  dt=0.3009 s
+[2D] t=61200.3 s  dt=0.3035 s
+[2D] t=63000.1 s  dt=0.3062 s
+[2D] t=64800.0 s  dt=0.3089 s
+[2D] t=66600.2 s  dt=0.3119 s
+[2D] t=68400.2 s  dt=0.3144 s
+[2D] t=70200.1 s  dt=0.3169 s
+[2D] t=72000.1 s  dt=0.3206 s
+[2D] t=73800.0 s  dt=0.3246 s
+[2D] t=75600.1 s  dt=0.3286 s
+[2D] t=77400.1 s  dt=0.3325 s
+[2D] t=79200.2 s  dt=0.3364 s
+[2D] t=81000.1 s  dt=0.3380 s
+[2D] t=82800.1 s  dt=0.3399 s
+[2D] t=84600.2 s  dt=0.3430 s
+[2D] t=86400.0 s  dt=0.3348 s
+[2D] t=88200.2 s  dt=0.3273 s
+[2D] t=90000.1 s  dt=0.3213 s
+[2D] t=91800.3 s  dt=0.3184 s
+[2D] t=93600.3 s  dt=0.3153 s
+[2D] t=95400.2 s  dt=0.3116 s
+[2D] t=97200.3 s  dt=0.3134 s
+[2D] t=99000.1 s  dt=0.3193 s
+[2D] t=100800.0 s  dt=0.3170 s
+[2D] t=102600.1 s  dt=0.3187 s
+[2D] t=104400.0 s  dt=0.3195 s
+[2D] t=106200.0 s  dt=0.3052 s
+[2D] t=108000.0 s  dt=0.3028 s
+[2D] t=109800.0 s  dt=0.3020 s
+[2D] t=111600.1 s  dt=0.3093 s
+[2D] t=113400.1 s  dt=0.3042 s
+[2D] t=115200.2 s  dt=0.2992 s
+[2D] t=117000.3 s  dt=0.2938 s
+[2D] t=118800.3 s  dt=0.2884 s
+[2D] t=120600.1 s  dt=0.2897 s
+[2D] t=122400.1 s  dt=0.2929 s
+[2D] t=124200.2 s  dt=0.2943 s
+[2D] t=126000.2 s  dt=0.2928 s
+[2D] t=127800.2 s  dt=0.2935 s
+[2D] t=129600.0 s  dt=0.2979 s
+[2D] t=131400.2 s  dt=0.2921 s
+[2D] t=133200.2 s  dt=0.2835 s
+[2D] t=135000.0 s  dt=0.2860 s
+[2D] t=136800.1 s  dt=0.2909 s
+[2D] t=138600.2 s  dt=0.2891 s
+[2D] t=140400.2 s  dt=0.2926 s
+[2D] t=142200.0 s  dt=0.2963 s
+[2D] t=144000.1 s  dt=0.2991 s
+[2D] t=145800.2 s  dt=0.3014 s
+[2D] t=147600.2 s  dt=0.3029 s
+[2D] t=149400.1 s  dt=0.3073 s
+[2D] t=151200.3 s  dt=0.3115 s
+[2D] t=153000.1 s  dt=0.3160 s
+[2D] t=154800.2 s  dt=0.3203 s
+[2D] t=156600.1 s  dt=0.3249 s
+[2D] t=158400.3 s  dt=0.3294 s
+[2D] t=160200.3 s  dt=0.3336 s
+[2D] t=162000.2 s  dt=0.3378 s
+[2D] t=163800.0 s  dt=0.3421 s
+[2D] t=165600.3 s  dt=0.3457 s
+[2D] t=167400.3 s  dt=0.3500 s
+[2D] t=169200.3 s  dt=0.3545 s
+[2D] t=171000.0 s  dt=0.3497 s
+[2D] t=172800.0 s  dt=0.3480 s
+[2D] t=174600.2 s  dt=0.3422 s
+[2D] t=176400.0 s  dt=0.3395 s
+[2D] t=178200.1 s  dt=0.3335 s
+[2D] t=180000.1 s  dt=0.3243 s
+[2D] t=181800.1 s  dt=0.3172 s
+[2D] t=183600.1 s  dt=0.3246 s
+[2D] t=185400.3 s  dt=0.3155 s
+[2D] t=187200.3 s  dt=0.3102 s
+[2D] t=189000.1 s  dt=0.3062 s
+[2D] t=190800.1 s  dt=0.3089 s
+[2D] t=192600.2 s  dt=0.3151 s
+[2D] t=194400.2 s  dt=0.3074 s
+[2D] t=196200.1 s  dt=0.3041 s
+[2D] t=198000.1 s  dt=0.3108 s
+Traceback (most recent call last):
+  File "/Users/soku/Desktop/codespace/WorldInProgress/nh-flood-2d/main.py", line 42, in <module>
+    evolve_domain_coupled(domain_alt, df7_cfg, None)
+  File "/Users/soku/Desktop/codespace/WorldInProgress/nh-flood-2d/main.py", line 38, in evolve_domain_coupled
+    solver_coupled(domain_cfg, force_cfg, pipe_cfg, start_time_step)
+  File "/Users/soku/Desktop/codespace/WorldInProgress/nh-flood-2d/src/nh_flood_2d/core/solver_coupled.py", line 894, in solver_coupled
+    mgr.shutdown()
+UnboundLocalError: local variable 'mgr' referenced before assignment
+[1m[7m%[27m[1m[0m                                                                                                                                                                                                                                  ]2;soku@Dsssyc-MBP:~/Desktop/codespace/WorldInProgress/nh-flood-2d]1;..s/nh-flood-2d[0m[27m[24m[J[31m[1m[31m➜ [32m[1m[32m[35m[1m[35m[34m[1m[34mnh-flood-2d [36m[1m[36m(feature/pipe-network-coupling) [33m[1m[33m✗ [39m[0m[31m[1m[31m[39m[0m[K[0m[27m[24m[J[31m[1m[31m➜ [32m[1m[32m[35m[1m[35m[34m[1m[34mnh-flood-2d [36m[1m[36m(feature/pipe-network-coupling) [33m[1m[33m✗ [39m[0m[31m[1m[31m[39m[0m[K[?1h=[?2004h[0m[27m[24m[J[31m[1m[31m➜ [32m[1m[32m[35m[1m[35m[34m[1m[34mnh-flood-2d [36m[1m[36m(feature/pipe-network-coupling) [33m[1m[33m✗ [39m[0m[31m[1m[31m[39m[0m[K[38;5;84muv[39m [38;5;231mrun[39m [38;5;231mmain.py[39m[14D[39m [39m  [39m [39m [39m  [39m [39m [39m [39m [39m [39m [39m [14D[38;5;84muv[39m [38;5;231mrun[39m [38;5;231mmain.py[39m[?1l>[?2004l
+]2;uv run main.py]1;uv[Taichi] version 1.7.4, llvm 15.0.7, commit b4b956fd, osx, python 3.10.17
+[Taichi] Starting on arch=metal
+Bounding Box: (808357.5, 830133.5) to (833573.5, 844197.5)
+Vertical Pixel Resolution: 4.0 m, Horizontal Pixel Resolution: 4.0 m
+Flood Map Size: 6304 x 3516
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230907-173000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_0_20230907-173000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230907-180000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_1_20230907-180000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230907-183000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_2_20230907-183000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230907-190000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_3_20230907-190000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230907-193000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_4_20230907-193000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230907-200000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_5_20230907-200000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230907-203000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_6_20230907-203000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230907-210000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_7_20230907-210000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230907-213000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_8_20230907-213000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230907-220000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_9_20230907-220000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230907-223000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_10_20230907-223000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230907-230000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_11_20230907-230000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230907-233000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_12_20230907-233000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230908-000000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_13_20230908-000000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230908-003000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_14_20230908-003000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230908-010000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_15_20230908-010000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230908-013000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_16_20230908-013000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230909-220000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_17_20230909-220000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230909-223000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_18_20230909-223000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230909-230000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_19_20230909-230000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230909-233000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_20_20230909-233000.tif
+Processing UVH file: resource/alt-mrcg/uvh/uvh_20230910-000000.fdb ...
+    Saved flood map to: resource/alt-mrcg/flood_maps/flood_map_21_20230910-000000.tif
+Generating flood video: 22 frames, 6304x3516 px, 5.0 fps
+IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (6304, 3516) to (6304, 3520) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+  Encoded frame 10/22 ...
+  Encoded frame 20/22 ...
+  Encoded frame 22/22 ...
+Saved flood video to: resource/flood_video.mp4
 [1m[7m%[27m[1m[0m                                                                                                                                                                                                                                  ]2;soku@Dsssyc-MBP:~/Desktop/codespace/WorldInProgress/nh-flood-2d]1;..s/nh-flood-2d[0m[27m[24m[J[32m[1m[32m➜ [32m[1m[32m[35m[1m[35m[34m[1m[34mnh-flood-2d [36m[1m[36m(feature/pipe-network-coupling) [33m[1m[33m✗ [39m[0m[32m[1m[32m[39m[0m[K[0m[27m[24m[J[32m[1m[32m➜ [32m[1m[32m[35m[1m[35m[34m[1m[34mnh-flood-2d [36m[1m[36m(feature/pipe-network-coupling) [33m[1m[33m✗ [39m[0m[32m[1m[32m[39m[0m[K[?1h=[?2004h[0m[27m[24m[J[32m[1m[32m➜ [32m[1m[32m[35m[1m[35m[34m[1m[34mnh-flood-2d [36m[1m[36m(feature/pipe-network-coupling) [33m[1m[33m✗ [39m[0m[32m[1m[32m[39m[0m[K

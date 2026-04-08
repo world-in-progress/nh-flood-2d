@@ -1,7 +1,7 @@
 from src.nh_flood_2d.preprocess import preprocess
 from src.nh_flood_2d.preprocess.pipe import prepare_pipe
 from src.nh_flood_2d.core.solver_compact import solver, warmup_solver
-from src.nh_flood_2d.core.solver_coupled import solver_coupled
+from src.nh_flood_2d.core.coupled import solver_coupled
 from src.nh_flood_2d.output.hydrograph import draw_hydrograph, compare_hydrograph
 from src.nh_flood_2d.input import load_domain_config, DomainConfig, load_force_config, ForceConfig
 from src.nh_flood_2d.input.pipe import load_pipe_config, PipeConfig
@@ -39,17 +39,18 @@ def evolve_domain_coupled(
 
 if __name__ == '__main__':
     # evolve_domain(domain_alt, df7_cfg)
+    # evolve_domain_coupled(domain_alt, df7_cfg, None)
     # evolve_domain_coupled(domain_alt, df7_cfg, pipe_cfg)
     
     # draw_hydrograph(domain_alt, 'D74', True, -3600)
-    # generate_flood_map(domain_alt)
-    # generate_flood_video(domain_alt, output_path='./resource/flood_video.mp4')
+    generate_flood_map(domain_alt)
+    generate_flood_video(domain_alt, output_path='./resource/flood_video.mp4')
     
     # preprocess(domain_mrcg, df7_cfg)
     # generate_max_inundation_extent_map(domain_4)
     
-    mses = compare_hydrograph([domain_alt], 'R22', clampped=True, show=True, show_obs=True)
-    print(f'RMSEs: {mses}')
+    # mses = compare_hydrograph([domain_alt], 'R22', clampped=True, show=True, show_obs=True)
+    # print(f'RMSEs: {mses}')
     
     # plot_spatial_mae_curve(domain_4, domain_mrcg, df7_cfg, output_path='./resource/spatial_mae_curve.png')
     
