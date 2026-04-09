@@ -183,11 +183,13 @@ def _run_2d_impl(
     def tick(tide: float, rainq: float) -> ti.f32:
         dt = ti.max(0.0001, ti.min(ndt_t[None], 1.0))
         ndt_t[None] = 1000.0
+        
         if tide > 1.5 and gate_is_open[None] == 0:
             for i in range(1, e_num):
                 if eu_t[i] == 11:
                     ez_t[i] = 0.0
             gate_is_open[None] = 1
+        
         for si in range(1, s_num):
             bf = ti.select(sbf_t[si] == 1, 0.0, 1.0)
             so, el, eh = sts_t[si, 0], sts_t[si, 1], sts_t[si, 2]
@@ -235,10 +237,12 @@ def _run_2d_impl(
                 flux = new_yq * sl_t[si]
                 ti.atomic_add(enq_t[eib, 3], flux)
                 ti.atomic_add(enq_t[eit, 2], flux)
+                
         if rainq > 0.0:
             cumulative_rain_time_t[None] += dt
             fr3[None] = fr5[None] = fr7[None] = horton_decay(3.0, 0.1, 2.0, cumulative_rain_time_t[None] / 3600.0) * 0.0254 / 3600.0
             fr1[None] = fr2[None] = horton_decay(0.8, 0.02, 10.0, cumulative_rain_time_t[None] / 3600.0) * 0.0254 / 3600.0
+            
         for ei in range(1, e_num):
             ql = enq_t[ei, 0]
             qr = enq_t[ei, 1]
@@ -264,9 +268,11 @@ def _run_2d_impl(
             next_h = ti.max(next_h, ez_t[ei])
             h_t[ei] = next_h
             depth_t[ei] = ti.max(next_h - ez_t[ei], 0.0)
+            
         for count in range(b_num):
             bdei = bdei_t[count]
             h_t[bdei] = tide
+            
         return ndt_t[None]
 
     # TICK_KERNEL_PLACEHOLDER
