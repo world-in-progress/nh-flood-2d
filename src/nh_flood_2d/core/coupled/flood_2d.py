@@ -403,10 +403,48 @@ def _run_2d_impl(
                 # apply: fresh drainage + overflow to ssq_t
                 apply_sources(q_source, overflow, ssq_t, primary_ei, name_to_idx)
 
+                # ── Water budget diagnostics (BEFORE overflow subtraction) ──
+                total_drain = sum(
+                    d.get('flow', 0.0) for n, d in data_dict.items()
+                    if not n.startswith('__')
+                )
+                total_overflow = sum(v for v in overflow.values() if v > 0)
+                n_overflow = sum(1 for v in overflow.values() if v > 0)
+
                 # net flow = drainage - overflow → "bleeding" SWMM
                 for name, q_ex in overflow.items():
                     if q_ex > 0.0 and name in data_dict:
                         data_dict[name]['flow'] -= q_ex
+
+                net_sent = sum(
+                    d.get('flow', 0.0) for n, d in data_dict.items()
+                    if not n.startswith('__')
+                )
+                n_negative = sum(
+                    1 for n, d in data_dict.items()
+                    if not n.startswith('__') and d.get('flow', 0.0) < 0
+                )
+                # HEAD distribution
+                heads_above_rim = 0
+                max_delta = 0.0
+                for i, name in enumerate(node_names):
+                    if node_is_outfall[i]:
+                        continue
+                    head = prev_flood_return.get(name, {}).get('level', 0.0)
+                    rim = junction_rim.get(name, 0.0)
+                    ei = int(primary_ei[name_to_idx[name]])
+                    h2d = max(float(h_np[ei]) - float(z_np[ei]), 0.0) if ei > 0 else 0.0
+                    dh = head - (rim + h2d)
+                    if dh > 0:
+                        heads_above_rim += 1
+                        max_delta = max(max_delta, dh)
+                w = timer.exchange_count
+                print(
+                    f'[2D] w={w:3d}  drain={total_drain:9.2f}  '
+                    f'overflow={total_overflow:9.2f}  net_sent={net_sent:9.2f}  '
+                    f'n_ovf={n_overflow:4d}  n_neg={n_negative:4d}  '
+                    f'heads>rim={heads_above_rim:4d}  max_Δh={max_delta:.3f}m'
+                )
 
                 # send to 1D (non-blocking) — 1D runs in parallel with next 2D window
                 send_to_1d(shared, data_dict, window_dt)
