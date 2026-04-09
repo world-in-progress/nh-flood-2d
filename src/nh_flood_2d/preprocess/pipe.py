@@ -13,7 +13,7 @@ import fastdb4py as fdb
 
 from ..input.domain import DomainConfig
 from ..input.pipe import PipeConfig
-from ..schema.feature import IndexLike, Node, PipeTopo
+from ..schema.feature import IndexLike, F32Value, Node, PipeTopo
 from ..util.ti import init_taichi
 
 
@@ -69,6 +69,32 @@ def _parse_inp_nodes(inp_path: str) -> list[_NodeInfo]:
                         is_outfall=(name in outfall_names),
                     ))
     return nodes
+
+
+def _parse_junction_rims(inp_path: str) -> dict[str, float]:
+    """Parse [JUNCTIONS] to compute rim elevation per junction.
+
+    Format: Name  Elevation  MaxDepth  InitDepth  SurDepth  Aponded
+    rim = Elevation + MaxDepth (ground level at junction opening).
+    """
+    rims: dict[str, float] = {}
+    in_junctions = False
+    with open(inp_path, encoding='utf-8') as f:
+        for line in f:
+            s = line.strip()
+            if s.lower().startswith('[junctions]'):
+                in_junctions = True
+                continue
+            if s.startswith('[') and in_junctions:
+                break
+            if in_junctions and s and not s.startswith(';'):
+                parts = s.split()
+                if len(parts) >= 3:
+                    name = parts[0]
+                    elevation = float(parts[1])
+                    max_depth = float(parts[2])
+                    rims[name] = elevation + max_depth
+    return rims
 
 
 # ─── Taichi nearest-neighbour kernel ───────────────────────────────────────────
@@ -207,6 +233,10 @@ def prepare_pipe(
         raise ValueError(f'No nodes found in SWMM .inp: {pipe_cfg.inp}')
     print(f'[prepare_pipe] parsed {n_nodes} nodes from .inp', flush=True)
 
+    # ── parse junction rim elevations ─────────────────────────────────────────
+    junction_rims = _parse_junction_rims(pipe_cfg.inp)
+    print(f'[prepare_pipe] parsed {len(junction_rims)} junction rims from .inp', flush=True)
+
     # ── GPU nearest-neighbour: find primary_ei per node ───────────────────────
     weak_dist_thresh = pipe_cfg.weak_dist_thresh
     nx_field    = ti.field(dtype=ti.f32, shape=e_num)
@@ -303,6 +333,12 @@ def prepare_pipe(
     il = IndexLike()
     il.index = n_nodes
     db.push(il, 'node_count')
+
+    # node_rim — junction rim elevation per node (outfalls get 0.0)
+    for i, node in enumerate(node_list):
+        fv = F32Value()
+        fv.value = junction_rims.get(node.name, 0.0) if not node.is_outfall else 0.0
+        db.push(fv, 'node_rim')
 
     db.save(pipe_cfg.pipe_fdb)
     db.unlink()

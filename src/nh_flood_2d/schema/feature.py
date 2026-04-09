@@ -14,6 +14,9 @@ class IndexLike(fdb.Feature):
 class U8Value(fdb.Feature):
     value: fdb.U8
 
+class F32Value(fdb.Feature):
+    value: fdb.F32
+
 class Ne(fdb.Feature):
     index: fdb.U32
     x: fdb.F32

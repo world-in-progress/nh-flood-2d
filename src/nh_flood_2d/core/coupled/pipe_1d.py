@@ -89,6 +89,44 @@ def _clear_inp_inflows(inp_path: str) -> None:
         f.writelines(new_lines)
 
 
+def _set_all_surdepth(inp_path: str, value: float = 1000.0) -> None:
+    """Set SurDepth to a large value for ALL junctions in [JUNCTIONS].
+
+    Prevents SWMM from internally flooding — the coupled exchange
+    code handles overflow via bidirectional feedback instead.
+
+    [JUNCTIONS] format:
+      Name  Elevation  MaxDepth  InitDepth  SurDepth  Aponded
+    SurDepth is the 5th data column (index 4 after name).
+    """
+    with open(inp_path, 'r') as f:
+        lines = f.readlines()
+
+    in_section = False
+    new_lines = []
+    count = 0
+    for line in lines:
+        stripped = line.strip()
+        if stripped.lower().startswith('[junctions]'):
+            in_section = True
+            new_lines.append(line)
+            continue
+        if in_section and stripped.startswith('['):
+            in_section = False
+        if in_section and stripped and not stripped.startswith(';'):
+            parts = line.split()
+            if len(parts) >= 5:
+                parts[4] = str(value)
+                new_lines.append('  '.join(parts) + '\n')
+                count += 1
+                continue
+        new_lines.append(line)
+
+    with open(inp_path, 'w') as f:
+        f.writelines(new_lines)
+    print(f'[1D] _set_all_surdepth: set {count} junctions to SurDepth={value}')
+
+
 # ─── 1D subprocess entry point ───────────────────────────────────────────────────
 
 
@@ -116,6 +154,9 @@ def run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
         _set_inp_end_time(inp_runtime, 7 * 24 * 3600)
         # Clear .inp baseline inflows to prevent double-counting with API calls
         _clear_inp_inflows(inp_runtime)
+        # Set all junction SurDepth=1000 so SWMM never internally floods;
+        # overflow is computed on the 2D side via bidirectional feedback.
+        _set_all_surdepth(inp_runtime, 1000.0)
 
         coupling_interval = float(pipe_cfg.coupling_interval)
 
@@ -134,23 +175,6 @@ def run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
                     f'[1D] {len(missing)} nodes in pipe.fdb not found in '
                     f'SWMM model: {sorted(missing)[:10]}...'
                 )
-
-            # Pre-compute junction rim elevations for virtual surcharge
-            # correction.  Reference sets SurDepth = 2D_water_depth each
-            # window; the SWMM API forbids this during a running sim, so
-            # we post-filter flood return using rim + 2D level instead.
-            nodes_obj = Nodes(sim)
-            junction_rim: dict = {}
-            for i, name in enumerate(node_names):
-                if is_outfall[i]:
-                    continue
-                try:
-                    nobj = nodes_obj[name]
-                    junction_rim[name] = (
-                        nobj.invert_elevation + nobj.full_depth
-                    )
-                except Exception:
-                    pass
 
             # ── Manual start (don't use for/iter — it advances before body) ──
             sim.start()
@@ -201,6 +225,9 @@ def run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
                     break  # SWMM reached END_TIME
 
                 # ── Read 1D → 2D results (AFTER advancing) ──
+                # With SurDepth=1000, SWMM never reports flooding internally.
+                # Overflow is computed on the 2D side using HEAD vs rim.
+                # 1D returns absolute HEAD for junctions, flow=0 for all nodes.
                 data_1d: dict = {}
                 for i, name in enumerate(node_names):
                     swmm_idx = name_to_swmm_idx.get(name)
@@ -208,48 +235,22 @@ def run_1d_pipe(shared, pipe_cfg: PipeConfig) -> None:
                         data_1d[name] = {'level': 0.0, 'flow': 0.0}
                         continue
 
+                    head = solver.node_get_result(
+                        swmm_idx, NodeResult.HEAD,
+                    )
+
                     if is_outfall[i]:
-                        level = solver.node_get_result(
-                            swmm_idx, NodeResult.HEAD,
-                        )
-                        # Outfalls discharge water OUT of the pipe system.
-                        # Don't return to 2D — it would recycle water.
-                        flow = 0.0
+                        # Outfalls: don't return flow to 2D
+                        data_1d[name] = {
+                            'level': float(head),
+                            'flow': 0.0,
+                        }
                     else:
-                        depth_1d = solver.node_get_result(
-                            swmm_idx, NodeResult.DEPTH,
-                        )
-                        head = solver.node_get_result(
-                            swmm_idx, NodeResult.HEAD,
-                        )
-                        flood = solver.node_get_result(
-                            swmm_idx, NodeResult.FLOOD,
-                        )
-
-                        # Virtual surcharge correction: suppress flood
-                        # return that is below the 2D water surface.
-                        rim = junction_rim.get(name, 0.0)
-                        level_2d = float(
-                            raw_2d.get(name, {}).get('level', 0.0),
-                        )
-                        effective_rim = rim + level_2d
-
-                        if flood <= 0.0 or head <= effective_rim:
-                            flow = 0.0
-                        else:
-                            excess = head - effective_rim
-                            swmm_excess = head - rim
-                            if swmm_excess > 1e-6:
-                                flow = flood * (excess / swmm_excess)
-                            else:
-                                flow = 0.0
-
-                        level = depth_1d
-
-                    data_1d[name] = {
-                        'level': float(level),
-                        'flow': float(flow),
-                    }
+                        # Junctions: return absolute HEAD for overflow calc
+                        data_1d[name] = {
+                            'level': float(head),
+                            'flow': 0.0,
+                        }
 
                 t_1d_elapsed = time.perf_counter() - t_1d_start
 

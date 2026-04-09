@@ -23,10 +23,12 @@ from ...input.pipe import PipeConfig
 from ...util.ti import init_taichi, copy_to_taichi
 from ...schema.feature import (
     Ne, Ns, IndexLike, SideTopoInfo, Rainfall, Tide, Gate,
-    U8Value, UVH, Node, PipeTopo,
+    U8Value, UVH, Node, PipeTopo, F32Value,
 )
 from .timer import CouplingTimer
-from .exchange import compute_drainage, send_to_1d, receive_from_1d, apply_sources
+from .exchange import (
+    compute_drainage, compute_overflow, send_to_1d, receive_from_1d, apply_sources,
+)
 
 
 def _lerp(a: float, b: float, t: float) -> float:
@@ -300,6 +302,14 @@ def _run_2d_impl(
             [bool(nodes_tbl[i].is_outfall) for i in range(n_nodes)], dtype=bool
         )
         node_names = [str(nodes_tbl[i].name) for i in range(n_nodes)]
+
+        # Load junction rim elevations for overflow calculation
+        rim_tbl = pipe_fdb[F32Value]['node_rim']
+        junction_rim = {
+            node_names[i]: float(rim_tbl[i].value)
+            for i in range(n_nodes)
+        }
+
         del pipe_fdb
         name_to_idx = {name: i for i, name in enumerate(node_names)}
 
@@ -375,14 +385,28 @@ def _run_2d_impl(
                     prev_flood_return = receive_from_1d(shared, pipe_cfg, timer)
 
                 # compute fresh drainage from current 2D state
-                data_dict, q_source = compute_drainage(
+                data_dict, q_source, h_np, z_np, esl_np = compute_drainage(
                     window_dt, h_t, ez_t, esl_t,
                     primary_ei, topo_ei, topo_ptr, nc_per_ei,
                     node_names, node_is_outfall,
                 )
 
-                # apply: fresh drainage + lagged flood-return
-                apply_sources(q_source, prev_flood_return, ssq_t, primary_ei, name_to_idx)
+                # compute overflow from pipe → surface using lagged HEAD
+                overflow = compute_overflow(
+                    prev_flood_return, junction_rim,
+                    h_np, z_np, esl_np,
+                    primary_ei, nc_per_ei,
+                    coupling_interval,
+                    node_names, node_is_outfall,
+                )
+
+                # apply: fresh drainage + overflow to ssq_t
+                apply_sources(q_source, overflow, ssq_t, primary_ei, name_to_idx)
+
+                # net flow = drainage - overflow → "bleeding" SWMM
+                for name, q_ex in overflow.items():
+                    if q_ex > 0.0 and name in data_dict:
+                        data_dict[name]['flow'] -= q_ex
 
                 # send to 1D (non-blocking) — 1D runs in parallel with next 2D window
                 send_to_1d(shared, data_dict, window_dt)
