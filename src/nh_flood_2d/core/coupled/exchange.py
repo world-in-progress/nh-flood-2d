@@ -154,13 +154,20 @@ def compute_overflow(
             overflow[name] = 0.0
             continue
 
+        # Cap effective Δh to prevent runaway overflow from
+        # SWMM pressurisation (SurDepth=1000 allows extreme HEAD).
+        # Physical manhole overflow rarely exceeds ~3m head.
+        MAX_DELTA_H = 3.0
+        RELAX = 0.5           # under-relaxation to damp oscillation
+        dh_eff = min(delta_h, MAX_DELTA_H)
+
         area = float(esl_np[ei]) ** 2
         nc = max(int(nc_per_ei[ei]), 1)
         q_ex = min(
-            0.85 * pi * 0.8 * delta_h ** 1.5,
-            delta_h * area / ci / nc,
+            0.85 * pi * 0.8 * dh_eff ** 1.5,
+            dh_eff * area / ci / nc,
         )
-        overflow[name] = q_ex
+        overflow[name] = q_ex * RELAX
 
     return overflow
 
