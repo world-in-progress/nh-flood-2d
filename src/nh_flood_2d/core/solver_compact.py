@@ -194,13 +194,15 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
     cumulative_rain_time_t = ti.field(dtype=ti.f32, shape=())
 
     # Infiltration rate
-    fr1 = ti.field(dtype=ti.f32, shape=())   # building
-    fr2 = ti.field(dtype=ti.f32, shape=())   # road
-    fr3 = ti.field(dtype=ti.f32, shape=())   # agricultural land
-    fr4 = ti.field(dtype=ti.f32, shape=())   # fish pond
-    fr5 = ti.field(dtype=ti.f32, shape=())   # mountainous land
-    fr6 = ti.field(dtype=ti.f32, shape=())   # water body
-    fr7 = ti.field(dtype=ti.f32, shape=())   # catch basin
+    fr1 = ti.field(dtype=ti.f32, shape=())   # building land
+    fr2 = ti.field(dtype=ti.f32, shape=())   # business land
+    fr3 = ti.field(dtype=ti.f32, shape=())   # industrial land
+    fr4 = ti.field(dtype=ti.f32, shape=())   # transport land
+    fr5 = ti.field(dtype=ti.f32, shape=())   # infrastructure land
+    fr6 = ti.field(dtype=ti.f32, shape=())   # agricultural land
+    fr7 = ti.field(dtype=ti.f32, shape=())   # fish pond land
+    # fr8                                    # water body
+    # fr9                                    # mountainous land
 
     # Time counters
     current_time = 0.0
@@ -210,9 +212,11 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
 
     @ti.kernel
     @no_type_check
-    def init_gpu(ex_t: ti.template(), ey_t: ti.template(),
-                 isl_data: ti.template(), isl_ptr_l: ti.template(),
-                 sx_t: ti.template()):
+    def init_gpu(
+        ex_t: ti.template(), ey_t: ti.template(),
+        isl_data: ti.template(), isl_ptr_l: ti.template(),
+        sx_t: ti.template()
+    ):
         ndt_t[None] = 0.1
         cumulative_rain_time_t[None] = 0.0
 
@@ -227,7 +231,10 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
             # Get side length (all four sides are the same for square elements)
             lsi0 = isl_data[isl_ptr_l[ei]]
             esl_t[ei] = ti.max((ex_t[ei] - sx_t[lsi0]) * 2.0, 0.0001)
-            # eu_t[ei] = 0b1 << (eu_t[ei] - 1)    # set type flag bit
+            
+            # Set water level of elements in water body to 2.0m
+            if eu_t[ei] == 8:
+                h_t[ei] = 2.0
 
         for si in range(1, s_num):
             sq_t[si] = 0.0
@@ -345,21 +352,20 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
             qr = enq_t[ei, 1]
             qb = enq_t[ei, 2]
             qt = enq_t[ei, 3]
-            # tq = ql - qr + qb - qt + ssq_t[ei] + q_source                       # total inflow quantity
             tq = ql - qr + qb - qt + ssq_t[ei]                                  # total inflow quantity
             eq_t[ei, 0], eq_t[ei, 1], eq_t[ei, 2], eq_t[ei, 3] = ql, qr, qb, qt # update current side flow quantities
             enq_t[ei, 0] = enq_t[ei, 1] = enq_t[ei, 2] = enq_t[ei, 3] = 0.0     # reset next time step side flow quantities
 
             # Calculate infiltration masks for all underlay types
             eu = eu_t[ei]       # underlay type value
-            f1 = ti.select(eu == 1, 1.0, 0.0)    # building
-            f2 = ti.select(eu == 2, 1.0, 0.0)    # road
-            f3 = ti.select(eu == 3, 1.0, 0.0)    # agricultural land
-            f4 = ti.select(eu == 4, 1.0, 0.0)    # fish pond
-            f5 = ti.select(eu == 5, 1.0, 0.0)    # mountainous land
-            f6 = ti.select(eu == 6, 1.0, 0.0)    # water body
-            f7 = ti.select(eu == 7, 1.0, 0.0)    # catch basin
-
+            f1 = ti.select(eu == 1, 1.0, 0.0)
+            f2 = ti.select(eu == 2, 1.0, 0.0)
+            f3 = ti.select(eu == 3, 1.0, 0.0)
+            f4 = ti.select(eu == 4, 1.0, 0.0)
+            f5 = ti.select(eu == 5, 1.0, 0.0)
+            f6 = ti.select(eu == 6, 1.0, 0.0)
+            f7 = ti.select(eu == 7, 1.0, 0.0)
+                                   
             ea = esl_t[ei] ** 2                 # area of element
             next_h = h_t[ei] + (tq * dt) / ea   # update next water depth
             next_h += rainq * dt                # add rainfall effect
@@ -462,6 +468,361 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
             uvh_fn = output_uvh_fn / f'uvh_{time_str}.fdb'
             uvh_db.save(str(uvh_fn))
             uvh_db.unlink()
+
+@benchmark(applied=True)
+def warmup_solver(
+    domain_cfg: DomainConfig,
+    force_cfg: ForceConfig,
+    warmup_tide: float = 0.45,
+    warmup_duration: float = 14400.0,
+    start_time_step: int = 0,
+):
+    """
+    Run a warmup phase before the normal simulation.
+
+    First runs `warmup_duration` seconds (default 4 h) using a constant tide level of
+    `warmup_tide` (default 0.45 m) and zero rainfall so the hydraulic state can reach a
+    quasi-steady initial condition.  No UVH snapshots are written during warmup.  Afterwards
+    the simulation continues normally driven by `force_cfg`, writing UVH output exactly as
+    the regular `solver` does.  The `solver` function itself is not modified.
+
+    Parameters
+    ----------
+    domain_cfg       : DomainConfig for the simulation domain.
+    force_cfg        : ForceConfig with tide / rain / gate data for the real simulation.
+    warmup_tide      : Constant water-surface elevation (m) imposed on boundary elements
+                       during the warmup phase.  Default 0.45 m.
+    warmup_duration  : Length of the warmup phase in seconds.  Default 14400 (4 hours).
+    start_time_step  : Index offset into tide data; same meaning as in solver().
+    """
+    init_taichi(use_gpu=True, profiler=True)
+
+    # ── Load FDB files ──────────────────────────────────────────────────────────
+    ne_fdb_fn      = Path(domain_cfg.ne_fdb)
+    ns_fdb_fn      = Path(domain_cfg.ns_fdb)
+    rain_fdb_fn    = Path(force_cfg.rain_fdb)
+    tide_fdb_fn    = Path(force_cfg.tide_fdb)
+    gate_fdb_fn    = Path(force_cfg.gate_fdb)
+    boundary_fdb_fn = Path(domain_cfg.boundary_fdb)
+
+    ne_fdb       = fdb.ORM.load(str(ne_fdb_fn),       from_file=True)
+    ns_fdb       = fdb.ORM.load(str(ns_fdb_fn),       from_file=True)
+    tide_fdb     = fdb.ORM.load(str(tide_fdb_fn),     from_file=True)
+    gate_fdb     = fdb.ORM.load(str(gate_fdb_fn),     from_file=True)
+    rain_fdb     = fdb.ORM.load(str(rain_fdb_fn),     from_file=True)
+    boundary_fdb = fdb.ORM.load(str(boundary_fdb_fn), from_file=True)
+
+    nes       = ne_fdb[Ne][Ne]
+    nss       = ns_fdb[Ns][Ns]
+    tides     = tide_fdb[Tide][Tide]
+    gates     = gate_fdb[Gate][Gate]
+    sbfs      = boundary_fdb[U8Value]['sbf']
+    bdeis     = boundary_fdb[IndexLike]['bdei']
+    rainfalls = rain_fdb[Rainfall][Rainfall]
+    sts       = ns_fdb[SideTopoInfo][SideTopoInfo]
+
+    tts: np.ndarray = tides.column.time.copy()
+    tls: np.ndarray = tides.column.level.copy()
+    rts: np.ndarray = rainfalls.column.time.copy()
+    rqs: np.ndarray = rainfalls.column.quantity.copy()
+
+    # ── Lengths and counts ──────────────────────────────────────────────────────
+    e_num = len(nes)
+    s_num = len(nss)
+    b_num = len(bdeis)
+    t_num = len(tides)
+    r_num = len(rainfalls)
+    g_num = gate_fdb[IndexLike]['gate_count'][0].index
+
+    # ── Physical parameters ─────────────────────────────────────────────────────
+    n     = 0.033
+    g     = 9.81
+    afa   = domain_cfg.afa
+    sita  = domain_cfg.sita
+    min_h = domain_cfg.min_h
+
+    # ── Taichi fields ───────────────────────────────────────────────────────────
+    esl_t  = ti.field(dtype=ti.f32, shape=e_num)
+    eq_t   = ti.field(dtype=ti.f32, shape=(e_num, 4))
+    enq_t  = ti.field(dtype=ti.f32, shape=(e_num, 4))
+    ez_t   = copy_to_taichi(nes.column.z,    ti.f32, None)
+    eu_t   = copy_to_taichi(nes.column.type, ti.u8,  None)
+    bdei_t = copy_to_taichi(bdeis.column.index, ti.i32, None)
+
+    isl_data_t    = copy_to_taichi(ne_fdb[IndexLike]['isl_data'].column.index,  ti.i32, None)
+    isl_ptr_l_t   = copy_to_taichi(ne_fdb[IndexLike]['isl_ptr_l'].column.index, ti.i32, None)
+    isl_ptr_r_t   = copy_to_taichi(ne_fdb[IndexLike]['isl_ptr_r'].column.index, ti.i32, None)
+    isl_ptr_b_t   = copy_to_taichi(ne_fdb[IndexLike]['isl_ptr_b'].column.index, ti.i32, None)
+    isl_ptr_top_t = copy_to_taichi(ne_fdb[IndexLike]['isl_ptr_t'].column.index, ti.i32, None)
+
+    ndt_t   = ti.field(dtype=ti.f32, shape=())
+    dh_t    = ti.field(dtype=ti.f32, shape=s_num)
+    sq_t    = ti.field(dtype=ti.f32, shape=s_num)
+    sqn_t   = ti.field(dtype=ti.f32, shape=s_num)
+    sdc_t   = ti.field(dtype=ti.f32, shape=s_num)
+    sl_t    = copy_to_taichi(nss.column.length,    ti.f32, None)
+    sbf_t   = copy_to_taichi(sbfs.column.value,    ti.u8,  None)
+    sts_t   = copy_to_taichi(sts.column.info,      ti.i32, [s_num, 3])
+    gate_t  = copy_to_taichi(gates.column.info[:g_num * 100], ti.i32, [g_num, 100])
+
+    u_t       = ti.field(dtype=ti.f32, shape=e_num)
+    v_t       = ti.field(dtype=ti.f32, shape=e_num)
+    h_t       = ti.field(dtype=ti.f32, shape=e_num)
+    depth_t   = ti.field(dtype=ti.f32, shape=e_num)
+    ssq_t     = ti.field(dtype=ti.f32, shape=e_num)
+
+    cumulative_rain_time_t = ti.field(dtype=ti.f32, shape=())
+
+    fr1 = ti.field(dtype=ti.f32, shape=())
+    fr2 = ti.field(dtype=ti.f32, shape=())
+    fr3 = ti.field(dtype=ti.f32, shape=())
+    fr4 = ti.field(dtype=ti.f32, shape=())
+    fr5 = ti.field(dtype=ti.f32, shape=())
+    fr6 = ti.field(dtype=ti.f32, shape=())
+    fr7 = ti.field(dtype=ti.f32, shape=())
+
+    current_time          = 0.0
+    current_rain_idx      = 0
+    current_tide_idx      = 0
+    simulation_begin_time = 0.0
+
+    # ── Kernels (identical to solver) ───────────────────────────────────────────
+
+    @ti.kernel
+    @no_type_check
+    def init_gpu(
+        ex_t: ti.template(), ey_t: ti.template(),
+        isl_data: ti.template(), isl_ptr_l: ti.template(),
+        sx_t: ti.template()
+    ):
+        ndt_t[None] = 0.1
+        cumulative_rain_time_t[None] = 0.0
+
+        for ei in range(1, e_num):
+            u_t[ei] = 0.0
+            v_t[ei] = 0.0
+            ssq_t[ei] = 0.0
+            h_t[ei] = ez_t[ei] if ez_t[ei] > 0.0 else 0.0
+            eq_t[ei, 0] = eq_t[ei, 1] = eq_t[ei, 2] = eq_t[ei, 3] = 0.0
+            enq_t[ei, 0] = enq_t[ei, 1] = enq_t[ei, 2] = enq_t[ei, 3] = 0.0
+
+            lsi0 = isl_data[isl_ptr_l[ei]]
+            esl_t[ei] = ti.max((ex_t[ei] - sx_t[lsi0]) * 2.0, 0.0001)
+
+            if eu_t[ei] == 8:
+                h_t[ei] = 2.0
+
+        for si in range(1, s_num):
+            sq_t[si] = 0.0
+            sqn_t[si] = 0.0
+            dh_t[si] = -999.0
+            so, el, eh = sts_t[si, 0], sts_t[si, 1], sts_t[si, 2]
+            if so == 2:
+                eil, eir = el, eh
+                sdc_t[si] = ti.max(ti.abs(ex_t[eir] - ex_t[eil]), 0.01)
+            else:
+                eib, eit = el, eh
+                sdc_t[si] = ti.max(ti.abs(ey_t[eit] - ey_t[eib]), 0.01)
+
+        fr1[None] = fr2[None] = fr3[None] = fr4[None] = fr5[None] = fr6[None] = fr7[None] = 0.0
+
+    gate_is_open = ti.field(dtype=ti.i32, shape=())
+    if not USE_GATE_EFFECT:
+        gate_is_open[None] = 1
+
+    @ti.kernel
+    @no_type_check
+    def tick(tide: float, rainq: float) -> ti.f32:
+        dt = ti.max(0.0001, ti.min(ndt_t[None], 1.0))
+        ndt_t[None] = 1000.0
+
+        if tide > 1.5 and gate_is_open[None] == 0:
+            for i in range(1, e_num):
+                if eu_t[i] == 11:
+                    ez_t[i] = 0.0
+            gate_is_open[None] = 1
+
+        for si in range(1, s_num):
+            bf = ti.select(sbf_t[si] == 1, 0.0, 1.0)
+            so, el, eh = sts_t[si, 0], sts_t[si, 1], sts_t[si, 2]
+            if so == 2:
+                eil, eir = el, eh
+                side_l = isl_data_t[isl_ptr_l_t[eil]]
+                side_r = isl_data_t[isl_ptr_r_t[eir]]
+                hl, hr = h_t[eil], h_t[eir]
+                dx = sdc_t[si]
+                xq = sq_t[si]
+                xwh = ti.max(hl, hr) - ti.max(ez_t[eil], ez_t[eir], dh_t[si])
+                xdq = (-g * (hr - hl) / dx) * ti.max(xwh, 0.0) * dt
+                xf = 1.0 + g * dt * (n ** 2) * ti.abs(xq / (ti.max(xwh, 0.00001) ** (7.0 / 3.0)))
+                new_xq = (sita * xq + (1.0 - sita) / 2.0 * (sqn_t[side_l] + sqn_t[side_r]) + xdq) / xf
+                new_xq = ti.select(xwh < min_h, 0.0, new_xq)
+                new_xq *= bf
+                sq_t[si] = new_xq
+                sqn_t[si] = new_xq
+                xwh = ti.max(xwh, 0.01)
+                sdt = bf * afa * sl_t[si] / (ti.sqrt(g * xwh) + ti.abs(new_xq) / xwh)
+                sdt = ti.max((0.001 - sdt) * 100000.0, sdt)
+                ti.atomic_min(ndt_t[None], sdt)
+                flux = new_xq * sl_t[si]
+                ti.atomic_add(enq_t[eil, 1], flux)
+                ti.atomic_add(enq_t[eir, 0], flux)
+            else:
+                eib, eit = el, eh
+                side_b = isl_data_t[isl_ptr_b_t[eib]]
+                side_t = isl_data_t[isl_ptr_top_t[eit]]
+                hb, ht = h_t[eib], h_t[eit]
+                dy = sdc_t[si]
+                yq = sq_t[si]
+                ywh = ti.max(hb, ht) - ti.max(ez_t[eib], ez_t[eit], dh_t[si])
+                ydq = (-g * (ht - hb) / dy) * ti.max(ywh, 0.0) * dt
+                yf = 1.0 + g * dt * (n ** 2) * ti.abs(yq / (ti.max(ywh, 0.00001) ** (7.0 / 3.0)))
+                new_yq = (sita * yq + (1.0 - sita) / 2.0 * (sqn_t[side_b] + sqn_t[side_t]) + ydq) / yf
+                new_yq = ti.select(ywh < min_h, 0.0, new_yq)
+                new_yq *= bf
+                sq_t[si] = new_yq
+                sqn_t[si] = new_yq
+                ywh = ti.max(ywh, 0.01)
+                sdt = bf * afa * sl_t[si] / (ti.sqrt(g * ywh) + ti.abs(new_yq) / ywh)
+                sdt = ti.max((0.001 - sdt) * 100000.0, sdt)
+                ti.atomic_min(ndt_t[None], sdt)
+                flux = new_yq * sl_t[si]
+                ti.atomic_add(enq_t[eib, 3], flux)
+                ti.atomic_add(enq_t[eit, 2], flux)
+
+        if rainq > 0.0:
+            cumulative_rain_time_t[None] += dt
+            fr3[None] = fr5[None] = fr7[None] = horton_decay(3.0, 0.1, 2.0, cumulative_rain_time_t[None] / 3600.0) * 0.0254 / 3600.0
+            fr1[None] = fr2[None] = horton_decay(0.8, 0.02, 10.0, cumulative_rain_time_t[None] / 3600.0) * 0.0254 / 3600.0
+
+        for ei in range(1, e_num):
+            ql = enq_t[ei, 0]
+            qr = enq_t[ei, 1]
+            qb = enq_t[ei, 2]
+            qt = enq_t[ei, 3]
+            tq = ql - qr + qb - qt + ssq_t[ei]
+            eq_t[ei, 0], eq_t[ei, 1], eq_t[ei, 2], eq_t[ei, 3] = ql, qr, qb, qt
+            enq_t[ei, 0] = enq_t[ei, 1] = enq_t[ei, 2] = enq_t[ei, 3] = 0.0
+
+            eu = eu_t[ei]
+            f1 = ti.select(eu == 1, 1.0, 0.0)
+            f2 = ti.select(eu == 2, 1.0, 0.0)
+            f3 = ti.select(eu == 3, 1.0, 0.0)
+            f4 = ti.select(eu == 4, 1.0, 0.0)
+            f5 = ti.select(eu == 5, 1.0, 0.0)
+            f6 = ti.select(eu == 6, 1.0, 0.0)
+            f7 = ti.select(eu == 7, 1.0, 0.0)
+
+            ea = esl_t[ei] ** 2
+            next_h = h_t[ei] + (tq * dt) / ea
+            next_h += rainq * dt
+            next_h -= (fr1[None] * f1 + fr2[None] * f2 + fr3[None] * f3 +
+                       fr4[None] * f4 + fr5[None] * f5 + fr6[None] * f6 +
+                       fr7[None] * f7) * dt
+            next_h = ti.max(next_h, ez_t[ei])
+            h_t[ei] = next_h
+            depth_t[ei] = ti.max(next_h - ez_t[ei], 0.00)
+
+        for count in range(b_num):
+            bdei = bdei_t[count]
+            h_t[bdei] = tide
+
+        return ndt_t[None]
+
+    @ti.kernel
+    @no_type_check
+    def update_velocities():
+        for ei in range(1, e_num):
+            esl   = esl_t[ei]
+            depth = ti.max(h_t[ei] - ez_t[ei], 0.01)
+            u_t[ei] = ti.select(depth < min_h, 0.0, (eq_t[ei, 0] + eq_t[ei, 1]) / esl / depth / 2.0)
+            v_t[ei] = ti.select(depth < min_h, 0.0, (eq_t[ei, 2] + eq_t[ei, 3]) / esl / depth / 2.0)
+
+    # ── Initialise GPU state ────────────────────────────────────────────────────
+    tide_step   = round((tts[1] - tts[0]) / 60.0)
+    begin_index = max(0, (int(start_time_step * 5 / tide_step) - 1))
+    current_time          = tts[begin_index]
+    simulation_begin_time = current_time
+
+    while rts[current_rain_idx] < simulation_begin_time:
+        current_rain_idx += 1
+
+    ex = copy_to_taichi(nes.column.x, ti.f32, None)
+    ey = copy_to_taichi(nes.column.y, ti.f32, None)
+    sx = copy_to_taichi(nss.column.x, ti.f32, None)
+    init_gpu(ex, ey, isl_data_t, isl_ptr_l_t, sx)
+
+    del ne_fdb, ns_fdb, tide_fdb, gate_fdb, rain_fdb, boundary_fdb
+    del nes, nss, tides, gates, sbfs, bdeis, rainfalls, sts
+    gc.collect()
+    print('FDB objects deleted, memory freed for simulation.')
+
+    # ── Warmup phase ────────────────────────────────────────────────────────────
+    print(f'Starting warmup: {warmup_duration / 3600:.1f} h at constant tide = {warmup_tide} m (no output)')
+    warmup_elapsed = 0.0
+    warmup_log_interval = warmup_duration / 4.0   # print progress 4 times during warmup
+    next_warmup_log    = warmup_log_interval
+
+    while warmup_elapsed < warmup_duration:
+        dt_w = tick(warmup_tide, 0.0)
+        warmup_elapsed += dt_w
+        if warmup_elapsed >= next_warmup_log:
+            print(f'  Warmup progress: {warmup_elapsed / 3600:.2f} / {warmup_duration / 3600:.1f} h  (dt = {dt_w:.4f} s)')
+            next_warmup_log += warmup_log_interval
+
+    print(f'Warmup complete ({warmup_elapsed:.1f} s simulated). Switching to normal simulation.')
+
+    # ── Normal simulation ────────────────────────────────────────────────────────
+    # h_t / sq_t / sqn_t already carry the warmed-up hydraulic state.
+    # Only reset the simulation clock and output directory; do NOT re-call init_gpu.
+    last_output_time  = current_time
+    evolve_start_time = current_time
+
+    output_uvh_fn = Path(domain_cfg.uvh_dir)
+    if output_uvh_fn.exists():
+        shutil.rmtree(output_uvh_fn)
+    output_uvh_fn.mkdir(parents=True, exist_ok=True)
+
+    while domain_cfg.duration == -1 or current_time - evolve_start_time < domain_cfg.duration:
+        # Update tide by linear interpolation
+        if current_time >= tts[current_tide_idx + 1]:
+            if current_tide_idx + 2 >= t_num:
+                break
+            else:
+                current_tide_idx += 1
+        tide = lerp(
+            tls[current_tide_idx],
+            tls[current_tide_idx + 1],
+            (current_time - tts[current_tide_idx]) / (tts[current_tide_idx + 1] - tts[current_tide_idx])
+        )
+
+        # Update average rainfall quantity (m/s)
+        rainq = 0.0
+        if current_time <= rts[r_num - 1]:
+            if current_time > rts[current_rain_idx + 1]:
+                current_rain_idx += 1
+            rainq = rqs[current_rain_idx + 1] / (rts[current_rain_idx + 1] - rts[current_rain_idx]) * 0.001
+
+        dt = tick(tide, rainq)
+        current_time += dt
+
+        if current_time - last_output_time >= domain_cfg.yield_step:
+            last_output_time += domain_cfg.yield_step
+            cumulative_time = current_time - simulation_begin_time
+            print(f'Cumulative simulation time: {cumulative_time} seconds, current dt: {dt} seconds')
+
+            update_velocities()
+
+            uvh_db = fdb.ORM.truncate([fdb.TableDefn(UVH, e_num)])
+            uvh_db[UVH][UVH].column.u[:] = u_t.to_numpy()
+            uvh_db[UVH][UVH].column.v[:] = v_t.to_numpy()
+            uvh_db[UVH][UVH].column.h[:] = h_t.to_numpy()
+
+            time_str = datetime.fromtimestamp(last_output_time).strftime('%Y%m%d-%H%M%S')
+            uvh_fn = output_uvh_fn / f'uvh_{time_str}.fdb'
+            uvh_db.save(str(uvh_fn))
+            uvh_db.unlink()
+
 
 # Helpers ##################################################
 

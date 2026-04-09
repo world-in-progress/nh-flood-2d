@@ -1,0 +1,7 @@
+{
+    "inp": "./resource/network.inp",
+    "pipe_dir": "./resource/pipe",
+    "coupling_interval": 600.0,
+    "exchange_timeout": 600.0,
+    "weak_dist_thresh": 50.0
+}
