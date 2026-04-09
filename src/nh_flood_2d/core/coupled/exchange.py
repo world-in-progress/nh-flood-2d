@@ -48,12 +48,16 @@ def compute_drainage(
     nc_per_ei: np.ndarray,
     node_names: list,
     node_is_outfall: np.ndarray,
+    eu_np: np.ndarray | None = None,
 ) -> tuple:
     """Compute surface drainage into pipe nodes (GPU→CPU).
 
     Matches reference (Flood_new801.py L726-761):
       1. Secondary cells first — SET (=) semantics, no /nc, all nodes
       2. Primary cells second — accumulate (+=), /nc, node_type gating
+
+    Elements with land-use type 8 (water body) are excluded from
+    drainage — manholes do not drain rivers/lakes.
 
     Returns (data_dict, q_source, h_np, z_np, esl_np) where data_dict is
     sent to 1D, q_source is per-element source/sink, and h/z/esl numpy
@@ -76,6 +80,8 @@ def compute_drainage(
             ei = int(topo_ei[j])
             if ei == 0:
                 continue
+            if eu_np is not None and eu_np[ei] == 8:
+                continue  # skip water body elements
             depth = max(float(h_np[ei]) - float(z_np[ei]), 0.0)
             area = float(esl_np[ei]) ** 2
             q = min(0.85 * pi * 0.8 * depth ** 1.5, depth * area / ci)
@@ -88,6 +94,13 @@ def compute_drainage(
         ei = int(primary_ei[i])
         if ei == 0:
             data_dict[name] = {'level': 0.0, 'flow': 0.0}
+            continue
+
+        # skip water body elements from drainage
+        if eu_np is not None and eu_np[ei] == 8:
+            depth = max(float(h_np[ei]) - float(z_np[ei]), 0.0)
+            level = float(h_np[ei]) if node_is_outfall[i] else depth
+            data_dict[name] = {'level': level, 'flow': float(total_flow[i])}
             continue
 
         depth = max(float(h_np[ei]) - float(z_np[ei]), 0.0)
@@ -121,6 +134,7 @@ def compute_overflow(
     coupling_interval: float,
     node_names: list,
     node_is_outfall: np.ndarray,
+    eu_np: np.ndarray | None = None,
 ) -> dict:
     """Compute overflow Q_ex from pipe to surface using HEAD vs rim + h_2d.
 
@@ -142,6 +156,11 @@ def compute_overflow(
 
         ei = int(primary_ei[i])
         if ei == 0:
+            overflow[name] = 0.0
+            continue
+
+        # Don't overflow into water body cells (type=8)
+        if eu_np is not None and eu_np[ei] == 8:
             overflow[name] = 0.0
             continue
 

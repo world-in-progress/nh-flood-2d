@@ -167,8 +167,11 @@ def _run_2d_impl(
             enq_t[ei, 0] = enq_t[ei, 1] = enq_t[ei, 2] = enq_t[ei, 3] = 0.0
             lsi0 = isl_data[isl_ptr_l[ei]]
             esl_t[ei] = ti.max((ex_t[ei] - sx_t[lsi0]) * 2.0, 0.0001)
-            if eu_t[ei] == 8:
-                h_t[ei] = 2.0
+            
+            
+            # if eu_t[ei] == 8:
+            #     h_t[ei] = 2.0
+                
         for si in range(1, s_num):
             sq_t[si] = 0.0
             sqn_t[si] = 0.0
@@ -326,6 +329,9 @@ def _run_2d_impl(
     sx = copy_to_taichi(nss.column.x, ti.f32, None)
     init_gpu(ex, ey, isl_data_t, isl_ptr_l_t, sx)
 
+    # Element type numpy copy (for drainage/overflow: skip water body type=8)
+    eu_np = eu_t.to_numpy()
+
     del ne_fdb, ns_fdb, tide_fdb, gate_fdb, rain_fdb, boundary_fdb
     del nes, nss, tides, gates, sbfs, bdeis, rainfalls, sts
     gc.collect()
@@ -388,7 +394,7 @@ def _run_2d_impl(
                 data_dict, q_source, h_np, z_np, esl_np = compute_drainage(
                     window_dt, h_t, ez_t, esl_t,
                     primary_ei, topo_ei, topo_ptr, nc_per_ei,
-                    node_names, node_is_outfall,
+                    node_names, node_is_outfall, eu_np,
                 )
 
                 # compute overflow from pipe → surface using lagged HEAD
@@ -397,7 +403,7 @@ def _run_2d_impl(
                     h_np, z_np, esl_np,
                     primary_ei, nc_per_ei,
                     coupling_interval,
-                    node_names, node_is_outfall,
+                    node_names, node_is_outfall, eu_np,
                 )
 
                 # apply: fresh drainage + overflow to ssq_t
