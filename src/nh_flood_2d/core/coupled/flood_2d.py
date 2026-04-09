@@ -23,10 +23,12 @@ from ...input.pipe import PipeConfig
 from ...util.ti import init_taichi, copy_to_taichi
 from ...schema.feature import (
     Ne, Ns, IndexLike, SideTopoInfo, Rainfall, Tide, Gate,
-    U8Value, UVH, Node, PipeTopo,
+    U8Value, UVH, Node, PipeTopo, F32Value,
 )
 from .timer import CouplingTimer
-from .exchange import compute_drainage, send_to_1d, receive_from_1d, apply_sources
+from .exchange import (
+    compute_drainage, compute_overflow, send_to_1d, receive_from_1d, apply_sources,
+)
 
 
 def _lerp(a: float, b: float, t: float) -> float:
@@ -165,8 +167,11 @@ def _run_2d_impl(
             enq_t[ei, 0] = enq_t[ei, 1] = enq_t[ei, 2] = enq_t[ei, 3] = 0.0
             lsi0 = isl_data[isl_ptr_l[ei]]
             esl_t[ei] = ti.max((ex_t[ei] - sx_t[lsi0]) * 2.0, 0.0001)
-            if eu_t[ei] == 8:
-                h_t[ei] = 2.0
+            
+            
+            # if eu_t[ei] == 8:
+            #     h_t[ei] = 2.0
+                
         for si in range(1, s_num):
             sq_t[si] = 0.0
             sqn_t[si] = 0.0
@@ -300,6 +305,14 @@ def _run_2d_impl(
             [bool(nodes_tbl[i].is_outfall) for i in range(n_nodes)], dtype=bool
         )
         node_names = [str(nodes_tbl[i].name) for i in range(n_nodes)]
+
+        # Load junction rim elevations for overflow calculation
+        rim_tbl = pipe_fdb[F32Value]['node_rim']
+        junction_rim = {
+            node_names[i]: float(rim_tbl[i].value)
+            for i in range(n_nodes)
+        }
+
         del pipe_fdb
         name_to_idx = {name: i for i, name in enumerate(node_names)}
 
@@ -315,6 +328,9 @@ def _run_2d_impl(
     ey = copy_to_taichi(nes.column.y, ti.f32, None)
     sx = copy_to_taichi(nss.column.x, ti.f32, None)
     init_gpu(ex, ey, isl_data_t, isl_ptr_l_t, sx)
+
+    # Element type numpy copy (for drainage/overflow: skip water body type=8)
+    eu_np = eu_t.to_numpy()
 
     del ne_fdb, ns_fdb, tide_fdb, gate_fdb, rain_fdb, boundary_fdb
     del nes, nss, tides, gates, sbfs, bdeis, rainfalls, sts
@@ -375,14 +391,66 @@ def _run_2d_impl(
                     prev_flood_return = receive_from_1d(shared, pipe_cfg, timer)
 
                 # compute fresh drainage from current 2D state
-                data_dict, q_source = compute_drainage(
+                data_dict, q_source, h_np, z_np, esl_np = compute_drainage(
                     window_dt, h_t, ez_t, esl_t,
                     primary_ei, topo_ei, topo_ptr, nc_per_ei,
-                    node_names, node_is_outfall,
+                    node_names, node_is_outfall, eu_np,
                 )
 
-                # apply: fresh drainage + lagged flood-return
-                apply_sources(q_source, prev_flood_return, ssq_t, primary_ei, name_to_idx)
+                # compute overflow from pipe → surface using lagged HEAD
+                overflow = compute_overflow(
+                    prev_flood_return, junction_rim,
+                    h_np, z_np, esl_np,
+                    primary_ei, nc_per_ei,
+                    coupling_interval,
+                    node_names, node_is_outfall, eu_np,
+                )
+
+                # apply: fresh drainage + overflow to ssq_t
+                apply_sources(q_source, overflow, ssq_t, primary_ei, name_to_idx)
+
+                # ── Water budget diagnostics (BEFORE overflow subtraction) ──
+                total_drain = sum(
+                    d.get('flow', 0.0) for n, d in data_dict.items()
+                    if not n.startswith('__')
+                )
+                total_overflow = sum(v for v in overflow.values() if v > 0)
+                n_overflow = sum(1 for v in overflow.values() if v > 0)
+
+                # net flow = drainage - overflow → "bleeding" SWMM
+                for name, q_ex in overflow.items():
+                    if q_ex > 0.0 and name in data_dict:
+                        data_dict[name]['flow'] -= q_ex
+
+                net_sent = sum(
+                    d.get('flow', 0.0) for n, d in data_dict.items()
+                    if not n.startswith('__')
+                )
+                n_negative = sum(
+                    1 for n, d in data_dict.items()
+                    if not n.startswith('__') and d.get('flow', 0.0) < 0
+                )
+                # HEAD distribution
+                heads_above_rim = 0
+                max_delta = 0.0
+                for i, name in enumerate(node_names):
+                    if node_is_outfall[i]:
+                        continue
+                    head = prev_flood_return.get(name, {}).get('level', 0.0)
+                    rim = junction_rim.get(name, 0.0)
+                    ei = int(primary_ei[name_to_idx[name]])
+                    h2d = max(float(h_np[ei]) - float(z_np[ei]), 0.0) if ei > 0 else 0.0
+                    dh = head - (rim + h2d)
+                    if dh > 0:
+                        heads_above_rim += 1
+                        max_delta = max(max_delta, dh)
+                w = timer.exchange_count
+                print(
+                    f'[2D] w={w:3d}  drain={total_drain:9.2f}  '
+                    f'overflow={total_overflow:9.2f}  net_sent={net_sent:9.2f}  '
+                    f'n_ovf={n_overflow:4d}  n_neg={n_negative:4d}  '
+                    f'heads>rim={heads_above_rim:4d}  max_Δh={max_delta:.3f}m'
+                )
 
                 # send to 1D (non-blocking) — 1D runs in parallel with next 2D window
                 send_to_1d(shared, data_dict, window_dt)
