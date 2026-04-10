@@ -15,6 +15,20 @@ from ..schema.feature import Ne, Ns, IndexLike, SideTopoInfo, Rainfall, Tide, Ga
 
 USE_GATE_EFFECT = True
 
+
+def _load_restart_uvh(restart_path: str, h_t, u_t, v_t, e_num: int):
+    """Load h/u/v from a UVH .fdb snapshot and overwrite GPU fields."""
+    uvh_db = fdb.ORM.load(restart_path, from_file=True)
+    uvh_tbl = uvh_db[UVH][UVH]
+    assert len(uvh_tbl) == e_num, (
+        f'Restart UVH size {len(uvh_tbl)} != element count {e_num}'
+    )
+    h_t.from_numpy(uvh_tbl.column.h)
+    u_t.from_numpy(uvh_tbl.column.u)
+    v_t.from_numpy(uvh_tbl.column.v)
+    del uvh_db
+    print(f'[warmstart] Loaded restart state from {restart_path}')
+
 def set_elevation(domain_cfg, elevate_meter: float):
     """
     Set the z data of element to a specified elevation (elevate_meter) if it is below that elevation.
@@ -193,16 +207,16 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
     # Taichi rainning time counters
     cumulative_rain_time_t = ti.field(dtype=ti.f32, shape=())
 
-    # Infiltration rate
-    fr1 = ti.field(dtype=ti.f32, shape=())   # building land
-    fr2 = ti.field(dtype=ti.f32, shape=())   # business land
-    fr3 = ti.field(dtype=ti.f32, shape=())   # industrial land
-    fr4 = ti.field(dtype=ti.f32, shape=())   # transport land
-    fr5 = ti.field(dtype=ti.f32, shape=())   # infrastructure land
-    fr6 = ti.field(dtype=ti.f32, shape=())   # agricultural land
-    fr7 = ti.field(dtype=ti.f32, shape=())   # fish pond land
-    # fr8                                    # water body
-    # fr9                                    # mountainous land
+    # Infiltration rate (Horton model: f₀→fc with decay k, in/hr → m/s via *0.0254/3600)
+    fr1 = ti.field(dtype=ti.f32, shape=())   # type=1: building land
+    fr2 = ti.field(dtype=ti.f32, shape=())   # type=2: business land
+    fr3 = ti.field(dtype=ti.f32, shape=())   # type=3: industrial land
+    fr4 = ti.field(dtype=ti.f32, shape=())   # type=4: transport land
+    fr5 = ti.field(dtype=ti.f32, shape=())   # type=5: infrastructure land
+    fr6 = ti.field(dtype=ti.f32, shape=())   # type=6: agricultural land
+    fr7 = ti.field(dtype=ti.f32, shape=())   # type=7: fish pond land
+    # type=8: water body — no infiltration
+    fr9 = ti.field(dtype=ti.f32, shape=())   # type=9: mountainous land
 
     # Time counters
     current_time = 0.0
@@ -248,7 +262,7 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
                 eib, eit = el, eh
                 sdc_t[si] = ti.max(ti.abs(ey_t[eit] - ey_t[eib]), 0.01)
 
-        fr1[None] = fr2[None] = fr3[None] = fr4[None] = fr5[None] = fr6[None] = fr7[None] = 0.0
+        fr1[None] = fr2[None] = fr3[None] = fr4[None] = fr5[None] = fr6[None] = fr7[None] = fr9[None] = 0.0
 
     def init():
         nonlocal current_time, simulation_begin_time, current_rain_idx
@@ -265,6 +279,10 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
         ey = copy_to_taichi(nes.column.y, ti.f32, None)
         sx = copy_to_taichi(nss.column.x, ti.f32, None)
         init_gpu(ex, ey, isl_data_t, isl_ptr_l_t, sx)
+
+        # Warm-start: overwrite h/u/v from a restart UVH snapshot
+        if domain_cfg.restart_uvh:
+            _load_restart_uvh(domain_cfg.restart_uvh, h_t, u_t, v_t, e_num)
 
     gate_is_open = ti.field(dtype=ti.i32, shape=())
     if not USE_GATE_EFFECT:
@@ -340,10 +358,14 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
                 ti.atomic_add(enq_t[eit, 2], flux)
 
         # Tick infiltration rate during rainfall (based on Horton model)
+        # Horton: f(t) = fc + (f0 - fc) * exp(-k * t), converted from in/hr to m/s
         if rainq > 0.0:
             cumulative_rain_time_t[None] += dt
-            fr3[None] = fr5[None] = fr7[None] = horton_decay(3.0, 0.1, 2.0, cumulative_rain_time_t[None] / 3600.0) * 0.0254 / 3600.0
-            fr1[None] = fr2[None] = horton_decay(0.8, 0.02, 10.0, cumulative_rain_time_t[None] / 3600.0) * 0.0254 / 3600.0
+            t_hr = cumulative_rain_time_t[None] / 3600.0
+            fr1[None] = fr2[None] = fr4[None] = horton_decay(0.8, 0.02, 10.0, t_hr) * 0.0254 / 3600.0    # impervious: building, business, transport
+            fr3[None] = fr5[None] = fr7[None] = horton_decay(3.0, 0.1, 2.0, t_hr) * 0.0254 / 3600.0      # semi-pervious: industrial, infrastructure, fish pond
+            fr6[None] = horton_decay(4.0, 0.3, 2.0, t_hr) * 0.0254 / 3600.0                               # pervious: agricultural land
+            fr9[None] = horton_decay(6.0, 1.0, 3.0, t_hr) * 0.0254 / 3600.0                               # highly pervious: mountainous land
 
         # Tick elements
         for ei in range(1, e_num):
@@ -358,20 +380,21 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
 
             # Calculate infiltration masks for all underlay types
             eu = eu_t[ei]       # underlay type value
-            f1 = ti.select(eu == 1, 1.0, 0.0)
-            f2 = ti.select(eu == 2, 1.0, 0.0)
-            f3 = ti.select(eu == 3, 1.0, 0.0)
-            f4 = ti.select(eu == 4, 1.0, 0.0)
-            f5 = ti.select(eu == 5, 1.0, 0.0)
-            f6 = ti.select(eu == 6, 1.0, 0.0)
-            f7 = ti.select(eu == 7, 1.0, 0.0)
+            f1 = ti.select(eu == 1, 1.0, 0.0)   # building
+            f2 = ti.select(eu == 2, 1.0, 0.0)   # business
+            f3 = ti.select(eu == 3, 1.0, 0.0)   # industrial
+            f4 = ti.select(eu == 4, 1.0, 0.0)   # transport
+            f5 = ti.select(eu == 5, 1.0, 0.0)   # infrastructure
+            f6 = ti.select(eu == 6, 1.0, 0.0)   # agricultural
+            f7 = ti.select(eu == 7, 1.0, 0.0)   # fish pond
+            f9 = ti.select(eu == 9, 1.0, 0.0)   # mountainous
                                    
             ea = esl_t[ei] ** 2                 # area of element
             next_h = h_t[ei] + (tq * dt) / ea   # update next water depth
             next_h += rainq * dt                # add rainfall effect
             next_h -= (fr1[None] * f1 + fr2[None] * f2 + fr3[None] * f3 +
                        fr4[None] * f4 + fr5[None] * f5 + fr6[None] * f6 +
-                       fr7[None] * f7) * dt     # subtract infiltration effect
+                       fr7[None] * f7 + fr9[None] * f9) * dt     # subtract infiltration effect
             next_h = ti.max(next_h, ez_t[ei])   # water depth cannot be lower than ground elevation
             h_t[ei] = next_h                    # update current water depth
             depth_t[ei] = ti.max(next_h - ez_t[ei], 0.00)     # update current water depth (h - z)
@@ -573,13 +596,16 @@ def warmup_solver(
 
     cumulative_rain_time_t = ti.field(dtype=ti.f32, shape=())
 
-    fr1 = ti.field(dtype=ti.f32, shape=())
-    fr2 = ti.field(dtype=ti.f32, shape=())
-    fr3 = ti.field(dtype=ti.f32, shape=())
-    fr4 = ti.field(dtype=ti.f32, shape=())
-    fr5 = ti.field(dtype=ti.f32, shape=())
-    fr6 = ti.field(dtype=ti.f32, shape=())
-    fr7 = ti.field(dtype=ti.f32, shape=())
+    # Infiltration rate (Horton model: f₀→fc with decay k, in/hr → m/s via *0.0254/3600)
+    fr1 = ti.field(dtype=ti.f32, shape=())   # type=1: building land
+    fr2 = ti.field(dtype=ti.f32, shape=())   # type=2: business land
+    fr3 = ti.field(dtype=ti.f32, shape=())   # type=3: industrial land
+    fr4 = ti.field(dtype=ti.f32, shape=())   # type=4: transport land
+    fr5 = ti.field(dtype=ti.f32, shape=())   # type=5: infrastructure land
+    fr6 = ti.field(dtype=ti.f32, shape=())   # type=6: agricultural land
+    fr7 = ti.field(dtype=ti.f32, shape=())   # type=7: fish pond land
+    # type=8: water body — no infiltration
+    fr9 = ti.field(dtype=ti.f32, shape=())   # type=9: mountainous land
 
     current_time          = 0.0
     current_rain_idx      = 0
@@ -624,7 +650,7 @@ def warmup_solver(
                 eib, eit = el, eh
                 sdc_t[si] = ti.max(ti.abs(ey_t[eit] - ey_t[eib]), 0.01)
 
-        fr1[None] = fr2[None] = fr3[None] = fr4[None] = fr5[None] = fr6[None] = fr7[None] = 0.0
+        fr1[None] = fr2[None] = fr3[None] = fr4[None] = fr5[None] = fr6[None] = fr7[None] = fr9[None] = 0.0
 
     gate_is_open = ti.field(dtype=ti.i32, shape=())
     if not USE_GATE_EFFECT:
@@ -690,10 +716,15 @@ def warmup_solver(
                 ti.atomic_add(enq_t[eib, 3], flux)
                 ti.atomic_add(enq_t[eit, 2], flux)
 
+        # Tick infiltration rate during rainfall (based on Horton model)
+        # Horton: f(t) = fc + (f0 - fc) * exp(-k * t), converted from in/hr to m/s
         if rainq > 0.0:
             cumulative_rain_time_t[None] += dt
-            fr3[None] = fr5[None] = fr7[None] = horton_decay(3.0, 0.1, 2.0, cumulative_rain_time_t[None] / 3600.0) * 0.0254 / 3600.0
-            fr1[None] = fr2[None] = horton_decay(0.8, 0.02, 10.0, cumulative_rain_time_t[None] / 3600.0) * 0.0254 / 3600.0
+            t_hr = cumulative_rain_time_t[None] / 3600.0
+            fr1[None] = fr2[None] = fr4[None] = horton_decay(0.8, 0.02, 10.0, t_hr) * 0.0254 / 3600.0    # impervious: building, business, transport
+            fr3[None] = fr5[None] = fr7[None] = horton_decay(3.0, 0.1, 2.0, t_hr) * 0.0254 / 3600.0      # semi-pervious: industrial, infrastructure, fish pond
+            fr6[None] = horton_decay(4.0, 0.3, 2.0, t_hr) * 0.0254 / 3600.0                               # pervious: agricultural land
+            fr9[None] = horton_decay(6.0, 1.0, 3.0, t_hr) * 0.0254 / 3600.0                               # highly pervious: mountainous land
 
         for ei in range(1, e_num):
             ql = enq_t[ei, 0]
@@ -704,21 +735,23 @@ def warmup_solver(
             eq_t[ei, 0], eq_t[ei, 1], eq_t[ei, 2], eq_t[ei, 3] = ql, qr, qb, qt
             enq_t[ei, 0] = enq_t[ei, 1] = enq_t[ei, 2] = enq_t[ei, 3] = 0.0
 
+            # Infiltration masks for all underlay types
             eu = eu_t[ei]
-            f1 = ti.select(eu == 1, 1.0, 0.0)
-            f2 = ti.select(eu == 2, 1.0, 0.0)
-            f3 = ti.select(eu == 3, 1.0, 0.0)
-            f4 = ti.select(eu == 4, 1.0, 0.0)
-            f5 = ti.select(eu == 5, 1.0, 0.0)
-            f6 = ti.select(eu == 6, 1.0, 0.0)
-            f7 = ti.select(eu == 7, 1.0, 0.0)
+            f1 = ti.select(eu == 1, 1.0, 0.0)   # building
+            f2 = ti.select(eu == 2, 1.0, 0.0)   # business
+            f3 = ti.select(eu == 3, 1.0, 0.0)   # industrial
+            f4 = ti.select(eu == 4, 1.0, 0.0)   # transport
+            f5 = ti.select(eu == 5, 1.0, 0.0)   # infrastructure
+            f6 = ti.select(eu == 6, 1.0, 0.0)   # agricultural
+            f7 = ti.select(eu == 7, 1.0, 0.0)   # fish pond
+            f9 = ti.select(eu == 9, 1.0, 0.0)   # mountainous
 
             ea = esl_t[ei] ** 2
             next_h = h_t[ei] + (tq * dt) / ea
             next_h += rainq * dt
             next_h -= (fr1[None] * f1 + fr2[None] * f2 + fr3[None] * f3 +
                        fr4[None] * f4 + fr5[None] * f5 + fr6[None] * f6 +
-                       fr7[None] * f7) * dt
+                       fr7[None] * f7 + fr9[None] * f9) * dt
             next_h = ti.max(next_h, ez_t[ei])
             h_t[ei] = next_h
             depth_t[ei] = ti.max(next_h - ez_t[ei], 0.00)

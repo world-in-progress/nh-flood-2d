@@ -875,13 +875,14 @@ def generate_flood_video(
     interval_second: float = 0.2,
 ) -> None:
     """
-    Generate an MP4 animation from all GeoTIFF flood maps produced by generate_flood_map.
+    Generate an MP4 animation from all GeoTIFF flood maps with depth-dependent coloring.
 
-    Each frame corresponds to one flood_map_*.tif file.  noData pixels (and pixels outside
-    the domain) are rendered as black; inundated pixels are rendered as dodger-blue
-    (RGB 30, 144, 255).  The current simulation timestamp is drawn in the top-right corner
-    of every frame, extracted from the TIF filename.  The video resolution matches the
-    TIFFs exactly.
+    A two-pass approach is used:
+      Pass 1 — scan all TIF frames to determine the global min/max water depth.
+      Pass 2 — render each frame with a linear colour gradient from light-blue
+               (shallow) to dark-blue (deep).  Dry / noData pixels remain black.
+
+    The current simulation timestamp is drawn in the top-right corner of every frame.
 
     Parameters
     ----------
@@ -910,12 +911,33 @@ def generate_flood_video(
         nodata = src.nodata
         height, width = src.height, src.width
 
+    # --- Pass 1: scan all TIFs to find global depth range ---
+    global_min = np.inf
+    global_max = -np.inf
+    for tif_path in tif_paths:
+        with rasterio.open(str(tif_path)) as src:
+            data = src.read(1)
+        if nodata is not None:
+            valid = (data != nodata) & np.isfinite(data)
+        else:
+            valid = np.isfinite(data)
+        if valid.any():
+            vals = data[valid]
+            global_min = min(global_min, float(vals.min()))
+            global_max = max(global_max, float(vals.max()))
+
+    if global_min >= global_max:
+        global_min, global_max = 0.0, 1.0
+
     print(f'Generating flood video: {len(tif_paths)} frames, {width}x{height} px, {fps:.1f} fps')
+    print(f'  Depth range: {global_min:.3f} – {global_max:.3f} m')
 
     out_path = Path(output_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    blue = np.array([30, 144, 255], dtype=np.uint8)  # dodger blue for inundated pixels
+    # Colour gradient endpoints: light-blue (shallow) → dark-blue (deep)
+    color_shallow = np.array([173, 216, 230], dtype=np.float32)
+    color_deep = np.array([0, 0, 139], dtype=np.float32)
 
     # Scale font size relative to image width (roughly 1.5% of width, min 14px)
     font_size = max(14, int(width * 0.015))
@@ -926,18 +948,24 @@ def generate_flood_video(
 
     padding = max(6, font_size // 3)
 
-    with imageio.get_writer(str(out_path), fps=fps, codec='libx264', quality=8) as writer:
+    with imageio.get_writer(str(out_path), fps=fps, codec='libx264', quality=8,
+                            macro_block_size=1) as writer:
         for idx, tif_path in enumerate(tif_paths):
             with rasterio.open(str(tif_path)) as src:
                 data = src.read(1)  # shape (H, W), float32
 
-            # Build RGB frame: black background, blue for valid (wet) pixels
+            # Build RGB frame: black background, depth-coloured wet pixels
             frame = np.zeros((height, width, 3), dtype=np.uint8)
             if nodata is not None:
                 valid_mask = (data != nodata) & np.isfinite(data)
             else:
                 valid_mask = np.isfinite(data)
-            frame[valid_mask] = blue
+
+            if valid_mask.any():
+                depths = data[valid_mask]
+                t = np.clip((depths - global_min) / (global_max - global_min), 0.0, 1.0)
+                colors = (1.0 - t[:, None]) * color_shallow + t[:, None] * color_deep
+                frame[valid_mask] = colors.astype(np.uint8)
 
             # Parse timestamp from filename: flood_map_{idx}_{YYYYMMDD-HHMMSS}.tif
             ts_str = tif_path.stem.split('_')[-1]
