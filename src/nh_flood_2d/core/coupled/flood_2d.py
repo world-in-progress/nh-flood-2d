@@ -35,6 +35,20 @@ def _lerp(a: float, b: float, t: float) -> float:
     return a + (b - a) * t
 
 
+def _load_restart_uvh(restart_path: str, h_t, u_t, v_t, e_num: int):
+    """Load h/u/v from a UVH .fdb snapshot and overwrite GPU fields."""
+    uvh_db = fdb.ORM.load(restart_path, from_file=True)
+    uvh_tbl = uvh_db[UVH][UVH]
+    assert len(uvh_tbl) == e_num, (
+        f'Restart UVH size {len(uvh_tbl)} != element count {e_num}'
+    )
+    h_t.from_numpy(uvh_tbl.column.h)
+    u_t.from_numpy(uvh_tbl.column.u)
+    v_t.from_numpy(uvh_tbl.column.v)
+    del uvh_db
+    print(f'[warmstart] Loaded restart state from {restart_path}')
+
+
 @ti.func
 @no_type_check
 def horton_decay(initial: float, final: float, k: float, t: float) -> float:
@@ -329,6 +343,10 @@ def _run_2d_impl(
     ey = copy_to_taichi(nes.column.y, ti.f32, None)
     sx = copy_to_taichi(nss.column.x, ti.f32, None)
     init_gpu(ex, ey, isl_data_t, isl_ptr_l_t, sx)
+
+    # Warm-start: overwrite h/u/v from a restart UVH snapshot
+    if domain_cfg.restart_uvh:
+        _load_restart_uvh(domain_cfg.restart_uvh, h_t, u_t, v_t, e_num)
 
     # Element type numpy copy (for drainage/overflow: skip water body type=8)
     eu_np = eu_t.to_numpy()

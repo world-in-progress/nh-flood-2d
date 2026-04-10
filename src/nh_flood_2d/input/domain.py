@@ -18,6 +18,8 @@ class DomainConfig(BaseModel):
     duration: int = -1      # total simulation duration in seconds (default: -1 means auto-detect from input data)
     yield_step: int = 300   # output every 5 minutes (300 seconds) as default
     
+    restart_uvh: str = ''  # path to a UVH .fdb file for warm-start (empty = cold start)
+    
     hydrograph_points: dict[str, tuple[float, float]] = {}  # name -> (x, y)
     observation_dir: str = ''  # directory for observation data, file_name should be the same as hydrograph_points keys
     

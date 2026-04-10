@@ -15,6 +15,20 @@ from ..schema.feature import Ne, Ns, IndexLike, SideTopoInfo, Rainfall, Tide, Ga
 
 USE_GATE_EFFECT = True
 
+
+def _load_restart_uvh(restart_path: str, h_t, u_t, v_t, e_num: int):
+    """Load h/u/v from a UVH .fdb snapshot and overwrite GPU fields."""
+    uvh_db = fdb.ORM.load(restart_path, from_file=True)
+    uvh_tbl = uvh_db[UVH][UVH]
+    assert len(uvh_tbl) == e_num, (
+        f'Restart UVH size {len(uvh_tbl)} != element count {e_num}'
+    )
+    h_t.from_numpy(uvh_tbl.column.h)
+    u_t.from_numpy(uvh_tbl.column.u)
+    v_t.from_numpy(uvh_tbl.column.v)
+    del uvh_db
+    print(f'[warmstart] Loaded restart state from {restart_path}')
+
 def set_elevation(domain_cfg, elevate_meter: float):
     """
     Set the z data of element to a specified elevation (elevate_meter) if it is below that elevation.
@@ -265,6 +279,10 @@ def solver(domain_cfg: DomainConfig, force_cfg: ForceConfig, start_time_step: in
         ey = copy_to_taichi(nes.column.y, ti.f32, None)
         sx = copy_to_taichi(nss.column.x, ti.f32, None)
         init_gpu(ex, ey, isl_data_t, isl_ptr_l_t, sx)
+
+        # Warm-start: overwrite h/u/v from a restart UVH snapshot
+        if domain_cfg.restart_uvh:
+            _load_restart_uvh(domain_cfg.restart_uvh, h_t, u_t, v_t, e_num)
 
     gate_is_open = ti.field(dtype=ti.i32, shape=())
     if not USE_GATE_EFFECT:
