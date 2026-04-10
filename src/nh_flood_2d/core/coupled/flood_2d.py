@@ -30,10 +30,8 @@ from .exchange import (
     compute_drainage, compute_overflow, send_to_1d, receive_from_1d, apply_sources,
 )
 
-
 def _lerp(a: float, b: float, t: float) -> float:
     return a + (b - a) * t
-
 
 def _load_restart_uvh(restart_path: str, h_t, u_t, v_t, e_num: int):
     """Load h/u/v from a UVH .fdb snapshot and overwrite GPU fields."""
@@ -48,12 +46,10 @@ def _load_restart_uvh(restart_path: str, h_t, u_t, v_t, e_num: int):
     del uvh_db
     print(f'[warmstart] Loaded restart state from {restart_path}')
 
-
 @ti.func
 @no_type_check
 def horton_decay(initial: float, final: float, k: float, t: float) -> float:
     return final + (initial - final) * ti.exp(-k * t)
-
 
 def run_2d(
     shared,
@@ -69,7 +65,6 @@ def run_2d(
         has_pipe = pipe_cfg is not None
         if has_pipe:
             shared['stop'].set()
-
 
 def _run_2d_impl(
     shared,
@@ -268,8 +263,8 @@ def _run_2d_impl(
             t_hr = cumulative_rain_time_t[None] / 3600.0
             fr1[None] = fr2[None] = fr4[None] = horton_decay(0.8, 0.02, 10.0, t_hr) * 0.0254 / 3600.0    # impervious: building, business, transport
             fr3[None] = fr5[None] = fr7[None] = horton_decay(3.0, 0.1, 2.0, t_hr) * 0.0254 / 3600.0      # semi-pervious: industrial, infrastructure, fish pond
-            fr6[None] = horton_decay(4.0, 0.3, 2.0, t_hr) * 0.0254 / 3600.0                               # pervious: agricultural land
-            fr9[None] = horton_decay(6.0, 1.0, 3.0, t_hr) * 0.0254 / 3600.0                               # highly pervious: mountainous land
+            fr6[None] = horton_decay(4.0, 0.3, 2.0, t_hr) * 0.0254 / 3600.0                              # pervious: agricultural land
+            fr9[None] = horton_decay(6.0, 1.0, 3.0, t_hr) * 0.0254 / 3600.0                              # highly pervious: mountainous land
             
         # Tick elements
         for ei in range(1, e_num):
@@ -283,7 +278,7 @@ def _run_2d_impl(
             enq_t[ei, 0] = enq_t[ei, 1] = enq_t[ei, 2] = enq_t[ei, 3] = 0.0     # reset next time step side flow quantities
 
             # Calculate infiltration masks for all underlay types
-            eu = eu_t[ei]                        # underlay type value
+            eu = eu_t[ei]                       # underlay type value
             f1 = ti.select(eu == 1, 1.0, 0.0)   # building
             f2 = ti.select(eu == 2, 1.0, 0.0)   # business
             f3 = ti.select(eu == 3, 1.0, 0.0)   # industrial
