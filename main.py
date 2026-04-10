@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from src.nh_flood_2d.preprocess import preprocess
 from src.nh_flood_2d.preprocess.pipe import prepare_pipe
+from src.nh_flood_2d.preprocess.warmstart import clean_uvh_for_warmstart
 from src.nh_flood_2d.core.solver_compact import solver, warmup_solver
 from src.nh_flood_2d.core.coupled import solver_coupled
 from src.nh_flood_2d.output.hydrograph import draw_hydrograph, compare_hydrograph
@@ -37,14 +40,59 @@ def evolve_domain_coupled(
         prepare_pipe(pipe_cfg, domain_cfg)
     solver_coupled(domain_cfg, force_cfg, pipe_cfg, start_time_step)
 
+def evolve_domain_coupled_warmup(
+    domain_cfg: DomainConfig,
+    force_cfg: ForceConfig,
+    pipe_cfg: PipeConfig | None = None,
+    keep_types: tuple[int, ...] = (7, 8),
+):
+    """Run a coupled simulation, then clean the last UVH snapshot for warm-start.
+
+    1. Calls evolve_domain_coupled (preprocess + solve).
+    2. Finds the last UVH .fdb in domain_cfg.uvh_dir (by timestamp).
+    3. Cleans it (keeps water only on *keep_types* elements) and writes
+       a ``warmstart.fdb`` next to the UVH directory.
+
+    The resulting file can be used as ``domain_cfg.restart_uvh`` in a
+    subsequent cold→warm restart run.
+
+    Parameters
+    ----------
+    keep_types : Element types that retain water (default 7=fish pond, 8=water body).
+    """
+    evolve_domain_coupled(domain_cfg, force_cfg, pipe_cfg)
+
+    # Find the last UVH snapshot (sorted by filename timestamp)
+    uvh_dir = Path(domain_cfg.uvh_dir)
+    uvh_files = sorted(uvh_dir.glob('uvh_*.fdb'))
+    if not uvh_files:
+        print('[warmstart] No UVH files found — skipping warm-start cleanup.')
+        return
+
+    last_uvh = str(uvh_files[-1])
+    warmstart_out = str(uvh_dir.parent / 'warmstart.fdb')
+
+    print(f'[warmstart] Using last UVH: {last_uvh}')
+    clean_uvh_for_warmstart(
+        uvh_path=last_uvh,
+        ne_fdb_path=domain_cfg.ne_fdb,
+        output_path=warmstart_out,
+        keep_types=keep_types,
+    )
+    print(f'[warmstart] Set restart_uvh to "{warmstart_out}" in your domain config to use it.')
+
 if __name__ == '__main__':
+    # Warmup
+    evolve_domain_coupled(domain_alt, df11_cfg, pipe_cfg)
+    
+    
     # evolve_domain(domain_alt, df7_cfg)
     # evolve_domain_coupled(domain_alt, df7_cfg)
-    evolve_domain_coupled(domain_alt, df7_cfg, pipe_cfg)
+    # evolve_domain_coupled(domain_alt, df7_cfg, pipe_cfg)
     
     # draw_hydrograph(domain_alt, 'D74', True, -3600)
-    generate_flood_map(domain_alt)
-    generate_flood_video(domain_alt, output_path='./resource/flood_video.mp4')
+    # generate_flood_map(domain_alt)
+    # generate_flood_video(domain_alt, output_path='./resource/flood_video.mp4')
     
     # preprocess(domain_mrcg, df7_cfg)
     # generate_max_inundation_extent_map(domain_4)
