@@ -83,22 +83,22 @@ def evolve_domain_coupled_warmup(
 
 if __name__ == '__main__':
     # Warmup
-    evolve_domain_coupled(domain_alt, df11_cfg, pipe_cfg)
+    # evolve_domain_coupled_warmup(domain_alt, df11_cfg, pipe_cfg, keep_types=(7, 8))
     
-    
-    # evolve_domain(domain_alt, df7_cfg)
-    # evolve_domain_coupled(domain_alt, df7_cfg)
+    # Simulation
     # evolve_domain_coupled(domain_alt, df7_cfg, pipe_cfg)
     
-    # draw_hydrograph(domain_alt, 'D74', True, -3600)
+    # Output video
     # generate_flood_map(domain_alt)
     # generate_flood_video(domain_alt, output_path='./resource/flood_video.mp4')
+    
+    # draw_hydrograph(domain_alt, 'D74', True, -3600)
     
     # preprocess(domain_mrcg, df7_cfg)
     # generate_max_inundation_extent_map(domain_4)
     
-    # mses = compare_hydrograph([domain_alt], 'D80', clampped=True, show=True, show_obs=True)
-    # print(f'RMSEs: {mses}')
+    mses = compare_hydrograph([domain_alt], 'S17', clampped=True, show=True, show_obs=True)
+    print(f'RMSEs: {mses}')
     
     # plot_spatial_mae_curve(domain_4, domain_mrcg, df7_cfg, output_path='./resource/spatial_mae_curve.png')
     
