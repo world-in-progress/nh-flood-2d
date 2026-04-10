@@ -162,7 +162,8 @@ def _run_2d_impl(
             u_t[ei] = 0.0
             v_t[ei] = 0.0
             ssq_t[ei] = 0.0
-            h_t[ei] = ez_t[ei] if ez_t[ei] > 0.0 else 0.0
+            # h_t[ei] = ez_t[ei] if ez_t[ei] > 0.0 else 0.0
+            h_t[ei] = ez_t[ei]
             eq_t[ei, 0] = eq_t[ei, 1] = eq_t[ei, 2] = eq_t[ei, 3] = 0.0
             enq_t[ei, 0] = enq_t[ei, 1] = enq_t[ei, 2] = enq_t[ei, 3] = 0.0
             lsi0 = isl_data[isl_ptr_l[ei]]
@@ -483,4 +484,4 @@ def _run_2d_impl(
             receive_from_1d(shared, pipe_cfg, timer)
         except (TimeoutError, OSError):
             pass
-        timer.report('[2D]')
+    timer.report('[2D]')
