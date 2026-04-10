@@ -948,7 +948,8 @@ def generate_flood_video(
 
     padding = max(6, font_size // 3)
 
-    with imageio.get_writer(str(out_path), fps=fps, codec='libx264', quality=8) as writer:
+    with imageio.get_writer(str(out_path), fps=fps, codec='libx264', quality=8,
+                            macro_block_size=1) as writer:
         for idx, tif_path in enumerate(tif_paths):
             with rasterio.open(str(tif_path)) as src:
                 data = src.read(1)  # shape (H, W), float32
