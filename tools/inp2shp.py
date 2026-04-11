@@ -31,10 +31,16 @@ def inp_to_shp(
     Returns:
         List of created Shapefile paths.
     """
+    import geopandas as gpd
     from swmm_api.input_file import SwmmInput
-    from swmm_api.input_file.macros.gis import set_crs
+    from swmm_api.input_file.macros.gis import (
+        complete_vertices, set_crs, NODE_SECTIONS, LINK_SECTIONS,
+        get_node_tags, get_link_tags, get_subcatchment_tags,
+    )
     from swmm_api.input_file.section_labels import (
         COORDINATES, VERTICES, POLYGONS,
+        SUBCATCHMENTS, SUBAREAS, INFILTRATION,
+        XSECTIONS, LOSSES,
     )
 
     inp_path = Path(inp_path)
@@ -46,37 +52,90 @@ def inp_to_shp(
 
     inp = SwmmInput.read_file(str(inp_path))
 
-    if epsg is not None:
-        set_crs(inp, crs=f"EPSG:{epsg}")
+    crs_str = f"EPSG:{epsg}" if epsg is not None else None
+    if crs_str is not None:
+        set_crs(inp, crs=crs_str)
 
     created: list[Path] = []
 
-    # --- Nodes (Point) ---
+    # --- Nodes (Point) — per-section to work around swmm-api bugs ---
     if COORDINATES in inp:
-        gdf = _build_nodes(inp)
-        if gdf is not None and not gdf.empty:
-            p = out / "nodes.shp"
+        node_geo = inp[COORDINATES].geo_series
+        node_tags = _safe_call(lambda: get_node_tags(inp))
+        for sec in NODE_SECTIONS:
+            if sec not in inp:
+                continue
+            frame = inp[sec].frame
+            if frame.empty:
+                continue
+            df = frame.rename(columns=lambda c: f"{sec}.{c}")
+            df = df.join(node_geo)
+            if node_tags is not None:
+                df = df.join(node_tags)
+            gdf = gpd.GeoDataFrame(df.dropna(subset=["geometry"]))
+            if gdf.empty:
+                continue
+            p = out / f"{sec.lower()}.shp"
             _save(gdf, p, epsg)
             created.append(p)
-            print(f"  ✓ nodes.shp  ({len(gdf)} features)")
+            print(f"  ✓ {p.name}  ({len(gdf)} features)")
 
-    # --- Links (LineString) ---
-    if VERTICES in inp or COORDINATES in inp:
-        gdf = _build_links(inp)
-        if gdf is not None and not gdf.empty:
-            p = out / "links.shp"
+    # --- Links (LineString) — per-section, call complete_vertices first ---
+    if COORDINATES in inp:
+        complete_vertices(inp, crs_str)
+        link_geo = inp[VERTICES].geo_series
+        link_tags = _safe_call(lambda: get_link_tags(inp))
+        xsec_frame = inp[XSECTIONS].frame if XSECTIONS in inp else None
+        loss_frame = inp[LOSSES].frame if LOSSES in inp else None
+        for sec in LINK_SECTIONS:
+            if sec not in inp:
+                continue
+            frame = inp[sec].frame
+            if frame.empty:
+                continue
+            df = frame.rename(columns=lambda c: f"{sec}.{c}")
+            if xsec_frame is not None and not xsec_frame.empty:
+                df = df.join(
+                    xsec_frame.rename(columns=lambda c: f"XSECTIONS.{c}"),
+                )
+            if loss_frame is not None and not loss_frame.empty:
+                df = df.join(
+                    loss_frame.rename(columns=lambda c: f"LOSSES.{c}"),
+                )
+            df = df.join(link_geo)
+            if link_tags is not None:
+                df = df.join(link_tags)
+            gdf = gpd.GeoDataFrame(df.dropna(subset=["geometry"]))
+            if gdf.empty:
+                continue
+            p = out / f"{sec.lower()}.shp"
             _save(gdf, p, epsg)
             created.append(p)
-            print(f"  ✓ links.shp  ({len(gdf)} features)")
+            print(f"  ✓ {p.name}  ({len(gdf)} features)")
 
     # --- Subcatchments (Polygon) ---
-    if POLYGONS in inp:
-        gdf = _build_subcatchments(inp)
-        if gdf is not None and not gdf.empty:
-            p = out / "subcatchments.shp"
-            _save(gdf, p, epsg)
-            created.append(p)
-            print(f"  ✓ subcatchments.shp  ({len(gdf)} features)")
+    if POLYGONS in inp and SUBCATCHMENTS in inp:
+        frame = inp[SUBCATCHMENTS].frame
+        if not frame.empty:
+            df = frame.rename(columns=lambda c: f"SUBCATCHMENTS.{c}")
+            if SUBAREAS in inp and not inp[SUBAREAS].frame.empty:
+                df = df.join(
+                    inp[SUBAREAS].frame.rename(columns=lambda c: f"SUBAREAS.{c}"),
+                )
+            if INFILTRATION in inp and not inp[INFILTRATION].frame.empty:
+                df = df.join(
+                    inp[INFILTRATION].frame.rename(columns=lambda c: f"INFILTRATION.{c}"),
+                )
+            sub_tags = _safe_call(lambda: get_subcatchment_tags(inp))
+            if sub_tags is not None:
+                df = df.join(sub_tags)
+            df = df.join(inp[POLYGONS].geo_series)
+            gdf = gpd.GeoDataFrame(df.dropna(subset=["geometry"]))
+            if not gdf.empty:
+                p = out / "subcatchments.shp"
+                _save(gdf, p, epsg)
+                created.append(p)
+                print(f"  ✓ subcatchments.shp  ({len(gdf)} features)")
 
     if not created:
         print("  ⚠ No spatial data found in INP file.")
@@ -88,33 +147,11 @@ def inp_to_shp(
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _build_nodes(inp):
-    """Build a GeoDataFrame of all node types."""
+def _safe_call(fn):
+    """Call *fn* and return None on any exception."""
     try:
-        from swmm_api.input_file.macros.gis import nodes_geo_data_frame
-        return nodes_geo_data_frame(inp, label_sep="_")
-    except Exception as e:
-        print(f"  ⚠ Failed to build nodes layer: {e}")
-        return None
-
-
-def _build_links(inp):
-    """Build a GeoDataFrame of all link types."""
-    try:
-        from swmm_api.input_file.macros.gis import links_geo_data_frame
-        return links_geo_data_frame(inp, label_sep="_")
-    except Exception as e:
-        print(f"  ⚠ Failed to build links layer: {e}")
-        return None
-
-
-def _build_subcatchments(inp):
-    """Build a GeoDataFrame of all subcatchments."""
-    try:
-        from swmm_api.input_file.macros.gis import subcatchment_geo_data_frame
-        return subcatchment_geo_data_frame(inp, label_sep="_")
-    except Exception as e:
-        print(f"  ⚠ Failed to build subcatchments layer: {e}")
+        return fn()
+    except Exception:
         return None
 
 

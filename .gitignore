@@ -208,3 +208,6 @@ __marimo__/
 
 resource/
 .DS_Store
+
+# INP to SHP output
+resource/inp_output/
