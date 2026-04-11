@@ -376,6 +376,15 @@ wheels = [
 ]
 
 [[package]]
+name = "networkx"
+version = "3.4.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fd/1d/06475e1cd5264c0b870ea2cc6fdb3e37177c1e565c43f56ff17a10e3937f/networkx-3.4.2.tar.gz", hash = "sha256:307c3669428c5362aab27c8a1260aa8f47c4e91d3891f48be0141738d8d053e1", size = 2151368, upload-time = "2024-10-21T12:39:38.695Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b9/54/dd730b32ea14ea797530a4479b2ed46a6fb250f682a9cfb997e968bf0261/networkx-3.4.2-py3-none-any.whl", hash = "sha256:df5d4365b724cf81b8c6a7312509d0c22386097011ad1abe274afd5e9d3bbc5f", size = 1723263, upload-time = "2024-10-21T12:39:36.247Z" },
+]
+
+[[package]]
 name = "nh-flood-2d"
 version = "0.1.0"
 source = { virtual = "." }
@@ -385,6 +394,7 @@ dependencies = [
     { name = "imageio" },
     { name = "imageio-ffmpeg" },
     { name = "matplotlib" },
+    { name = "networkx" },
     { name = "pandas" },
     { name = "pillow" },
     { name = "pydantic" },
@@ -394,6 +404,7 @@ dependencies = [
     { name = "rasterio" },
     { name = "scipy" },
     { name = "shapely" },
+    { name = "swmm-api" },
     { name = "swmm-toolkit" },
     { name = "taichi" },
     { name = "triangle" },
@@ -407,6 +418,7 @@ requires-dist = [
     { name = "imageio", specifier = ">=2.34" },
     { name = "imageio-ffmpeg", specifier = ">=0.5" },
     { name = "matplotlib", specifier = ">=3.10.8" },
+    { name = "networkx", specifier = ">=3.4.2" },
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "pillow", specifier = ">=10.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
@@ -416,6 +428,7 @@ requires-dist = [
     { name = "rasterio", specifier = ">=1.4.4" },
     { name = "scipy", specifier = ">=1.15.3" },
     { name = "shapely", specifier = ">=2.1.2" },
+    { name = "swmm-api", specifier = ">=0.4.73" },
     { name = "swmm-toolkit", specifier = ">=0.16" },
     { name = "taichi", specifier = ">=1.7.4" },
     { name = "triangle", specifier = ">=2023.11.28" },
@@ -760,6 +773,20 @@ wheels = [
 ]
 
 [[package]]
+name = "swmm-api"
+version = "0.4.73"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+    { name = "pandas" },
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/71/d8/aca9487a3101a0f17a7862c2fbb5adb9245467c6ab7f2b5ea49350a25485/swmm_api-0.4.73.tar.gz", hash = "sha256:908ba3f3676f41e6659fc0626ccb39060c5d832fb610f85fceb4c0cd9fc5498e", size = 263982, upload-time = "2026-03-04T08:43:54.395Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f1/08/a854792272a24ea57fe97ccc8c6efe2edf16e7d772077512506efb2a28aa/swmm_api-0.4.73-py3-none-any.whl", hash = "sha256:0150466ebc4ea1e39f95d2b58e3f4abf2bf5dc44fd3203751a1511535d20f121", size = 304661, upload-time = "2026-03-04T08:43:52.874Z" },
+]
+
+[[package]]
 name = "swmm-toolkit"
 version = "0.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -800,6 +827,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/22/de/48c59722572767841493b26183a0d1cc411d54fd759c5607c4590b6563a6/tomli-2.4.1.tar.gz", hash = "sha256:7c7e1a961a0b2f2472c1ac5b69affa0ae1132c39adcb67aba98568702b9cc23f", size = 17543, upload-time = "2026-03-25T20:22:03.828Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7b/61/cceae43728b7de99d9b847560c262873a1f6c98202171fd5ed62640b494b/tomli-2.4.1-py3-none-any.whl", hash = "sha256:0d85819802132122da43cb86656f8d1f8c6587d54ae7dcaf30e90533028b49fe", size = 14583, upload-time = "2026-03-25T20:22:03.012Z" },
+]
+
+[[package]]
+name = "tqdm"
+version = "4.67.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/09/a9/6ba95a270c6f1fbcd8dac228323f2777d886cb206987444e4bce66338dd4/tqdm-4.67.3.tar.gz", hash = "sha256:7d825f03f89244ef73f1d4ce193cb1774a8179fd96f31d7e1dcde62092b960bb", size = 169598, upload-time = "2026-02-03T17:35:53.048Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/16/e1/3079a9ff9b8e11b846c6ac5c8b5bfb7ff225eee721825310c91b3b50304f/tqdm-4.67.3-py3-none-any.whl", hash = "sha256:ee1e4c0e59148062281c49d80b25b67771a127c85fc9676d3be5f243206826bf", size = 78374, upload-time = "2026-02-03T17:35:50.982Z" },
 ]
 
 [[package]]

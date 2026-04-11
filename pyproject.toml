@@ -23,6 +23,8 @@ dependencies = [
     "xarray>=2025.6.1",
     "swmm-toolkit>=0.16",
     "pyswmm>=2.1.0",
+    "swmm-api>=0.4.73",
+    "networkx>=3.4.2",
 ]
 
 [project.scripts]
