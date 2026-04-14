@@ -148,6 +148,66 @@ def generate_flood_map(cfg: DomainConfig):
     hw_field = copy_to_taichi(half_widths, ti.f32, None)
     hh_field = copy_to_taichi(half_heights, ti.f32, None)
     
+    real_e_cnt = e_cnt - 1  # skip virtual element 0
+
+    # Pre-allocate per-timestep Taichi fields once and reuse them to avoid
+    # repeated GPU allocations when processing long UVH sequences.
+    h_field = ti.field(dtype=ti.f32, shape=real_e_cnt)
+    depth_field = ti.field(dtype=ti.f32, shape=real_e_cnt)
+    tile_field = ti.field(dtype=ti.f32, shape=(TILE_SIZE, TILE_SIZE))
+
+    @ti.kernel
+    @no_type_check
+    def rasterize_tile_kernel(
+        x: ti.template(), y: ti.template(),
+        hw: ti.template(), hh: ti.template(),
+        depth: ti.template(),
+        tile: ti.template(), tile_min_x: float, tile_max_y: float,
+        hr: float, vr: float,
+        t_rows: int, t_cols: int
+    ):
+        # Loop over all elements
+        for i in x:
+            px = x[i]
+            py = y[i]
+            phw = hw[i]
+            phh = hh[i]
+
+            # Element bounds in world coords
+            e_min_x = px - phw
+            e_max_x = px + phw
+            e_min_y = py - phh
+            e_max_y = py + phh
+
+            # Check if element overlaps with this tile (AABB check)
+            # Tile: [tile_min_x, tile_max_x] x [tile_min_y, tile_max_y]
+            tile_max_x = tile_min_x + t_cols * hr
+            tile_min_y = tile_max_y - t_rows * vr
+            if (e_max_x >= tile_min_x and e_min_x < tile_max_x and
+                e_max_y >= tile_min_y and e_min_y < tile_max_y):
+                # Convert world bounds to tile-relative grid coordinates
+                start_col_f = ti.floor((e_min_x - tile_min_x) / hr)
+                end_col_f   = ti.floor((e_max_x - tile_min_x) / hr)
+                start_row_f = ti.floor((tile_max_y - e_max_y) / vr)
+                end_row_f   = ti.floor((tile_max_y - e_min_y) / vr)
+
+                col_start = int(start_col_f)
+                col_end   = int(end_col_f)
+                row_start = int(start_row_f)
+                row_end   = int(end_row_f)
+
+                # Clamp to tile bounds (0..t_cols-1, 0..t_rows-1)
+                col_start = ti.max(0, col_start)
+                col_end   = ti.min(t_cols - 1, col_end)
+                row_start = ti.max(0, row_start)
+                row_end   = ti.min(t_rows - 1, row_end)
+
+                # Splat the depth value
+                d = depth[i]
+                for r in range(row_start, row_end + 1):
+                    for c in range(col_start, col_end + 1):
+                        tile[r, c] = d
+
     # Make flood map for all UVH files in the directory
     uvh_paths = list(uvhs_path.glob('uvh_*.fdb'))
     uvh_paths.sort(
@@ -164,9 +224,8 @@ def generate_flood_map(cfg: DomainConfig):
         uvh_fdb = fdb.ORM.load(str(uvh_file), from_file=True)
         uvhs = uvh_fdb[UVH][UVH]
         
-        # Compute water depth on GPU
-        h_field = copy_to_taichi(uvhs.column.h[1:], ti.f32, None)
-        depth_field = ti.field(dtype=ti.f32, shape=e_cnt)
+        # Reuse pre-allocated fields; avoids cumulative GPU memory growth.
+        h_field.from_numpy(uvhs.column.h[1:].astype(np.float32))
         compute_depth(h_field, z_field, depth_field, min_h=min_h, invalid_data=no_data)
         
         # Calculate geotransform
@@ -186,81 +245,6 @@ def generate_flood_map(cfg: DomainConfig):
             tiled=True,
             blockxsize=512, blockysize=512
         ) as dst:
-            # Make tile
-            tile_field = ti.field(dtype=ti.f32, shape=(TILE_SIZE, TILE_SIZE))
-            
-            @ti.kernel
-            @no_type_check
-            def rasterize_tile_kernel(
-                x: ti.template(), y: ti.template(), 
-                hw: ti.template(), hh: ti.template(),
-                depth: ti.template(), 
-                tile: ti.template(), tile_min_x: float, tile_max_y: float, 
-                hr: float, vr: float,
-                t_rows: int, t_cols: int
-            ):
-                # Loop over all elements
-                for i in x:
-                    px = x[i]
-                    py = y[i]
-                    phw = hw[i]
-                    phh = hh[i]
-                    
-                    # Element bounds in world coords
-                    e_min_x = px - phw
-                    e_max_x = px + phw
-                    e_min_y = py - phh
-                    e_max_y = py + phh
-                    
-                    # Check if element overlaps with this tile (AABB check)
-                    # Tile: [tile_min_x, tile_max_x] x [tile_min_y, tile_max_y]
-                    tile_max_x = tile_min_x + t_cols * hr
-                    tile_min_y = tile_max_y - t_rows * vr
-                    if (e_max_x >= tile_min_x and e_min_x < tile_max_x and
-                        e_max_y >= tile_min_y and e_min_y < tile_max_y):
-                        # Compute integer grid index range to loop over within the tile
-                        # The grid indices (r, c) correspond to:
-                        # x_center = tile_min_x + (c + 0.5) * h_res
-                        # y_center = tile_max_y - (r + 0.5) * v_res
-                        
-                        # We want to cover the range [e_min_x, e_max_x] and [e_min_y, e_max_y]
-                        
-                        # Convert world bounds to tile-relative grid coordinates
-                        # col = (x - tile_min_x) / h_res
-                        # row = (tile_max_y - y) / v_res
-                        
-                        # For X (Columns):
-                        # We want smallest col c such that cell right edge > e_min_x
-                        # cell_right_edge = (c + 1) * h_res
-                        # (c+1)*h_res > e_min_x - tile_min_x  => c > (e_min_x - tile_min_x)/h_res - 1
-                        # So start_col = floor((e_min_x - tile_min_x) / h_res)
-                        
-                        # We want largest col c such that cell left edge < e_max_x
-                        # cell_left_edge = c * h_res
-                        # c * h_res < e_max_x - tile_min_x => c < (e_max_x - tile_min_x)/h_res
-                        
-                        start_col_f = ti.floor((e_min_x - tile_min_x) / hr)
-                        end_col_f   = ti.floor((e_max_x - tile_min_x) / hr)
-                        start_row_f = ti.floor((tile_max_y - e_max_y) / vr)
-                        end_row_f   = ti.floor((tile_max_y - e_min_y) / vr)
-                        
-                        col_start = int(start_col_f)
-                        col_end   = int(end_col_f)
-                        row_start = int(start_row_f)
-                        row_end   = int(end_row_f)
-                        
-                        # Clamp to tile bounds (0..t_cols-1, 0..t_rows-1)
-                        col_start = ti.max(0, col_start)
-                        col_end   = ti.min(t_cols - 1, col_end)
-                        row_start = ti.max(0, row_start)
-                        row_end   = ti.min(t_rows - 1, row_end)
-                        
-                        # Splat the depth value
-                        d = depth[i]
-                        for r in range(row_start, row_end + 1):
-                            for c in range(col_start, col_end + 1):
-                                tile[r, c] = d
-
             # Iterate through tiles
             for row_off in range(0, height, TILE_SIZE):
                 for col_off in range(0, width, TILE_SIZE):
@@ -372,12 +356,14 @@ def generate_max_inundation_extent_map(cfg: DomainConfig, min_depth: float = 0.0
         for i in h:
             ti.atomic_max(max_h[i], h[i])
 
+    h_field = ti.field(dtype=ti.f32, shape=real_e_cnt)
+
     # Pass 1: scan all timesteps, keep per-element maximum h on GPU
     for uvh_file in uvh_paths:
         print(f'Processing UVH file: {uvh_file} ...')
         uvh_fdb = fdb.ORM.load(str(uvh_file), from_file=True)
         uvhs = uvh_fdb[UVH][UVH]
-        h_field = copy_to_taichi(uvhs.column.h[1:], ti.f32, None)
+        h_field.from_numpy(uvhs.column.h[1:].astype(np.float32))
         update_max_h(h_field, max_h_field)
 
     # Pass 2: compute max depth once and rasterize once
