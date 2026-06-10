@@ -209,5 +209,9 @@ __marimo__/
 resource/
 .DS_Store
 
+# Local terminal transcripts / resource configs
+typescript
+resource/pipe.json
+
 # INP to SHP output
 resource/inp_output/
