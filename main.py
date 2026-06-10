@@ -5,7 +5,7 @@ from src.nh_flood_2d.preprocess.pipe import prepare_pipe
 from src.nh_flood_2d.preprocess.warmstart import clean_uvh_for_warmstart
 from src.nh_flood_2d.core.solver_compact import solver, warmup_solver
 from src.nh_flood_2d.core.coupled import solver_coupled
-from src.nh_flood_2d.output.hydrograph import draw_hydrograph, compare_hydrograph
+from src.nh_flood_2d.output.hydrograph import draw_hydrograph, compare_hydrograph, compare_hydrograph_panels
 from src.nh_flood_2d.input import load_domain_config, DomainConfig, load_force_config, ForceConfig
 from src.nh_flood_2d.input.pipe import load_pipe_config, PipeConfig
 from src.nh_flood_2d.output.flood_map import generate_flood_map, generate_max_inundation_extent_map, plot_spatial_mae_curve, generate_flood_video
@@ -14,9 +14,9 @@ df7_cfg = load_force_config('./resource/df7.json')
 pipe_cfg   = load_pipe_config('./resource/pipe.json')
 df11_cfg = load_force_config('./resource/df11.json')
 domain_4 = load_domain_config('./resource/domain_4.json')
-# domain_mrcg = load_domain_config('./resource/domain_mrcg.json')
+domain_mrcg = load_domain_config('./resource/domain_mrcg.json')
 domain_alt = load_domain_config('./resource/domain_alt.json')
-# domain_mrcg_gw = load_domain_config('./resource/domain_mrcg_gw.json')
+domain_mrcg_gw = load_domain_config('./resource/domain_mrcg_gw.json')
 # domain_basic = load_domain_config('./resource/domain_basic.json')
 
 def evolve_domain(domain_cfg: DomainConfig, force_cfg: ForceConfig):
@@ -83,22 +83,31 @@ def evolve_domain_coupled_warmup(
 
 if __name__ == '__main__':
     # Warmup
-    # evolve_domain_coupled_warmup(domain_4, df11_cfg, pipe_cfg, keep_types=(7, 8))
+    # evolve_domain_coupled_warmup(domain_mrcg_gw, df11_cfg, pipe_cfg, keep_types=(7, 8))
     
     # Simulation
-    # evolve_domain_coupled(domain_4, df7_cfg, pipe_cfg)
+    # evolve_domain_coupled(domain_mrcg_gw, df7_cfg, None)
     
     # Output video
-    generate_flood_map(domain_alt)
-    generate_flood_video(domain_alt, output_path='./resource/flood_video_mrcg.mp4')
+    # generate_flood_map(domain_mrcg_gw)
+    # generate_flood_video(domain_mrcg_gw, output_path='./resource/flood_video_mrcg_gw.mp4')
     
     # draw_hydrograph(domain_alt, 'D74', True, -3600)
     
     # preprocess(domain_mrcg, df7_cfg)
     # generate_max_inundation_extent_map(domain_4)
     
-    # mses = compare_hydrograph([domain_4, domain_alt], 'D43C', show=True, show_obs=True, baseline=domain_4)
+    # mses = compare_hydrograph([domain_mrcg_gw, domain_mrcg], 'S4', show=True, show_obs=False)
+    # mses = compare_hydrograph([domain_mrcg_gw, domain_mrcg], 'S5', show=True, show_obs=False)
     # print(f'RMSEs: {mses}')
+    compare_hydrograph_panels(
+        [domain_mrcg_gw, domain_mrcg],
+        ['S4', 'S5'],
+        show=True,
+        show_obs=False,
+        output_path='./resource/hydrograph_panels.png',
+    )
     
-    # plot_spatial_mae_curve(domain_4, domain_mrcg, df7_cfg, output_path='./resource/spatial_mae_curve.png')
+    # preprocess(domain_4, df7_cfg)
+    # plot_spatial_mae_curve(domain_4, domain_alt, df7_cfg, output_path='./resource/spatial_mae_curve.png')
     

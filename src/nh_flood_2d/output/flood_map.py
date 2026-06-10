@@ -4,7 +4,7 @@ import numpy as np
 import taichi as ti
 import fastdb4py as fdb
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import no_type_check
 from rasterio.transform import from_origin
 
@@ -15,6 +15,32 @@ from ..schema.feature import Ne, UVH, Ns, IndexLike, Rainfall
 # Check if grid is too large for single Taichi field (limit near 2^31 elements, but practical limit lower)
 # Using 20000x20000 as a safe threshold for tiling
 TILE_SIZE = 4096
+
+
+def _load_rainfall_plot_series(rain_fdb_path: str | Path) -> tuple[list[datetime], np.ndarray]:
+    """Load rainfall timestamps/quantities for plotting on the same local-time axis as UVH files."""
+    rain_fdb = fdb.ORM.load(str(rain_fdb_path), from_file=True)
+    rainfalls = rain_fdb[Rainfall][Rainfall]
+    rain_times = [datetime.fromtimestamp(float(t)) for t in rainfalls.column.time]
+    rain_qty = rainfalls.column.quantity.copy()
+    return rain_times, rain_qty
+
+
+def _validate_uvh_snapshot_size(
+    label: str,
+    uvh_path: str | Path,
+    timestamp: str,
+    actual_size: int,
+    expected_size: int,
+) -> None:
+    if actual_size != expected_size:
+        raise ValueError(
+            f'UVH snapshot size mismatch for {label} at {timestamp}: '
+            f'{uvh_path} has {actual_size} rows, but the current mesh expects {expected_size}. '
+            'This usually means the UVH snapshots were generated from a different mesh or '
+            'preprocessed domain revision. Regenerate the UVH outputs or use matching '
+            'ne.fdb/ns.fdb and uvh files.'
+        )
 
 @ti.kernel
 @no_type_check
@@ -746,16 +772,16 @@ def plot_spatial_mae_curve(
         raise ValueError('No common UVH timestamps found between cfg_ref and cfg_cmp.')
     print(f'Processing {len(common)} shared UVH timesteps ...')
 
+    ref_label = Path(cfg_ref.domain_dir).name
+    cmp_label = Path(cfg_cmp.domain_dir).name
+
     # ── Optional: load rainfall for hyetograph overlay ─────────────────────────
     rain_dts: list[datetime] | None = None
     rain_qty: np.ndarray | None = None
     if force_cfg is not None:
         rain_fdb_path = Path(force_cfg.rain_fdb)
         if rain_fdb_path.exists():
-            _rfdb   = fdb.ORM.load(str(rain_fdb_path), from_file=True)
-            _rfall  = _rfdb[Rainfall][Rainfall]
-            rain_dts = [datetime.fromtimestamp(float(t), tz=timezone.utc).replace(tzinfo=None) for t in _rfall.column.time]
-            rain_qty = _rfall.column.quantity.copy()   # mm per interval
+            rain_dts, rain_qty = _load_rainfall_plot_series(rain_fdb_path)
         else:
             print(f'Warning: rain.fdb not found at {rain_fdb_path}, skipping hyetograph.')
 
@@ -766,6 +792,8 @@ def plot_spatial_mae_curve(
     for ts in common:
         uvh_r = fdb.ORM.load(str(ts_ref[ts]), from_file=True)[UVH][UVH]
         uvh_c = fdb.ORM.load(str(ts_cmp[ts]), from_file=True)[UVH][UVH]
+        _validate_uvh_snapshot_size(ref_label, ts_ref[ts], ts, len(uvh_r), len(nes_r))
+        _validate_uvh_snapshot_size(cmp_label, ts_cmp[ts], ts, len(uvh_c), len(nes_c))
 
         # Reuse pre-allocated fields; no new ti.field() allocation here
         h_r_field.from_numpy(uvh_r.column.h[1:].astype(np.float32))
@@ -839,8 +867,6 @@ def plot_spatial_mae_curve(
             ax2.invert_yaxis()   # meteorological convention: bars grow downward from top
             ax2.legend(loc='upper right')
 
-    ref_label = Path(cfg_ref.domain_dir).name
-    cmp_label = Path(cfg_cmp.domain_dir).name
     ax1.set_title(f'Spatial MAE of WSE — {ref_label}  vs  {cmp_label}  (min_depth = {min_depth} m)', fontweight='bold')
     ax1.legend(loc='upper left')
     plt.tight_layout()
