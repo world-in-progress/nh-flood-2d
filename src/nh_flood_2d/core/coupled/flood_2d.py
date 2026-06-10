@@ -174,8 +174,8 @@ def _run_2d_impl(
             u_t[ei] = 0.0
             v_t[ei] = 0.0
             ssq_t[ei] = 0.0
-            # h_t[ei] = ez_t[ei] if ez_t[ei] > 0.0 else 0.0
-            h_t[ei] = ez_t[ei]
+            h_t[ei] = ez_t[ei] if ez_t[ei] > 0.0 else 0.0
+            # h_t[ei] = ez_t[ei]
             eq_t[ei, 0] = eq_t[ei, 1] = eq_t[ei, 2] = eq_t[ei, 3] = 0.0
             enq_t[ei, 0] = enq_t[ei, 1] = enq_t[ei, 2] = enq_t[ei, 3] = 0.0
             lsi0 = isl_data[isl_ptr_l[ei]]
@@ -255,7 +255,7 @@ def _run_2d_impl(
                 flux = new_yq * sl_t[si]
                 ti.atomic_add(enq_t[eib, 3], flux)
                 ti.atomic_add(enq_t[eit, 2], flux)
-                
+        
         # Tick infiltration rate during rainfall (based on Horton model)
         # Horton: f(t) = fc + (f0 - fc) * exp(-k * t), converted from in/hr to m/s
         if rainq > 0.0:
