@@ -1,292 +1,266 @@
 # nh-flood-2d
 
-2D hydrodynamic model that simulates shallow water flow on multi-resolution Cartesian grids using GPU-accelerated computation.
+`nh-flood-2d` is a Python 3.10 hydrodynamic modeling workspace for 2D shallow-water flood simulation on multi-resolution Cartesian meshes. The current codebase also includes optional 1D SWMM pipe-network coupling, DEM fusion utilities, and post-processing tools for flood maps and hydrographs.
 
-## Overview
+The solver uses Taichi kernels for the main numerical work and stores mesh, forcing, and UVH snapshot data in `fastdb4py` FDB files. `fastdb4py` is pinned to `0.1.12` because later FastDB changes are not assumed to be compatible with this model's stored data layout.
 
-`nh-flood-2d` is a high-performance 2D hydrodynamic simulation framework designed for flood modeling and analysis. It leverages GPU acceleration via [Taichi](https://taichi-lang.org/) and stores mesh/simulation data in a custom binary format using [`fastdb4py`](https://github.com/world-in-progress/fastdb).
+## What Is In This Repository
 
-### Key Features
+- 2D surface-water preprocessing and simulation (`src/nh_flood_2d/preprocess`, `src/nh_flood_2d/core/solver_compact.py`).
+- Optional 2D surface-water and 1D SWMM pipe-network coupling (`src/nh_flood_2d/core/coupled`).
+- FDB schema definitions for mesh, forcing, pipe, and UVH data (`src/nh_flood_2d/schema/feature.py`).
+- Flood-map, maximum-inundation, video, hydrograph, and comparison utilities (`src/nh_flood_2d/output`).
+- DEM fusion and TIN helper code (`src/nh_flood_2d/dem`, `examples`, `docs/dem_fusion_mask_replacement_usage.md`).
+- Utility scripts for SWMM `.inp` conversion and warm-start UVH cleanup (`tools`).
 
-- **GPU-accelerated computation** using Taichi for high-performance simulation
-- **Multi-resolution Cartesian grids** support for flexible domain representation
-- **Comprehensive physics model** including:
-  - Semi-implicit Saint-Venant equations for shallow water flow
-  - Horton infiltration model for 7 land-use types
-  - Gate operation logic (open/close based on water head)
-  - Tide boundary conditions with linear interpolation
-  - Rainfall forcing with time-varying rates
-- **Modular architecture** with separate configuration for domain and forcing
-- **Multiple output formats**:
-  - GeoTIFF flood maps (rasterized water depth)
-  - Hydrograph time series at observation stations
-  - Binary FDB files for intermediate data storage
-- **Configurable simulation parameters**:
-  - Courant number (CFL condition)
-  - Time weighting factor
-  - Minimum water depth threshold
-  - Output intervals and duration
+Large local inputs and generated outputs live under `resource/` and are ignored by Git. A fresh clone does not include the project-specific DEM, NE/NS mesh, rainfall, tide, gate, observation, SWMM, or UVH files needed to run the local scenarios referenced by `main.py`.
 
-## Installation
+## Requirements
 
-This project uses `uv` for dependency management (Python 3.10.17 required).
+- Python `3.10.17`.
+- `uv` for dependency management.
+- A Taichi-supported compute backend for solver runs.
+- GIS and SWMM dependencies installed through `pyproject.toml`.
+- Local model data files matching the configuration JSON files you provide.
+
+Install dependencies:
 
 ```bash
-# Install dependencies
 uv sync
-
-# Run the simulation
-uv run python main.py
 ```
 
-## Project Structure
+On macOS, if loading `swmm-toolkit` terminates the process because of an invalid bundled dylib signature, run:
 
-```
-nh-flood-2d/
-├── src/nh_flood_2d/
-│   ├── input/              # Configuration management
-│   │   ├── __init__.py     # Main imports (DomainConfig, ForceConfig)
-│   │   ├── domain.py       # Domain configuration (terrain, simulation parameters)
-│   │   └── force.py        # Force configuration (boundary conditions)
-│   ├── preprocess/         # Data preprocessing
-│   │   ├── __init__.py     # Main preprocessing function
-│   │   ├── domain.py       # Domain data preparation
-│   │   ├── force.py        # Force data preparation
-│   │   ├── pass_1.py       # Legacy pass 1 (raw to FDB conversion)
-│   │   └── pass_2.py       # Legacy pass 2 (boundary identification)
-│   ├── core/               # Core simulation engine
-│   │   ├── solver_compact.py  # Main production solver (GPU-accelerated)
-│   │   ├── solver.py          # Legacy functional solver
-│   │   └── domain.py          # Experimental object-oriented implementation
-│   ├── output/             # Output generation
-│   │   ├── flood_map.py    # GeoTIFF flood map generation
-│   │   └── hydrograph.py   # Hydrograph analysis and plotting
-│   ├── schema/             # Data schema definitions
-│   │   └── feature.py      # FDB Feature classes for data storage
-│   └── util/               # Utility functions
-│       ├── ti.py           # Taichi initialization and helpers
-│       └── benchmark.py    # Timing decorator for performance measurement
-├── main.py                 # Main entry point with example usage
-├── resource/               # Configuration and input data files
-│   ├── domain_*.json       # Domain configuration files
-│   ├── df*.json           # Force configuration files
-│   └── elevate/           # Elevation adjustment data
-└── CLAUDE.md              # Developer guide for Claude Code
+```bash
+uv run fix-macos-codesign
 ```
 
-## API Reference
+## Verification Commands
 
-The following functions are exposed in `main.py` and available for use:
-
-### Configuration Loading
-
-```python
-from src.nh_flood_2d.input import load_domain_config, DomainConfig, load_force_config, ForceConfig
-
-# Load domain configuration (terrain and simulation parameters)
-domain_cfg = load_domain_config('./resource/domain_mrcg.json')
-
-# Load force configuration (boundary conditions)
-force_cfg = load_force_config('./resource/df7.json')
+```bash
+uv lock --check
+uv run pytest tests/test_flood_map_rainfall.py tests/test_flood_map_uvh_validation.py
 ```
 
-### Main Simulation Pipeline
+These smoke tests cover output helper behavior that does not require local model data. Full test collection currently includes DEM/GIS and legacy local-data tests; run those only in an environment with the required GMT/GIS libraries and project data. The tests are not a full validation run for a complete flood simulation.
 
-```python
-from src.nh_flood_2d.preprocess import preprocess
-from src.nh_flood_2d.core.solver_compact import solver
+## Data And Configuration
 
-# Complete simulation workflow
-def evolve_domain(domain_cfg: DomainConfig, force_cfg: ForceConfig):
-    preprocess(domain_cfg, force_cfg)    # Data preparation
-    solver(domain_cfg, force_cfg)        # Core simulation
-```
+The model is configured with separate JSON files for the 2D domain, external forcing, and optional pipe network. Configuration loaders validate required input paths and create output directories when needed.
 
-### Elevation Adjustment
+### Domain Config
 
-```python
-from src.nh_flood_2d.core.solver_compact import set_elevation
+Loaded with `load_domain_config(...)` into `DomainConfig`.
 
-# Raise ground elevation of elements below specified level
-set_elevation(domain_cfg, elevate_meter=3.0)
-```
-
-### Output Generation
-
-```python
-from src.nh_flood_2d.output.flood_map import generate_flood_map, generate_max_inundation_extent_map
-from src.nh_flood_2d.output.hydrograph import draw_hydrograph, compare_hydrograph
-
-# Generate flood maps
-generate_flood_map(domain_cfg)                      # Single timestep flood map
-generate_max_inundation_extent_map(domain_cfg)      # Maximum inundation extent map
-
-# Analyze hydrographs
-draw_hydrograph(domain_cfg, 'D74', clampped=True, translation_second=-3600)
-
-# Compare multiple simulations
-mses = compare_hydrograph(
-    [domain_cfg1, domain_cfg2],
-    'D74',
-    clampped=True,
-    show=False,
-    show_obs=False,
-    baseline=domain_cfg1
-)
-```
-
-## Configuration Files
-
-### Domain Configuration (`domain_*.json`)
 ```json
 {
   "ne": "path/to/ne.txt",
   "ns": "path/to/ns.txt",
-  "epsg_code": 4326,
-  "domain_dir": "output/domain_mrcg",
+  "epsg_code": 4547,
+  "domain_dir": "path/to/domain-output",
   "afa": 0.5,
   "sita": 1.0,
   "min_h": 0.02,
   "duration": -1,
   "yield_step": 300,
+  "restart_uvh": "",
   "hydrograph_points": {
-    "D74": [827040.3, 843912.8],
-    "D75": [827120.5, 843850.2]
+    "S4": [827040.3, 843912.8]
   },
   "observation_dir": "path/to/observations"
 }
 ```
 
-### Force Configuration (`df*.json`)
+Important fields:
+
+| Field | Meaning |
+| --- | --- |
+| `ne`, `ns` | Raw mesh element and side text files. |
+| `epsg_code` | CRS code used by raster outputs. |
+| `domain_dir` | Output root for preprocessed FDBs, UVH snapshots, flood maps, hydrographs, and maximum-inundation rasters. |
+| `afa` | CFL factor used in adaptive time-step calculation. |
+| `sita` | Time weighting factor used in the side-flow update. |
+| `min_h` | Minimum active water depth in meters. |
+| `duration` | Simulation duration in seconds; `-1` runs until forcing data ends. |
+| `yield_step` | UVH output interval in seconds. |
+| `restart_uvh` | Optional UVH `.fdb` snapshot for warm-start runs. |
+| `hydrograph_points` | Station name to `(x, y)` coordinate mapping. |
+| `observation_dir` | Optional observation files for hydrograph comparison. |
+
+### Force Config
+
+Loaded with `load_force_config(...)` into `ForceConfig`.
+
 ```json
 {
   "gate": "path/to/gate.txt",
   "tide": "path/to/tide.csv",
   "rain": "path/to/rain.csv",
-  "force_dir": "output/force_df7"
+  "force_dir": "path/to/force-output"
 }
 ```
 
-## Usage Examples
+`preprocess(...)` converts these files into `gate.fdb`, `tide.fdb`, and `rain.fdb` under `force_dir/preprocessed`.
 
-### Basic Simulation
+### Pipe Config
+
+Loaded with `load_pipe_config(...)` into `PipeConfig` when 1D-2D coupling is needed.
+
+```json
+{
+  "inp": "path/to/network.inp",
+  "pipe_dir": "path/to/pipe-output",
+  "coupling_interval": 600.0,
+  "exchange_timeout": 600.0,
+  "weak_dist_thresh": 50.0
+}
+```
+
+The pipe preprocessor reads SWMM nodes from the `.inp` file, builds a pipe FDB, records primary and weakly related 2D elements for each node, and writes runtime pipe files under `pipe_dir`.
+
+## Running The 2D Solver
+
+`main.py` is a local orchestration script with hard-coded paths under `resource/`. Use it as a template after creating local config files; do not treat it as a generic CLI entry point.
+
+Minimal 2D workflow:
+
 ```python
+from src.nh_flood_2d.input import load_domain_config, load_force_config
 from src.nh_flood_2d.preprocess import preprocess
 from src.nh_flood_2d.core.solver_compact import solver
+
+domain_cfg = load_domain_config("path/to/domain.json")
+force_cfg = load_force_config("path/to/force.json")
+
+preprocess(domain_cfg, force_cfg)
+solver(domain_cfg, force_cfg)
+```
+
+The preprocessing stage creates:
+
+- `domain_dir/preprocessed/ne.fdb`
+- `domain_dir/preprocessed/ns.fdb`
+- `domain_dir/preprocessed/boundary.fdb`
+- `force_dir/preprocessed/gate.fdb`
+- `force_dir/preprocessed/tide.fdb`
+- `force_dir/preprocessed/rain.fdb`
+
+The solver writes `uvh_*.fdb` snapshots under `domain_dir/uvh`.
+
+## Running Coupled 2D-1D Simulations
+
+For SWMM pipe coupling:
+
+```python
 from src.nh_flood_2d.input import load_domain_config, load_force_config
+from src.nh_flood_2d.input.pipe import load_pipe_config
+from src.nh_flood_2d.preprocess import preprocess
+from src.nh_flood_2d.preprocess.pipe import prepare_pipe
+from src.nh_flood_2d.core.coupled import solver_coupled
 
-# Load configurations
-domain_cfg = load_domain_config('./resource/domain_mrcg.json')
-force_cfg = load_force_config('./resource/df7.json')
+domain_cfg = load_domain_config("path/to/domain.json")
+force_cfg = load_force_config("path/to/force.json")
+pipe_cfg = load_pipe_config("path/to/pipe.json")
 
-# Run complete simulation
 preprocess(domain_cfg, force_cfg)
-solver(domain_cfg, force_cfg)
+prepare_pipe(pipe_cfg, domain_cfg)
+solver_coupled(domain_cfg, force_cfg, pipe_cfg)
 ```
 
-### Elevation Adjustment + Simulation
-```python
-from src.nh_flood_2d.core.solver_compact import set_elevation
+`solver_coupled(...)` starts a 2D Taichi process and, when `pipe_cfg` is provided, a 1D SWMM pipe process. The processes exchange drainage and overflow data through multiprocessing-managed shared state at `coupling_interval` seconds.
 
-# Adjust elevations before simulation
-set_elevation(domain_cfg, elevate_meter=3.0)
+Calling `solver_coupled(domain_cfg, force_cfg, None)` runs the coupled 2D code path without the 1D pipe process.
 
-# Run simulation
-preprocess(domain_cfg, force_cfg)
-solver(domain_cfg, force_cfg)
+## Warm Starts
+
+`DomainConfig.restart_uvh` can point to a previous UVH snapshot. The helper below creates a cleaned warm-start snapshot that preserves water only on selected element types:
+
+```bash
+uv run python tools/clean_uvh_for_warmstart.py \
+  --uvh path/to/uvh_20230908-000000.fdb \
+  --ne path/to/preprocessed/ne.fdb \
+  --out path/to/warmstart.fdb \
+  --keep-types 7 8
 ```
 
-### Post-processing Analysis
+Then set `"restart_uvh": "path/to/warmstart.fdb"` in the domain config.
+
+## Post-Processing
+
+Common output functions:
+
 ```python
-# Generate flood maps
-generate_flood_map(domain_cfg)
-generate_max_inundation_extent_map(domain_cfg, min_depth=0.2)
-
-# Plot hydrographs
-draw_hydrograph(domain_cfg, 'D74', clampped=True)
-
-# Compare simulations
-mses = compare_hydrograph(
-    [domain_mrcg, domain_4],
-    'D74',
-    clampped=True,
-    show=True
+from src.nh_flood_2d.output.flood_map import (
+    generate_flood_map,
+    generate_max_inundation_extent_map,
+    generate_flood_video,
+    plot_spatial_mae_curve,
 )
-print(f'RMSE values: {mses}')
+from src.nh_flood_2d.output.hydrograph import (
+    draw_hydrograph,
+    compare_hydrograph,
+    compare_hydrograph_panels,
+)
+
+generate_flood_map(domain_cfg)
+generate_max_inundation_extent_map(domain_cfg, min_depth=0.05)
+generate_flood_video(domain_cfg, output_path="path/to/flood_video.mp4")
+draw_hydrograph(domain_cfg, "S4")
 ```
 
-## Data Schema
+These functions expect preprocessed mesh FDBs and UVH snapshots produced by the solver.
 
-The model uses `fastdb4py` Feature subclasses for data storage:
+## DEM And GIS Utilities
 
-| Feature | Description | Fields |
-|---------|-------------|--------|
-| `Ne` | Hydro element | `index`, `x`, `y`, `z`, `type` (1-7) |
-| `Ns` | Hydro side | `index`, `length`, `x`, `y`, `z`, `attr` |
-| `SideTopoInfo` | Side topology | `[orient, lower_ei, upper_ei]` |
-| `Tide` | Tide time series | `time`, `level` |
-| `Rainfall` | Rainfall time series | `time`, `quantity` |
-| `Gate` | Gate information | `info[100]` (per gate) |
-| `UVH` | Simulation output | `u`, `v`, `h` per element |
-| `IndexLike` | Index storage | `index` |
-| `U8Value` | 8-bit value storage | `value` |
+DEM mask-replacement fusion CLI:
 
-**Note:** Index 0 is always virtual (placeholder). Real elements/sides start at index 1.
-
-## Physics Model
-
-### Governing Equations
-The model solves the 2D shallow water equations (Saint-Venant equations) using a semi-implicit finite volume scheme:
-
-1. **Continuity equation**: ∂h/∂t + ∇·(hu) = R - I
-2. **Momentum equation**: ∂u/∂t + u·∇u = -g∇h - g∇z - τ/ρ
-
-Where:
-- `h`: water depth
-- `u`: flow velocity vector
-- `z`: ground elevation
-- `R`: rainfall rate
-- `I`: infiltration rate
-- `g`: gravitational acceleration
-- `τ`: bottom friction (Manning's formula)
-- `ρ`: water density
-
-### Infiltration Model
-Horton infiltration model applied per land-use type (7 types):
-- Building, Road, Agricultural land, Fish pond, Mountainous land, Water body, Catch basin
-
-### Gate Operation
-Gates open/close based on upstream vs downstream water head difference.
-
-### Boundary Conditions
-- Tide: Time-varying water level at domain boundaries
-- Rainfall: Time-varying precipitation rate over domain
-
-## Performance
-
-- **GPU acceleration**: All core computations run on GPU via Taichi
-- **Memory efficient**: FDB format minimizes memory footprint
-- **Scalable**: Tiled processing for large domains (tile size 4096)
-- **Optimized**: CSR-like data layout for efficient neighborhood access
-
-## Contributing
-
-Please refer to `CLAUDE.md` for detailed developer guidelines and codebase conventions.
-
-## License
-
-[License information to be added]
-
-## Citation
-
-If you use this software in your research, please cite:
-
-```
-[Citation information to be added]
+```bash
+uv run python src/nh_flood_2d/dem/dem_fusion_mask_replacement.py \
+  --dem path/to/study_area_dem.tif \
+  --mask path/to/study_area_dem_mask.shp \
+  --bay-points path/to/bay.txt \
+  --shenzhenhe-points path/to/shenzhenhe-fix.csv \
+  --output path/to/fused_dem_4m.tif \
+  --resolution 4.0 \
+  --nodata -9999.0
 ```
 
-## Acknowledgments
+SWMM `.inp` to shapefile conversion:
 
-- [Taichi](https://taichi-lang.org/) for GPU computing infrastructure
-- [fastdb4py](https://github.com/world-in-progress/fastdb) for efficient binary data storage
-- [rasterio](https://rasterio.readthedocs.io/) for GeoTIFF output support
+```bash
+uv run python tools/inp2shp.py path/to/network.inp -o path/to/shapefiles --epsg 4547
+```
+
+## Data Model Notes
+
+The FDB schema is defined in `src/nh_flood_2d/schema/feature.py`. Core records include:
+
+| Feature | Purpose |
+| --- | --- |
+| `Ne` | 2D mesh element coordinates, elevation, side counts, and type. |
+| `Ns` | 2D side geometry, elevation, length, and attribute. |
+| `SideTopoInfo` | Side orientation and adjacent element indices. |
+| `Rainfall`, `Tide`, `Gate` | Preprocessed forcing records. |
+| `UVH` | Per-element velocity components and water surface elevation. |
+| `Node`, `PipeTopo` | SWMM node and pipe-to-2D topology records for coupling. |
+| `IndexLike`, `U8Value`, `F32Value` | Small typed helper tables. |
+
+Index `0` is a virtual/sentinel element or side in the 2D mesh data. Real mesh iteration starts at index `1`.
+
+## Code Map
+
+```text
+src/nh_flood_2d/
+  input/            Pydantic config models and JSON loaders
+  preprocess/       Raw domain, forcing, pipe, and warm-start preparation
+  core/
+    solver_compact.py
+    coupled/        2D/1D coupled solver driver and exchange logic
+  output/           Flood rasters, videos, hydrographs, and comparison maps
+  schema/           fastdb4py Feature definitions
+  dem/              DEM fusion and TIN utilities
+  util/             Taichi initialization and timing helpers
+tools/              Standalone maintenance/conversion scripts
+examples/           DEM fusion runner examples
+docs/               Design notes and usage documents
+```

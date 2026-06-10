@@ -1,292 +1,266 @@
 # nh-flood-2d
 
-基于多分辨率笛卡尔网格的二维水动力模型，使用GPU加速计算模拟浅水流动。
+`nh-flood-2d` 是一个面向二维浅水洪水模拟的 Python 3.10 建模工程。当前代码支持多分辨率笛卡尔网格上的二维地表水计算，也包含可选的 SWMM 一维管网耦合、DEM 融合工具，以及洪水图和水文过程线后处理。
 
-## 概述
+求解器的主要数值计算由 Taichi kernel 执行，网格、强迫和 UVH 快照数据使用 `fastdb4py` FDB 文件保存。项目将 `fastdb4py` 固定在 `0.1.12`，因为后续 FastDB 变更不默认兼容当前模型使用的数据布局。
 
-`nh-flood-2d` 是一个高性能的二维水动力模拟框架，专为洪水建模和分析设计。它利用 [Taichi](https://taichi-lang.org/) 实现GPU加速，并使用 [`fastdb4py`](https://github.com/world-in-progress/fastdb) 的自定义二进制格式存储网格/模拟数据。
+## 仓库内容
 
-### 主要特性
+- 二维地表水预处理与模拟代码：`src/nh_flood_2d/preprocess`、`src/nh_flood_2d/core/solver_compact.py`。
+- 可选二维地表水与一维 SWMM 管网耦合代码：`src/nh_flood_2d/core/coupled`。
+- 网格、强迫、管网和 UVH 数据的 FDB schema：`src/nh_flood_2d/schema/feature.py`。
+- 洪水图、最大淹没范围、视频、水文过程线和对比分析工具：`src/nh_flood_2d/output`。
+- DEM 融合和 TIN 辅助代码：`src/nh_flood_2d/dem`、`examples`、`docs/dem_fusion_mask_replacement_usage.md`。
+- SWMM `.inp` 转 shapefile 和 warm-start UVH 清理脚本：`tools`。
 
-- **GPU加速计算**：使用Taichi实现高性能模拟
-- **多分辨率笛卡尔网格**：支持灵活的域表示
-- **全面的物理模型**，包括：
-  - 浅水流动的半隐式Saint-Venant方程
-  - 7种土地利用类型的Horton下渗模型
-  - 基于水头差的闸门操作逻辑
-  - 带线性插值的潮汐边界条件
-  - 随时间变化的降雨强迫
-- **模块化架构**：域配置和驱动力配置分离
-- **多种输出格式**：
-  - GeoTIFF洪水地图（栅格化水深）
-  - 观测站点的水文过程线时间序列
-  - 中间数据存储的二进制FDB文件
-- **可配置的模拟参数**：
-  - Courant数（CFL条件）
-  - 时间加权因子
-  - 最小水深阈值
-  - 输出间隔和时长
+大型本地输入和模拟输出位于 `resource/`，该目录已被 Git 忽略。全新克隆不包含 `main.py` 中本地场景依赖的 DEM、NE/NS 网格、降雨、潮位、闸门、观测、SWMM 或 UVH 文件。
 
-## 安装
+## 环境要求
 
-本项目使用 `uv` 进行依赖管理（需要Python 3.10.17）。
+- Python `3.10.17`。
+- 使用 `uv` 管理依赖。
+- 求解运行需要 Taichi 支持的计算后端。
+- GIS 和 SWMM 相关依赖由 `pyproject.toml` 安装。
+- 本地需要准备与配置 JSON 对应的模型数据文件。
+
+安装依赖：
 
 ```bash
-# 安装依赖
 uv sync
-
-# 运行模拟
-uv run python main.py
 ```
 
-## 项目结构
+macOS 上如果加载 `swmm-toolkit` 时因为 wheel 内置 dylib 签名问题导致进程退出，可运行：
 
-```
-nh-flood-2d/
-├── src/nh_flood_2d/
-│   ├── input/              # 配置管理
-│   │   ├── __init__.py     # 主导入（DomainConfig, ForceConfig）
-│   │   ├── domain.py       # 域配置（地形、模拟参数）
-│   │   └── force.py        # 驱动力配置（边界条件）
-│   ├── preprocess/         # 数据预处理
-│   │   ├── __init__.py     # 主预处理函数
-│   │   ├── domain.py       # 域数据准备
-│   │   ├── force.py        # 驱动力数据准备
-│   │   ├── pass_1.py       # 遗留的第1阶段（原始数据转FDB）
-│   │   └── pass_2.py       # 遗留的第2阶段（边界识别）
-│   ├── core/               # 核心模拟引擎
-│   │   ├── solver_compact.py  # 主要生产求解器（GPU加速）
-│   │   ├── solver.py          # 遗留的功能式求解器
-│   │   └── domain.py          # 实验性面向对象实现
-│   ├── output/             # 输出生成
-│   │   ├── flood_map.py    # GeoTIFF洪水地图生成
-│   │   └── hydrograph.py   # 水文过程线分析和绘图
-│   ├── schema/             # 数据模式定义
-│   │   └── feature.py      # 数据存储的FDB Feature类
-│   └── util/               # 工具函数
-│       ├── ti.py           # Taichi初始化和辅助函数
-│       └── benchmark.py    # 性能测量的计时装饰器
-├── main.py                 # 主入口点，包含使用示例
-├── resource/               # 配置和输入数据文件
-│   ├── domain_*.json       # 域配置文件
-│   ├── df*.json           # 驱动力配置文件
-│   └── elevate/           # 高程调整数据
-└── CLAUDE.md              # Claude Code开发者指南
+```bash
+uv run fix-macos-codesign
 ```
 
-## API参考
+## 验证命令
 
-以下函数在 `main.py` 中暴露并可供使用：
-
-### 配置加载
-
-```python
-from src.nh_flood_2d.input import load_domain_config, DomainConfig, load_force_config, ForceConfig
-
-# 加载域配置（地形和模拟参数）
-domain_cfg = load_domain_config('./resource/domain_mrcg.json')
-
-# 加载驱动力配置（边界条件）
-force_cfg = load_force_config('./resource/df7.json')
+```bash
+uv lock --check
+uv run pytest tests/test_flood_map_rainfall.py tests/test_flood_map_uvh_validation.py
 ```
 
-### 主模拟流程
+这些 smoke tests 覆盖不依赖本地模型数据的输出工具行为。完整测试收集包含 DEM/GIS 和遗留本地数据测试，只应在具备所需 GMT/GIS 库和项目数据的环境中运行。当前测试不等同于完整洪水模拟验证。
 
-```python
-from src.nh_flood_2d.preprocess import preprocess
-from src.nh_flood_2d.core.solver_compact import solver
+## 数据与配置
 
-# 完整的模拟工作流
-def evolve_domain(domain_cfg: DomainConfig, force_cfg: ForceConfig):
-    preprocess(domain_cfg, force_cfg)    # 数据准备
-    solver(domain_cfg, force_cfg)        # 核心模拟
-```
+模型使用独立的 JSON 文件配置二维计算域、外部强迫和可选管网。配置加载器会验证必要输入路径，并在需要时创建输出目录。
 
-### 高程调整
+### 计算域配置
 
-```python
-from src.nh_flood_2d.core.solver_compact import set_elevation
+通过 `load_domain_config(...)` 加载为 `DomainConfig`。
 
-# 提升低于指定高程的元素地面高程
-set_elevation(domain_cfg, elevate_meter=3.0)
-```
-
-### 输出生成
-
-```python
-from src.nh_flood_2d.output.flood_map import generate_flood_map, generate_max_inundation_extent_map
-from src.nh_flood_2d.output.hydrograph import draw_hydrograph, compare_hydrograph
-
-# 生成洪水地图
-generate_flood_map(domain_cfg)                      # 单时间步洪水地图
-generate_max_inundation_extent_map(domain_cfg)      # 最大淹没范围地图
-
-# 分析水文过程线
-draw_hydrograph(domain_cfg, 'D74', clampped=True, translation_second=-3600)
-
-# 比较多个模拟
-mses = compare_hydrograph(
-    [domain_cfg1, domain_cfg2],
-    'D74',
-    clampped=True,
-    show=False,
-    show_obs=False,
-    baseline=domain_cfg1
-)
-```
-
-## 配置文件
-
-### 域配置 (`domain_*.json`)
 ```json
 {
   "ne": "path/to/ne.txt",
   "ns": "path/to/ns.txt",
-  "epsg_code": 4326,
-  "domain_dir": "output/domain_mrcg",
+  "epsg_code": 4547,
+  "domain_dir": "path/to/domain-output",
   "afa": 0.5,
   "sita": 1.0,
   "min_h": 0.02,
   "duration": -1,
   "yield_step": 300,
+  "restart_uvh": "",
   "hydrograph_points": {
-    "D74": [827040.3, 843912.8],
-    "D75": [827120.5, 843850.2]
+    "S4": [827040.3, 843912.8]
   },
   "observation_dir": "path/to/observations"
 }
 ```
 
-### 驱动力配置 (`df*.json`)
+关键字段：
+
+| 字段 | 含义 |
+| --- | --- |
+| `ne`, `ns` | 原始网格单元和边文件。 |
+| `epsg_code` | 栅格输出使用的坐标参考系统代码。 |
+| `domain_dir` | 计算域输出根目录，保存预处理 FDB、UVH 快照、洪水图、水文过程线和最大淹没范围栅格。 |
+| `afa` | 自适应时间步计算中的 CFL 系数。 |
+| `sita` | 边流量更新中的时间权重系数。 |
+| `min_h` | 最小有效水深，单位为米。 |
+| `duration` | 模拟时长，单位为秒；`-1` 表示运行到强迫数据结束。 |
+| `yield_step` | UVH 输出间隔，单位为秒。 |
+| `restart_uvh` | 可选 warm-start UVH `.fdb` 快照路径。 |
+| `hydrograph_points` | 水文站名到 `(x, y)` 坐标的映射。 |
+| `observation_dir` | 可选观测文件目录，用于水文过程线对比。 |
+
+### 强迫配置
+
+通过 `load_force_config(...)` 加载为 `ForceConfig`。
+
 ```json
 {
   "gate": "path/to/gate.txt",
   "tide": "path/to/tide.csv",
   "rain": "path/to/rain.csv",
-  "force_dir": "output/force_df7"
+  "force_dir": "path/to/force-output"
 }
 ```
 
-## 使用示例
+`preprocess(...)` 会将这些文件转换为 `force_dir/preprocessed` 下的 `gate.fdb`、`tide.fdb` 和 `rain.fdb`。
 
-### 基本模拟
+### 管网配置
+
+需要一维二维耦合时，通过 `load_pipe_config(...)` 加载为 `PipeConfig`。
+
+```json
+{
+  "inp": "path/to/network.inp",
+  "pipe_dir": "path/to/pipe-output",
+  "coupling_interval": 600.0,
+  "exchange_timeout": 600.0,
+  "weak_dist_thresh": 50.0
+}
+```
+
+管网预处理会读取 SWMM `.inp` 中的节点，构建管网 FDB，记录每个节点的主关联二维单元和弱关联二维单元，并将运行时管网文件写入 `pipe_dir`。
+
+## 运行二维求解器
+
+`main.py` 是带有本地硬编码 `resource/` 路径的编排脚本。准备好本地配置文件后可以参考它组织流程，但它不是通用命令行入口。
+
+最小二维流程：
+
 ```python
+from src.nh_flood_2d.input import load_domain_config, load_force_config
 from src.nh_flood_2d.preprocess import preprocess
 from src.nh_flood_2d.core.solver_compact import solver
+
+domain_cfg = load_domain_config("path/to/domain.json")
+force_cfg = load_force_config("path/to/force.json")
+
+preprocess(domain_cfg, force_cfg)
+solver(domain_cfg, force_cfg)
+```
+
+预处理阶段会创建：
+
+- `domain_dir/preprocessed/ne.fdb`
+- `domain_dir/preprocessed/ns.fdb`
+- `domain_dir/preprocessed/boundary.fdb`
+- `force_dir/preprocessed/gate.fdb`
+- `force_dir/preprocessed/tide.fdb`
+- `force_dir/preprocessed/rain.fdb`
+
+求解器会将 `uvh_*.fdb` 快照写入 `domain_dir/uvh`。
+
+## 运行二维一维耦合
+
+SWMM 管网耦合流程：
+
+```python
 from src.nh_flood_2d.input import load_domain_config, load_force_config
+from src.nh_flood_2d.input.pipe import load_pipe_config
+from src.nh_flood_2d.preprocess import preprocess
+from src.nh_flood_2d.preprocess.pipe import prepare_pipe
+from src.nh_flood_2d.core.coupled import solver_coupled
 
-# 加载配置
-domain_cfg = load_domain_config('./resource/domain_mrcg.json')
-force_cfg = load_force_config('./resource/df7.json')
+domain_cfg = load_domain_config("path/to/domain.json")
+force_cfg = load_force_config("path/to/force.json")
+pipe_cfg = load_pipe_config("path/to/pipe.json")
 
-# 运行完整模拟
 preprocess(domain_cfg, force_cfg)
-solver(domain_cfg, force_cfg)
+prepare_pipe(pipe_cfg, domain_cfg)
+solver_coupled(domain_cfg, force_cfg, pipe_cfg)
 ```
 
-### 高程调整 + 模拟
-```python
-from src.nh_flood_2d.core.solver_compact import set_elevation
+`solver_coupled(...)` 会启动二维 Taichi 进程；提供 `pipe_cfg` 时，还会启动一维 SWMM 管网进程。两个进程通过 multiprocessing 管理的共享状态按 `coupling_interval` 秒交换排水和溢流数据。
 
-# 模拟前调整高程
-set_elevation(domain_cfg, elevate_meter=3.0)
+调用 `solver_coupled(domain_cfg, force_cfg, None)` 会运行无一维管网进程的二维耦合代码路径。
 
-# 运行模拟
-preprocess(domain_cfg, force_cfg)
-solver(domain_cfg, force_cfg)
+## Warm Start
+
+`DomainConfig.restart_uvh` 可以指向已有 UVH 快照。下面的辅助脚本会生成一个清理后的 warm-start 快照，只保留指定单元类型上的水量：
+
+```bash
+uv run python tools/clean_uvh_for_warmstart.py \
+  --uvh path/to/uvh_20230908-000000.fdb \
+  --ne path/to/preprocessed/ne.fdb \
+  --out path/to/warmstart.fdb \
+  --keep-types 7 8
 ```
 
-### 后处理分析
+随后在计算域配置中设置 `"restart_uvh": "path/to/warmstart.fdb"`。
+
+## 后处理
+
+常用输出函数：
+
 ```python
-# 生成洪水地图
-generate_flood_map(domain_cfg)
-generate_max_inundation_extent_map(domain_cfg, min_depth=0.2)
-
-# 绘制水文过程线
-draw_hydrograph(domain_cfg, 'D74', clampped=True)
-
-# 比较模拟
-mses = compare_hydrograph(
-    [domain_mrcg, domain_4],
-    'D74',
-    clampped=True,
-    show=True
+from src.nh_flood_2d.output.flood_map import (
+    generate_flood_map,
+    generate_max_inundation_extent_map,
+    generate_flood_video,
+    plot_spatial_mae_curve,
 )
-print(f'均方根误差值: {mses}')
+from src.nh_flood_2d.output.hydrograph import (
+    draw_hydrograph,
+    compare_hydrograph,
+    compare_hydrograph_panels,
+)
+
+generate_flood_map(domain_cfg)
+generate_max_inundation_extent_map(domain_cfg, min_depth=0.05)
+generate_flood_video(domain_cfg, output_path="path/to/flood_video.mp4")
+draw_hydrograph(domain_cfg, "S4")
 ```
 
-## 数据模式
+这些函数依赖求解器生成的预处理网格 FDB 和 UVH 快照。
 
-模型使用 `fastdb4py` Feature子类进行数据存储：
+## DEM 与 GIS 工具
 
-| Feature | 描述 | 字段 |
-|---------|------|------|
-| `Ne` | 水力学元素 | `index`, `x`, `y`, `z`, `type` (1-7) |
-| `Ns` | 水力学边 | `index`, `length`, `x`, `y`, `z`, `attr` |
-| `SideTopoInfo` | 边拓扑 | `[orient, lower_ei, upper_ei]` |
-| `Tide` | 潮汐时间序列 | `time`, `level` |
-| `Rainfall` | 降雨时间序列 | `time`, `quantity` |
-| `Gate` | 闸门信息 | `info[100]`（每闸门） |
-| `UVH` | 模拟输出 | 每个元素的 `u`, `v`, `h` |
-| `IndexLike` | 索引存储 | `index` |
-| `U8Value` | 8位值存储 | `value` |
+DEM 掩模替换融合命令：
 
-**注意：** 索引0始终是虚拟的（占位符）。真实的元素/边从索引1开始。
-
-## 物理模型
-
-### 控制方程
-模型使用半隐式有限体积格式求解二维浅水方程（Saint-Venant方程）：
-
-1. **连续性方程**: ∂h/∂t + ∇·(hu) = R - I
-2. **动量方程**: ∂u/∂t + u·∇u = -g∇h - g∇z - τ/ρ
-
-其中：
-- `h`: 水深
-- `u`: 流速矢量
-- `z`: 地面高程
-- `R`: 降雨率
-- `I`: 下渗率
-- `g`: 重力加速度
-- `τ`: 底摩擦（Manning公式）
-- `ρ`: 水密度
-
-### 下渗模型
-按土地利用类型（7种类型）应用Horton下渗模型：
-- 建筑、道路、农业用地、鱼塘、山地、水体、集水区
-
-### 闸门操作
-基于上下游水头差控制闸门开/关。
-
-### 边界条件
-- 潮汐：域边界随时间变化的水位
-- 降雨：域上随时间变化的降水率
-
-## 性能
-
-- **GPU加速**：所有核心计算通过Taichi在GPU上运行
-- **内存高效**：FDB格式最小化内存占用
-- **可扩展**：大域的分块处理（块大小4096）
-- **优化**：CSR类数据布局实现高效邻域访问
-
-## 贡献
-
-请参考 `CLAUDE.md` 获取详细的开发者指南和代码库约定。
-
-## 许可证
-
-[待添加许可证信息]
-
-## 引用
-
-如果您在研究中使用了此软件，请引用：
-
-```
-[待添加引用信息]
+```bash
+uv run python src/nh_flood_2d/dem/dem_fusion_mask_replacement.py \
+  --dem path/to/study_area_dem.tif \
+  --mask path/to/study_area_dem_mask.shp \
+  --bay-points path/to/bay.txt \
+  --shenzhenhe-points path/to/shenzhenhe-fix.csv \
+  --output path/to/fused_dem_4m.tif \
+  --resolution 4.0 \
+  --nodata -9999.0
 ```
 
-## 致谢
+SWMM `.inp` 转 shapefile：
 
-- [Taichi](https://taichi-lang.org/) 提供GPU计算基础设施
-- [fastdb4py](https://github.com/world-in-progress/fastdb) 提供高效的二进制数据存储
-- [rasterio](https://rasterio.readthedocs.io/) 提供GeoTIFF输出支持
+```bash
+uv run python tools/inp2shp.py path/to/network.inp -o path/to/shapefiles --epsg 4547
+```
+
+## 数据模型说明
+
+FDB schema 定义在 `src/nh_flood_2d/schema/feature.py`。核心记录包括：
+
+| Feature | 用途 |
+| --- | --- |
+| `Ne` | 二维网格单元坐标、高程、边数量和类型。 |
+| `Ns` | 二维边的几何、高程、长度和属性。 |
+| `SideTopoInfo` | 边方向和相邻单元索引。 |
+| `Rainfall`, `Tide`, `Gate` | 预处理后的强迫记录。 |
+| `UVH` | 每个单元的流速分量和水位。 |
+| `Node`, `PipeTopo` | 耦合用 SWMM 节点和管网到二维单元拓扑记录。 |
+| `IndexLike`, `U8Value`, `F32Value` | 小型类型化辅助表。 |
+
+二维网格数据中的索引 `0` 是虚拟或哨兵元素/边，真实网格遍历从索引 `1` 开始。
+
+## 代码结构
+
+```text
+src/nh_flood_2d/
+  input/            Pydantic 配置模型和 JSON 加载器
+  preprocess/       计算域、强迫、管网和 warm-start 预处理
+  core/
+    solver_compact.py
+    coupled/        二维一维耦合求解器驱动和交换逻辑
+  output/           洪水栅格、视频、水文过程线和对比图
+  schema/           fastdb4py Feature 定义
+  dem/              DEM 融合和 TIN 工具
+  util/             Taichi 初始化和计时辅助函数
+tools/              独立维护和转换脚本
+examples/           DEM 融合运行示例
+docs/               设计说明和使用文档
+```
