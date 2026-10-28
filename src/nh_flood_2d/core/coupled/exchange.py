@@ -1,263 +1,122 @@
-"""
-2D ↔ 1D exchange protocol (async / lagged coupling with bidirectional feedback).
+"""Conservative surface/pipe exchange for one coupling window.
 
-Provides composable phases so the 2D process can overlap stepping
-with 1D computation:
-
-  compute_drainage()  — GPU→CPU + orifice drainage per node
-  compute_overflow()  — HEAD-based overflow from pipe → surface
-  send_to_1d()        — push net flow dict to 1D (non-blocking)
-  receive_from_1d()   — wait for 1D HEAD data
-  apply_sources()     — merge drainage + overflow → ssq_t
-
-Bidirectional feedback mechanism:
-  - 1D returns absolute HEAD per junction (SurDepth=1000, no internal flooding)
-  - 2D computes overflow Q_ex where HEAD > rim + h_2d
-  - Q_ex added to 2D as source (pipe → surface)
-  - net_inflow = drainage - Q_ex sent to 1D (negative = extraction / "bleeding")
-
-Async main-loop pattern (lag-1):
-  At exchange point N:
-    1. IF N>0: receive_from_1d(HEAD results of window N-1)
-    2. compute_overflow(lagged HEAD, rim, current h_2d)
-    3. compute_drainage(current state)
-    4. apply_sources(fresh drain + overflow)
-    5. net_flow = drainage - overflow → send_to_1d
-    6. continue 2D stepping immediately
+All rates use m³/s. A positive source adds water to the surface; the
+corresponding negative rate is applied to a SWMM junction in the same window.
 """
 
 from __future__ import annotations
 
 import math
-import time
-from typing import TYPE_CHECKING
 
 import numpy as np
 
-if TYPE_CHECKING:
-    from ...input.pipe import PipeConfig
-    from .timer import CouplingTimer
+
+ORIFICE_COEFFICIENT = 0.85 * math.pi * 0.8
+MAX_OVERFLOW_HEAD_M = 3.0
+OVERFLOW_RELAXATION = 0.5
 
 
-def compute_drainage(
+def compute_exchange(
     window_dt: float,
-    h_t, ez_t, esl_t,
+    depth: np.ndarray,
+    bed: np.ndarray,
+    area: np.ndarray,
+    land_types: np.ndarray,
+    node_names: list[str],
+    is_outfall: np.ndarray,
     primary_ei: np.ndarray,
     topo_ei: np.ndarray,
     topo_ptr: np.ndarray,
-    nc_per_ei: np.ndarray,
-    node_names: list,
-    node_is_outfall: np.ndarray,
-    eu_np: np.ndarray | None = None,
-) -> tuple:
-    """Compute surface drainage into pipe nodes (GPU→CPU).
+    rims: np.ndarray,
+    heads: dict[str, float],
+) -> tuple[np.ndarray, dict[str, dict[str, float]], dict[str, float], tuple[tuple[int, ...], ...]]:
+    """Return F32 surface source, SWMM boundaries, diagnostics, and cell links.
 
-    Matches reference (Flood_new801.py L726-761):
-      1. Secondary cells first — SET (=) semantics, no /nc, all nodes
-      2. Primary cells second — accumulate (+=), /nc, node_type gating
-
-    Elements with land-use type 8 (water body) are excluded from
-    drainage — manholes do not drain rivers/lakes.
-
-    Returns (data_dict, q_source, h_np, z_np, esl_np) where data_dict is
-    sent to 1D, q_source is per-element source/sink, and h/z/esl numpy
-    arrays are reused by compute_overflow() to avoid redundant GPU reads.
+    Topology and mesh shapes are validated once by PipeCoupling.
+    An eligible cell has one or more unique junction relationships. Its total
+    drainage is bounded by water present at the beginning of this window,
+    then divided equally across those junctions. Outfalls receive only stage.
+    Overflow uses the historical head cap and relaxation and enters the same
+    junction as a negative inflow, exactly balancing the surface source.
     """
-    pi = math.pi
-    ci = window_dt
-    n_nodes = len(node_names)
+    depth = np.asarray(depth, dtype=np.float64)
+    bed = np.asarray(bed, dtype=np.float64)
+    area = np.asarray(area, dtype=np.float64)
+    n_cells, n_nodes = len(depth), len(node_names)
 
-    h_np = h_t.to_numpy()
-    z_np = ez_t.to_numpy()
-    esl_np = esl_t.to_numpy()
-
-    q_source = np.zeros(len(h_np), dtype=np.float32)
-    total_flow = np.zeros(n_nodes, dtype=np.float32)
-
-    # Step 1: secondary cells — SET (=), no /nc, ALL nodes incl. outfalls
-    for i in range(n_nodes):
-        for j in range(int(topo_ptr[i]), int(topo_ptr[i + 1])):
-            ei = int(topo_ei[j])
-            if ei == 0:
-                continue
-            if eu_np is not None and eu_np[ei] == 8:
-                continue  # skip water body elements
-            depth = max(float(h_np[ei]) - float(z_np[ei]), 0.0)
-            area = float(esl_np[ei]) ** 2
-            q = min(0.85 * pi * 0.8 * depth ** 1.5, depth * area / ci)
-            q_source[ei] = -q
-            total_flow[i] += q
-
-    # Step 2: primary cells — accumulate (+=), /nc, node_type gating
-    data_dict: dict = {}
-    for i, name in enumerate(node_names):
-        ei = int(primary_ei[i])
-        if ei == 0:
-            data_dict[name] = {'level': 0.0, 'flow': 0.0}
+    relationships: list[set[int]] = [set() for _ in range(n_cells)]
+    for node in range(n_nodes):
+        if is_outfall[node]:
             continue
+        cells = [int(primary_ei[node])]
+        cells.extend(int(ei) for ei in topo_ei[int(topo_ptr[node]):int(topo_ptr[node + 1])])
+        for ei in set(cells):
+            if ei and land_types[ei] != 8:
+                relationships[ei].add(node)
 
-        # skip water body elements from drainage
-        if eu_np is not None and eu_np[ei] == 8:
-            depth = max(float(h_np[ei]) - float(z_np[ei]), 0.0)
-            level = float(h_np[ei]) if node_is_outfall[i] else depth
-            data_dict[name] = {'level': level, 'flow': float(total_flow[i])}
+    source = np.zeros(n_cells, dtype=np.float64)
+    node_flow = np.zeros(n_nodes, dtype=np.float64)
+    drainage = 0.0
+    for ei in range(1, n_cells):
+        attached = relationships[ei]
+        if not attached:
             continue
+        h = float(depth[ei])
+        q = min(ORIFICE_COEFFICIENT * h ** 1.5, h * float(area[ei]) / window_dt)
+        source[ei] -= q
+        drainage += q
+        for node in attached:
+            node_flow[node] += q / len(attached)
 
-        depth = max(float(h_np[ei]) - float(z_np[ei]), 0.0)
-        area = float(esl_np[ei]) ** 2
-        nc = max(int(nc_per_ei[ei]), 1)
-        node_type = 0 if node_is_outfall[i] else 1
+    overflow = 0.0
+    active_overflow_nodes = 0
+    primary_counts = np.zeros(n_cells, dtype=np.int32)
+    for node in range(n_nodes):
+        if not is_outfall[node] and int(primary_ei[node]) > 0:
+            primary_counts[int(primary_ei[node])] += 1
+    for node, name in enumerate(node_names):
+        ei = int(primary_ei[node])
+        if is_outfall[node] or ei == 0 or land_types[ei] == 8:
+            continue
+        h = float(depth[ei])
+        delta_h = float(heads[name]) - (float(rims[node]) + h)
+        if delta_h <= 0:
+            continue
+        dh_eff = min(delta_h, MAX_OVERFLOW_HEAD_M)
+        q = min(
+            ORIFICE_COEFFICIENT * dh_eff ** 1.5,
+            dh_eff * float(area[ei]) / window_dt / int(primary_counts[ei]),
+        ) * OVERFLOW_RELAXATION
+        source[ei] += q
+        node_flow[node] -= q
+        overflow += q
+        active_overflow_nodes += 1
 
-        # outfall level = WSE (h), junction level = depth
-        level = float(h_np[ei]) if node_is_outfall[i] else depth
+    # The device receives F32 source rates. Pair even that final rounding with
+    # SWMM, keeping the original drainage and overflow formulas unchanged.
+    source_f32 = source.astype(np.float32)
+    for ei in range(1, n_cells):
+        attached = relationships[ei]
+        if attached:
+            correction = (float(source_f32[ei]) - source[ei]) / len(attached)
+            for node in attached:
+                node_flow[node] -= correction
 
-        q = min(0.85 * pi * 0.8 * depth ** 1.5, depth * area / ci) / nc
-        q_source[ei] += -(q * node_type)
-
-        primary_drain = q * node_type
-        data_dict[name] = {
-            'level': level,
-            'flow': float(primary_drain + total_flow[i]),
+    boundaries = {}
+    for node, name in enumerate(node_names):
+        ei = int(primary_ei[node])
+        stage = float(depth[ei] + bed[ei]) if ei else 0.0
+        boundaries[name] = {
+            'level': stage if is_outfall[node] else 0.0,
+            'flow': 0.0 if is_outfall[node] else float(node_flow[node]),
         }
-
-    return data_dict, q_source, h_np, z_np, esl_np
-
-
-def compute_overflow(
-    flood_return: dict,
-    junction_rim: dict,
-    h_np: np.ndarray,
-    z_np: np.ndarray,
-    esl_np: np.ndarray,
-    primary_ei: np.ndarray,
-    nc_per_ei: np.ndarray,
-    coupling_interval: float,
-    node_names: list,
-    node_is_outfall: np.ndarray,
-    eu_np: np.ndarray | None = None,
-) -> dict:
-    """Compute overflow Q_ex from pipe to surface using HEAD vs rim + h_2d.
-
-    Uses the same formula as drainage (symmetric orifice approximation)
-    with a per-cell volume cap divided by nc_per_ei to prevent over-
-    crediting cells shared by multiple nodes.
-
-    Returns {name: Q_ex} where Q_ex >= 0 (pipe → surface).
-    Nodes with primary_ei==0 or outfalls always return 0.
-    """
-    pi = math.pi
-    ci = coupling_interval
-    overflow: dict = {}
-
-    for i, name in enumerate(node_names):
-        if node_is_outfall[i]:
-            overflow[name] = 0.0
-            continue
-
-        ei = int(primary_ei[i])
-        if ei == 0:
-            overflow[name] = 0.0
-            continue
-
-        # Don't overflow into water body cells (type=8)
-        if eu_np is not None and eu_np[ei] == 8:
-            overflow[name] = 0.0
-            continue
-
-        head = flood_return.get(name, {}).get('level', 0.0)
-        rim = junction_rim.get(name, 0.0)
-        h_2d = max(float(h_np[ei]) - float(z_np[ei]), 0.0)
-
-        delta_h = head - (rim + h_2d)
-        if delta_h <= 0.0:
-            overflow[name] = 0.0
-            continue
-
-        # Cap effective Δh to prevent runaway overflow from
-        # SWMM pressurisation (SurDepth=1000 allows extreme HEAD).
-        # Physical manhole overflow rarely exceeds ~3m head.
-        MAX_DELTA_H = 3.0
-        RELAX = 0.5           # under-relaxation to damp oscillation
-        dh_eff = min(delta_h, MAX_DELTA_H)
-
-        area = float(esl_np[ei]) ** 2
-        nc = max(int(nc_per_ei[ei]), 1)
-        q_ex = min(
-            0.85 * pi * 0.8 * dh_eff ** 1.5,
-            dh_eff * area / ci / nc,
-        )
-        overflow[name] = q_ex * RELAX
-
-    return overflow
-
-
-def send_to_1d(shared, data_dict: dict, window_dt: float) -> None:
-    """Push drainage data to the 1D process (non-blocking)."""
-    data_dict['__window_dt__'] = {'level': float(window_dt), 'flow': 0.0}
-    with shared['lock']:
-        shared['2d_data'].clear()
-        shared['2d_data'].update(data_dict)
-        shared['2d_ready'].set()
-        shared['1d_ready'].clear()
-
-
-def receive_from_1d(
-    shared,
-    pipe_cfg: PipeConfig,
-    timer: CouplingTimer | None = None,
-) -> dict:
-    """Wait for and receive 1D flood-return data.
-
-    Returns a dict {node_name: {'level': ..., 'flow': ...}}.
-    Updates *timer* with 1D-wait and 1D-step durations.
-    """
-    t_wait_start = time.perf_counter()
-
-    if shared['stop'].is_set():
-        return {}
-    if not shared['1d_ready'].wait(timeout=pipe_cfg.exchange_timeout):
-        raise TimeoutError('Timeout waiting for 1D pipe data')
-
-    with shared['lock']:
-        pipe_data = dict(shared['1d_data'])
-        shared['1d_ready'].clear()
-
-    t_wait = time.perf_counter() - t_wait_start
-
-    t_1d = 0.0
-    if '__1d_elapsed__' in pipe_data:
-        t_1d = float(pipe_data.pop('__1d_elapsed__'))
-    pipe_data.pop('__window_dt__', None)
-
-    if timer is not None:
-        timer.total_1d_wait += t_wait
-        timer.total_1d_step += t_1d
-
-    return pipe_data
-
-
-def apply_sources(
-    q_source: np.ndarray,
-    overflow: dict,
-    ssq_t,
-    primary_ei: np.ndarray,
-    name_to_idx: dict,
-) -> None:
-    """Add overflow Q_ex to q_source and write to ssq_t.
-
-    q_source already contains drainage terms from compute_drainage().
-    This adds overflow (pipe → surface) at primary cell locations.
-    """
-    for name, q_ex in overflow.items():
-        if q_ex <= 0.0:
-            continue
-        idx = name_to_idx.get(name)
-        if idx is None:
-            continue
-        ei = int(primary_ei[idx])
-        if ei == 0:
-            continue
-        q_source[ei] += q_ex
-
-    q_source[0] = 0.0
-    ssq_t.from_numpy(q_source)
+    source[0] = 0.0
+    diagnostics = {
+        'drainage_m3_s': drainage,
+        'overflow_m3_s': overflow,
+        'net_pipe_source_m3_s': float(source_f32.sum(dtype=np.float64)),
+        'net_swmm_inflow_m3_s': float(node_flow.sum()),
+        'overflow_nodes': active_overflow_nodes,
+        'surface_pipe_balance_m3_s': float(source_f32.sum(dtype=np.float64) + node_flow.sum()),
+    }
+    return source_f32, boundaries, diagnostics, tuple(tuple(sorted(nodes)) for nodes in relationships)

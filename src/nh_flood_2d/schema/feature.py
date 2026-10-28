@@ -1,13 +1,5 @@
 import fastdb4py as fdb
 
-class Rainfall(fdb.Feature):
-    time: fdb.F64
-    quantity: fdb.F64
-
-class Tide(fdb.Feature):
-    time: fdb.F64
-    level: fdb.F64
-
 class IndexLike(fdb.Feature):
     index: fdb.U32
 
@@ -66,19 +58,3 @@ class PipeTopo(fdb.Feature):
         in IndexLike['node_primary_ei'] and must NOT appear in this table.
     """
     ei: fdb.U32
-
-class Gate(fdb.Feature):
-    """
-    Gate information
-    Note:
-    0: upstream Ne index
-    1: downstream Ne index
-    2: gate height
-    3 - 99: influenced Ne indices
-    """
-    info: fdb.U32
-
-class UVH(fdb.Feature):
-    u: fdb.F32
-    v: fdb.F32
-    h: fdb.F32

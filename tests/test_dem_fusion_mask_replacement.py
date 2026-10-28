@@ -16,6 +16,10 @@ import sys
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+import ctypes.util
+if ctypes.util.find_library('gmt') is None:
+    pytest.skip('External libgmt is unavailable; this module imports PyGMT', allow_module_level=True)
+
 # 导入待测试模块
 from src.nh_flood_2d.dem.dem_fusion_mask_replacement import resample_dem_to_4m, rasterize_mask, read_bay_points, read_shenzhenhe_points, merge_point_clouds, create_tin_from_points
 

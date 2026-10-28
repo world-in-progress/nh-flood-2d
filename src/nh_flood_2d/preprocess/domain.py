@@ -174,7 +174,7 @@ def create_ne_fdb_compact(ne_fn: str, fdb_fn: str):
 
 def create_ne_fdb_parallel(ne_fn: str, fdb_fn: str):
     """Create NE FDB from NE file in parallel"""
-    shared_name = 'shared_ne'
+    shared_name = f'shared_ne_{os.getpid()}'
     ne_path = Path(ne_fn)
     if not ne_path.exists():
         raise FileNotFoundError(f'NE file not found: {ne_path}')
@@ -346,7 +346,7 @@ def _filter_ne_ns(ne_fn: str, ns_fn: str, out_ne_fn: str, out_ns_fn: str):
 
 def create_ns_fdb_parallel(ns_fn: str, fdb_fn: str):
     """Create NS FDB from NS file in parallel"""
-    shared_name = 'shared_ns'
+    shared_name = f'shared_ns_{os.getpid()}'
     ns_path = Path(ns_fn)
     if not ns_path.exists():
         raise FileNotFoundError(f'NS file not found: {ns_path}')
@@ -467,79 +467,13 @@ def _batch_ns_worker(ns_si: int, ns_count: int, fdb_fn: str, batch_size: int, ns
         db.close()
 
 def build_boundary_fdb(cfg: DomainConfig):
-    """Create boundary hydro element FDB from NE FDB and NS FDB"""
-    ne_fdb_fn: str = cfg.ne_fdb
-    ns_fdb_fn: str = cfg.ns_fdb
-    fdb_fn: str = cfg.boundary_fdb
-    
-    # Init Taichi
-    init_taichi(use_gpu=True, profiler=True)
-    
-    # Load necessaray information from fdbs
-    es = fdb.ORM.load(ne_fdb_fn, from_file=True)[Ne][Ne]
-    ss = fdb.ORM.load(ns_fdb_fn, from_file=True)[Ns][Ns]
-    s_ts = fdb.ORM.load(ns_fdb_fn, from_file=True)[SideTopoInfo][SideTopoInfo]
-    e_num = len(es)
-    s_num = len(ss)
-    e_xs_t = copy_to_taichi(es.column.x, ti.f32, None)
-    e_ys_t = copy_to_taichi(es.column.y, ti.f32, None)
-    s_ts_t = copy_to_taichi(s_ts.column.info, ti.u32, [s_num, 3])
-    
-    # Set Taichi fields
-    sbf_t = ti.field(dtype=ti.u8, shape=s_num)          # side boundary flag
-    bi_t = ti.field(dtype=ti.u32, shape=e_num)          # boundary element indices
-    bcount_t = ti.field(dtype=ti.u32, shape=())         # boundary element count
-    is_boundary = ti.field(dtype=ti.u8, shape=e_num)    # mark boundary elements
-    bcount_t[None] = 0
-    
-    @ti.kernel
-    def mark_boundary_elements():
-        for si in range(1, s_num):
-            ei = 0
-            sbf_t[si] = 0
-            orient = s_ts_t[si, 0]
-            el = s_ts_t[si, 1]
-            eh = s_ts_t[si, 2]
-            
-            if orient == 1 and el * eh == 0:    # horizontal side
-                ei = el if eh == 0 else eh
-                sbf_t[si] = 1
-            elif orient == 2 and el * eh == 0:  # vertical side
-                ei = el if eh == 0 else eh
-                sbf_t[si] = 1
-            
-            # 808411.0 for mrcg
-            if ei != 0 and e_xs_t[ei] < 808411.0 and e_ys_t[ei] < 837066.0:
-            # if ei != 0 and e_xs_t[ei] < 808361.0 and e_ys_t[ei] < 837066.0:
-                is_boundary[ei] = 1
-
-    @ti.kernel
-    def collect_boundary_elements():
-        for i in range(1, e_num):
-            if is_boundary[i] == 1:
-                idx = ti.atomic_add(bcount_t[None], 1)
-                bi_t[idx] = i
-    
-    mark_boundary_elements()
-    collect_boundary_elements()
-    
-    # Create boundary FDB
-    capacity = int(bcount_t.to_numpy()[None][0])
-    print(f'Boundary element count: {capacity}')
-    db = fdb.ORM.truncate([
-        fdb.TableDefn(IndexLike, capacity, 'bdei'),
-        fdb.TableDefn(U8Value, s_num, 'sbf')
-    ])
-    bdei: np.ndarray = db[IndexLike]['bdei'].column.index
-    bdei[:] = bi_t.to_numpy()[:capacity]
-    sbf: np.ndarray = db[U8Value]['sbf'].column.value
-    sbf[:] = sbf_t.to_numpy()[:s_num]
-    
-    # Save to file
-    fdb_path = Path(fdb_fn)
-    fdb_path.parent.mkdir(parents=True, exist_ok=True)
-    db.save(str(fdb_path))
-    db.unlink()
+    """All exterior sides are closed; cell forcing is loaded separately."""
+    ns_db = fdb.ORM.load(cfg.ns_fdb, from_file=True)
+    topo = ns_db[SideTopoInfo][SideTopoInfo].column.info.reshape(-1, 3)
+    flags = ((topo[:, 1] == 0) ^ (topo[:, 2] == 0)).astype(np.uint8)
+    db = fdb.ORM.truncate([fdb.TableDefn(U8Value, len(topo), 'sbf')])
+    db[U8Value]['sbf'].column.value[:] = flags
+    db.save(cfg.boundary_fdb)
 
 def _check_ne_fdb(ne_fn: str, fdb_fn: str):
     db = fdb.ORM.load(fdb_fn, from_file=True)

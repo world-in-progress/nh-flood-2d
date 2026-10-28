@@ -1,131 +1,48 @@
 import numpy as np
 import pandas as pd
-import taichi as ti
-import fastdb4py as fdb
 from pathlib import Path
-from datetime import datetime
+from typing import Literal
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.figure import Figure
 
 from ..input import DomainConfig
-from ..util.ti import init_taichi, copy_to_taichi
-from ..schema.feature import UVH, Ne, Ns, IndexLike
 
-def _find_ei(ne_fdb_path: str, ns_fdb_path: str, x: float, y: float) -> int:
-    init_taichi(use_gpu=True)
-    
-    ne_fdb = fdb.ORM.load(ne_fdb_path, from_file=True)
-    ns_fdb = fdb.ORM.load(ns_fdb_path, from_file=True)
-    
-    nes = ne_fdb[Ne][Ne]
-    nss = ns_fdb[Ns][Ns]
-    
-    e_num = len(nes)
-    
-    exs = copy_to_taichi(nes.column.x, ti.f32, None)
-    eys = copy_to_taichi(nes.column.y, ti.f32, None)
-    sxs = copy_to_taichi(nss.column.x, ti.f32, None)
-    sys = copy_to_taichi(nss.column.y, ti.f32, None)
-    isl_data  = copy_to_taichi(ne_fdb[IndexLike]['isl_data'].column.index,  ti.i32, None)
-    isl_ptr_l = copy_to_taichi(ne_fdb[IndexLike]['isl_ptr_l'].column.index, ti.i32, None)
-    isl_ptr_b = copy_to_taichi(ne_fdb[IndexLike]['isl_ptr_b'].column.index, ti.i32, None)
+_QUANTITY_LABEL = {"depth": "Water Depth", "level": "Water Level"}
 
-    the_ei = ti.field(ti.i32, shape=())
-    the_ei[None] = -1
+def _extract_data(cfg: DomainConfig, station_name: str, quantity: Literal['depth', 'level']) -> pd.DataFrame:
+    """Load samples already recorded at the station's resolved cell."""
+    path = Path(cfg.domain_dir) / 'output' / 'stations.csv'
+    samples = pd.read_csv(path)
+    selected = samples.loc[(samples['station'] == station_name) & (samples['elapsed_seconds'] >= 0), ['time', quantity]].copy()
+    if selected.empty:
+        raise ValueError(f'No simulated samples for station {station_name} in {path}')
+    selected['datetime'] = pd.to_datetime(selected.pop('time')).dt.tz_localize(None)
+    selected.sort_values('datetime', inplace=True)
+    return selected
 
-    @ti.kernel
-    def get_ei():
-        for ei in range(1, e_num):
-            lsi0 = isl_data[isl_ptr_l[ei]]   # first left side
-            lsi2 = isl_data[isl_ptr_b[ei]]   # first bottom side
-            slh = ti.floor(exs[ei] - sxs[lsi0] + 0.5) * 2.0
-            slv = ti.floor(eys[ei] - sys[lsi2] + 0.5) * 2.0
-            
-            xmin = exs[ei] - slh * 0.5
-            ymin = eys[ei] - slv * 0.5
-            xmax = exs[ei] + slh * 0.5
-            ymax = eys[ei] + slv * 0.5
-            
-            if xmin <= x and x <= xmax and ymin <= y and y <= ymax:
-                the_ei[None] = ei
-    
-    get_ei()
-    return the_ei[None]
-
-def _extract_data(cfg: DomainConfig, station_name: str):
-    db_path = Path(cfg.uvh_dir)
-    
-    # Find the hydro element index (the_ei) containing the hydrograph point
-    px, py = cfg.hydrograph_points[station_name]
-    the_ei = _find_ei(cfg.ne_fdb, cfg.ns_fdb, px, py)
-    if the_ei == -1:
-        raise ValueError(f'No hydro element found containing point ({px}, {py}) for station {station_name}')
-    
-    # Extract and sort times from uvh fdb file names
-    times: list[str] = []
-    for db_file in db_path.glob('*.fdb'):
-        time_str = db_file.stem.split('_')[-1]
-        times.append(time_str)
-    times.sort(
-        key=lambda x: datetime.strptime(x, '%Y%m%d-%H%M%S').timestamp()
-    )
-    
-    # Extract water depth at the_ei for each timestamp and save to txt file
-    hs: list[float] = []
-    for time_str in times:
-        db_file = str(db_path / f'uvh_{time_str}.fdb')
-        db = fdb.ORM.load(db_file, from_file=True)
-        
-        uvh = db[UVH][UVH].column.h
-        h = uvh[the_ei]
-        hs.append(float(h))
-    
-    with open(f'{cfg.hydrograph_dir}/{station_name}.txt', 'w') as f:
-        for time_str, h in zip(times, hs):
-            f.write(f'{time_str}, {h}\n')
-
-def _load_observation_water_depth(observation_file: Path) -> pd.DataFrame:
+def _load_observation_series(observation_file: Path, quantity: Literal['depth', 'level']) -> pd.DataFrame:
+    """Read one explicitly selected physical quantity; reject the other type."""
     df = pd.read_csv(observation_file)
-    if df.empty:
-        return pd.DataFrame(columns=['datetime', 'Waterdepth'])
+    columns = [name for name in df.columns
+               if 'water' in name.lower() and quantity in name.lower()]
+    if len(columns) != 1:
+        raise ValueError(f'Need exactly one water {quantity} column in {observation_file}')
+    df['datetime'] = pd.to_datetime(df['Date'] + ' ' + df['Time'], dayfirst=True)
+    df[quantity] = pd.to_numeric(df[columns[0]])
+    return df[['datetime', quantity]].dropna(subset=[quantity]).sort_values('datetime')
 
-    df['datetime'] = pd.to_datetime(
-        df['Date'] + ' ' + df['Time'],
-        dayfirst=True
-    )
-
-    water_depth_column = next(
-        (
-            column_name
-            for column_name in df.columns
-            if 'water' in column_name.lower()
-            and ('depth' in column_name.lower() or 'level' in column_name.lower())
-        ),
-        None,
-    )
-    if water_depth_column is None:
-        raise ValueError(
-            f'No water depth column found in observation file {observation_file}'
-        )
-
-    df['Waterdepth'] = pd.to_numeric(df[water_depth_column], errors='coerce')
-    obs_df = df[['datetime', 'Waterdepth']].dropna(subset=['Waterdepth']).copy()
-    obs_df.sort_values('datetime', inplace=True)
-    return obs_df
-            
-def draw_hydrograph(cfg: DomainConfig, station_name: str, clampped: bool = True, translation_second: int = 0):
+def draw_hydrograph(cfg: DomainConfig, station_name: str, quantity: Literal['depth', 'level'], clampped: bool = True, translation_second: int = 0):
     observation_file = Path(cfg.observation_dir) / f'{station_name}.csv'
     if not observation_file.exists():
         raise FileNotFoundError(f'Observation file for station {station_name} not found at {observation_file}')
     
-    # Load observed water depth data.
-    obs_df = _load_observation_water_depth(observation_file)
+    # Load the selected observed quantity.
+    obs_df = _load_observation_series(observation_file, quantity)
     
     # Extract and load simulation data
-    _extract_data(cfg, station_name)
-    sim_df = pd.read_csv(f'{cfg.hydrograph_dir}/{station_name}.txt', header=None, names=['datetime', 'depth'])
-    sim_df['datetime'] = pd.to_datetime(sim_df['datetime'], format='%Y%m%d-%H%M%S') + pd.to_timedelta(translation_second, unit='s')
+    sim_df = _extract_data(cfg, station_name, quantity)
+    sim_df['datetime'] += pd.to_timedelta(translation_second, unit='s')
     sim_df.sort_values('datetime', inplace=True)
     
     # Clamp time range to the overlapping period of observation and simulation data if clampped is True
@@ -144,17 +61,17 @@ def draw_hydrograph(cfg: DomainConfig, station_name: str, clampped: bool = True,
     
     plt.figure(figsize=(12, 6))
     plt.plot(
-        obs_df['datetime'], obs_df['Waterdepth'],
-        label='Observed Water Depth (m)', linewidth=2
+        obs_df['datetime'], obs_df[quantity],
+        label=f'Observed {_QUANTITY_LABEL[quantity]} (m)', linewidth=2
     )
     plt.plot(
-        sim_df['datetime'], sim_df['depth'],
-        label='Simulated Water Depth (m)', linewidth=2
+        sim_df['datetime'], sim_df[quantity],
+        label=f'Simulated {_QUANTITY_LABEL[quantity]} (m)', linewidth=2
     )
     
     plt.title(f'Hydrograph at Station {station_name}', fontsize=16)
     plt.xlabel('Time', fontsize=14)
-    plt.ylabel('Water Depth (m)', fontsize=14)
+    plt.ylabel(f'{_QUANTITY_LABEL[quantity]} (m)', fontsize=14)
     plt.legend()
     plt.tight_layout()
     plt.show()
@@ -162,6 +79,7 @@ def draw_hydrograph(cfg: DomainConfig, station_name: str, clampped: bool = True,
 def _prepare_hydrograph_comparison_data(
     cfgs: list[DomainConfig],
     station_name: str,
+    quantity: Literal['depth', 'level'],
     clampped: bool = True,
     translation_second: int = 0,
     forward_ignore_second: int = 0,
@@ -183,18 +101,17 @@ def _prepare_hydrograph_comparison_data(
             'All configs must use the same observation data.'
         )
 
-    # Load observed water depth data from the single validated observation file.
+    # Load the selected quantity from the single validated observation file.
     obs_df = None
     if show_obs and unique_obs_paths:
         observation_file = Path(unique_obs_paths[0])
-        obs_df = _load_observation_water_depth(observation_file)
+        obs_df = _load_observation_series(observation_file, quantity)
 
     # Extract and load simulation data for each config
     sim_dfs: list[tuple[str, pd.DataFrame]] = []
     for cfg in cfgs:
-        _extract_data(cfg, station_name)
-        sim_df = pd.read_csv(f'{cfg.hydrograph_dir}/{station_name}.txt', header=None, names=['datetime', 'depth'])
-        sim_df['datetime'] = pd.to_datetime(sim_df['datetime'], format='%Y%m%d-%H%M%S') + pd.to_timedelta(translation_second, unit='s')
+        sim_df = _extract_data(cfg, station_name, quantity)
+        sim_df['datetime'] += pd.to_timedelta(translation_second, unit='s')
         sim_df.sort_values('datetime', inplace=True)
 
         # Drop the first forward_ignore_second seconds of simulation data
@@ -226,7 +143,7 @@ def _prepare_hydrograph_comparison_data(
     return obs_df, sim_dfs
 
 def compare_hydrograph(
-    cfgs: list[DomainConfig], station_name: str,
+    cfgs: list[DomainConfig], station_name: str, quantity: Literal['depth', 'level'],
     clampped: bool = True, 
     translation_second: int = 0, forward_ignore_second: int = 0,
     show_obs: bool = True,
@@ -236,6 +153,7 @@ def compare_hydrograph(
     obs_df, sim_dfs = _prepare_hydrograph_comparison_data(
         cfgs,
         station_name,
+        quantity,
         clampped=clampped,
         translation_second=translation_second,
         forward_ignore_second=forward_ignore_second,
@@ -245,25 +163,25 @@ def compare_hydrograph(
     plt.figure(figsize=(12, 6))
     if obs_df is not None:
         plt.plot(
-            obs_df['datetime'], obs_df['Waterdepth'],
-            label='Observed Water Depth (m)', linewidth=2
+            obs_df['datetime'], obs_df[quantity],
+            label=f'Observed {_QUANTITY_LABEL[quantity]} (m)', linewidth=2
         )
     for label, sim_df in sim_dfs:
         plt.plot(
-            sim_df['datetime'], sim_df['depth'],
-            label=f'Simulated Water Depth (m) [{label}]', linewidth=2
+            sim_df['datetime'], sim_df[quantity],
+            label=f'Simulated {_QUANTITY_LABEL[quantity]} (m) [{label}]', linewidth=2
         )
 
     if show:
         ax = plt.gca()
         ax.set_title(
-            f'Water Depth Hydrograph Comparison at {station_name}',
+            f'{_QUANTITY_LABEL[quantity]} Hydrograph Comparison at {station_name}',
             fontsize=16,
             fontname='Times New Roman',
             fontweight='bold'
         )
         ax.set_xlabel('Time', fontsize=14, fontname='Times New Roman', fontweight='bold')
-        ax.set_ylabel('Water Depth (m)', fontsize=14, fontname='Times New Roman', fontweight='bold')
+        ax.set_ylabel(f'{_QUANTITY_LABEL[quantity]} (m)', fontsize=14, fontname='Times New Roman', fontweight='bold')
         ax.legend(prop={'family': 'Times New Roman', 'weight': 'bold'})
         for tick_label in ax.get_xticklabels() + ax.get_yticklabels():
             tick_label.set_fontname('Times New Roman')
@@ -290,7 +208,7 @@ def compare_hydrograph(
         _, baseline_df = baseline_entry
 
         base_ts = baseline_df['datetime'].astype(np.int64).values / 1e9
-        base_vals = baseline_df['depth'].values
+        base_vals = baseline_df[quantity].values
 
         rmse_values: list[float] = []
         nse_values: list[float] = []
@@ -298,7 +216,7 @@ def compare_hydrograph(
             if lbl == baseline_label:
                 continue
             sim_ts = sim_df['datetime'].astype(np.int64).values / 1e9
-            interp_vals = np.interp(base_ts, sim_ts, sim_df['depth'].values)
+            interp_vals = np.interp(base_ts, sim_ts, sim_df[quantity].values)
             rmse_values.append(float(np.sqrt(np.mean((base_vals - interp_vals) ** 2))))
             nse_values.append(_nse(base_vals, interp_vals))
         return rmse_values, nse_values
@@ -308,13 +226,13 @@ def compare_hydrograph(
             return [], []
 
         base_ts = obs_df['datetime'].astype(np.int64).values / 1e9
-        base_vals = obs_df['Waterdepth'].values
+        base_vals = obs_df[quantity].values
 
         rmse_values = []
         nse_values = []
         for lbl, sim_df in sim_dfs:
             sim_ts = sim_df['datetime'].astype(np.int64).values / 1e9
-            interp_vals = np.interp(base_ts, sim_ts, sim_df['depth'].values)
+            interp_vals = np.interp(base_ts, sim_ts, sim_df[quantity].values)
             rmse_values.append(float(np.sqrt(np.mean((base_vals - interp_vals) ** 2))))
             nse_values.append(_nse(base_vals, interp_vals))
         return rmse_values, nse_values
@@ -322,13 +240,14 @@ def compare_hydrograph(
 def compare_hydrograph_panels(
     cfgs: list[DomainConfig],
     station_names: list[str],
+    quantity: Literal['depth', 'level'],
     clampped: bool = True,
     translation_second: int = 0,
     forward_ignore_second: int = 0,
     show_obs: bool = False,
     show: bool = True,
     output_path: str | None = None,
-    title: str = 'Water Depth Hydrograph Comparison',
+    title: str | None = None,
     figsize: tuple[float, float] | None = None,
     dpi: int = 300,
 ) -> Figure:
@@ -344,6 +263,7 @@ def compare_hydrograph_panels(
         obs_df, sim_dfs = _prepare_hydrograph_comparison_data(
             cfgs,
             station_name,
+            quantity,
             clampped=clampped,
             translation_second=translation_second,
             forward_ignore_second=forward_ignore_second,
@@ -352,13 +272,13 @@ def compare_hydrograph_panels(
         station_plots.append((station_name, obs_df, sim_dfs))
 
         if obs_df is not None and not obs_df.empty:
-            all_depth_values.extend(obs_df['Waterdepth'].tolist())
+            all_depth_values.extend(obs_df[quantity].tolist())
             all_start_times.append(obs_df['datetime'].min())
             all_end_times.append(obs_df['datetime'].max())
         for _, sim_df in sim_dfs:
             if sim_df.empty:
                 continue
-            all_depth_values.extend(sim_df['depth'].tolist())
+            all_depth_values.extend(sim_df[quantity].tolist())
             all_start_times.append(sim_df['datetime'].min())
             all_end_times.append(sim_df['datetime'].max())
 
@@ -388,15 +308,15 @@ def compare_hydrograph_panels(
         if obs_df is not None:
             axis.plot(
                 obs_df['datetime'],
-                obs_df['Waterdepth'],
-                label='Observed Water Depth (m)',
+                obs_df[quantity],
+                label=f'Observed {_QUANTITY_LABEL[quantity]} (m)',
                 linewidth=2,
             )
         for label, sim_df in sim_dfs:
             axis.plot(
                 sim_df['datetime'],
-                sim_df['depth'],
-                label=f'Simulated Water Depth (m) [{label}]',
+                sim_df[quantity],
+                label=f'Simulated {_QUANTITY_LABEL[quantity]} (m) [{label}]',
                 linewidth=2,
             )
 
@@ -425,7 +345,7 @@ def compare_hydrograph_panels(
             tick_label.set_fontname('Times New Roman')
             tick_label.set_fontweight('normal')
 
-    axes[0].set_ylabel('Water Depth (m)', fontsize=13, fontname='Times New Roman', fontweight='semibold')
+    axes[0].set_ylabel(f'{_QUANTITY_LABEL[quantity]} (m)', fontsize=13, fontname='Times New Roman', fontweight='semibold')
 
     # Use a single, external legend to avoid covering hydrograph lines.
     legend_handles: list = []
@@ -449,7 +369,7 @@ def compare_hydrograph_panels(
         )
 
     fig.suptitle(
-        title,
+        title or f'{_QUANTITY_LABEL[quantity]} Hydrograph Comparison',
         fontsize=20,
         fontname='Times New Roman',
         fontweight='semibold',

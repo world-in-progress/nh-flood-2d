@@ -4,58 +4,54 @@ import numpy as np
 import taichi as ti
 import fastdb4py as fdb
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import no_type_check
 from rasterio.transform import from_origin
 
 from ..input import DomainConfig, ForceConfig
+from ..preprocess.force import MeshGeometry, RainField
 from ..util import init_taichi, copy_to_taichi
-from ..schema.feature import Ne, UVH, Ns, IndexLike, Rainfall
+from ..schema.feature import Ne, Ns, IndexLike
+from ..core.output import BedTimeline, list_depth_frames, read_depth_frame, read_extrema
     
 # Check if grid is too large for single Taichi field (limit near 2^31 elements, but practical limit lower)
 # Using 20000x20000 as a safe threshold for tiling
 TILE_SIZE = 4096
 
 
-def _load_rainfall_plot_series(rain_fdb_path: str | Path) -> tuple[list[datetime], np.ndarray]:
-    """Load rainfall timestamps/quantities for plotting on the same local-time axis as UVH files."""
-    rain_fdb = fdb.ORM.load(str(rain_fdb_path), from_file=True)
-    rainfalls = rain_fdb[Rainfall][Rainfall]
-    rain_times = [datetime.fromtimestamp(float(t)) for t in rainfalls.column.time]
-    rain_qty = rainfalls.column.quantity.copy()
-    return rain_times, rain_qty
+def _load_rainfall_plot_series(
+    domain_cfg: DomainConfig, force_cfg: ForceConfig,
+) -> tuple[list[datetime], np.ndarray, np.ndarray]:
+    """Return clipped interval starts, mesh-mean mm/hr, and widths in seconds.
 
-
-def _validate_uvh_snapshot_size(
-    label: str,
-    uvh_path: str | Path,
-    timestamp: str,
-    actual_size: int,
-    expected_size: int,
-) -> None:
-    if actual_size != expected_size:
-        raise ValueError(
-            f'UVH snapshot size mismatch for {label} at {timestamp}: '
-            f'{uvh_path} has {actual_size} rows, but the current mesh expects {expected_size}. '
-            'This usually means the UVH snapshots were generated from a different mesh or '
-            'preprocessed domain revision. Regenerate the UVH outputs or use matching '
-            'ne.fdb/ns.fdb and uvh files.'
-        )
-
-@ti.kernel
-@no_type_check
-def compute_depth(h: ti.template(), z: ti.template(), depth: ti.template(), min_h: float, invalid_data: float):
+    Frame wall times derive from ``domain_cfg.start``. Matplotlib receives
+    naive wall times for both rainfall and model series.
     """
-    Compute water depth for each element.
-    Water depth = max(h - z, 0)
-    """
-    for i in h:
-        depth[i] = ti.max(h[i] - z[i], 0.0)
-        if depth[i] < min_h:
-            depth[i] = invalid_data  # mark as invalid if depth < threshold
-        # depth[i] = h[i]
-        # if (h[i] - z[i]) < 0.2:  # if depth < 0.2m, consider it dry
-        #     depth[i] = -9999.0  # mark as invalid if max depth < threshold
+    ne_db = fdb.ORM.load(domain_cfg.ne_fdb, from_file=True)
+    ns_db = fdb.ORM.load(domain_cfg.ns_fdb, from_file=True)
+    mesh = MeshGeometry.from_fdb(ne_db, ns_db)
+    rain = RainField.load(force_cfg.rainfall, mesh, domain_cfg.epsg_code,
+                          domain_cfg.start, 0, domain_cfg.duration)
+    area = mesh.area[1:]
+    pixel_area = np.bincount(rain.pixel_index[1:], weights=area,
+                             minlength=rain.millimetres.shape[1])
+    total_area = pixel_area.sum(dtype=np.float64)
+    if not np.isfinite(total_area) or total_area <= 0:
+        raise ValueError('Rainfall plot requires positive finite mesh area')
+    mean_mm = rain.millimetres @ pixel_area / total_area
+    starts = np.maximum(rain.starts, 0.)
+    ends = np.minimum(rain.ends, float(domain_cfg.duration))
+    selected = ends > starts
+    widths = ends[selected] - starts[selected]
+    rates = mean_mm[selected] * (3600. / (rain.ends[selected] - rain.starts[selected]))
+    dates = [(domain_cfg.start + timedelta(seconds=float(t))).replace(tzinfo=None)
+             for t in starts[selected]]
+    return dates, rates, widths
+
+
+def _masked_depth(depth: np.ndarray, min_depth: float, invalid_data: float) -> np.ndarray:
+    """Apply the display threshold to stored water depth without WSE subtraction."""
+    return np.where(depth >= min_depth, depth, invalid_data).astype(np.float32)
 
 def get_area_meta(ne_fdb_fn: str, ns_fdb_fn: str):
     """
@@ -120,7 +116,7 @@ def get_area_meta(ne_fdb_fn: str, ns_fdb_fn: str):
 
 def generate_flood_map(cfg: DomainConfig):
     """
-    Generate a GeoTIFF flood map from UVH calculation results.
+    Generate GeoTIFF flood maps from 900-second depth frames.
     """
     init_taichi()
     
@@ -129,16 +125,15 @@ def generate_flood_map(cfg: DomainConfig):
     min_h = cfg.min_h
     ne_fdb_fn = cfg.ne_fdb
     ns_fdb_fn = cfg.ns_fdb
-    uvhs_dir = cfg.uvh_dir
+    frames_dir = Path(cfg.domain_dir) / 'output' / 'frames'
     epsg_code = cfg.epsg_code
     output_dir = cfg.flood_map_dir
     
     # Check input files
-    uvhs_path = Path(uvhs_dir)
     ne_fdb_path = Path(ne_fdb_fn)
     ns_fdb_path = Path(ns_fdb_fn)
-    if not ne_fdb_path.exists() or not ns_fdb_path.exists() or not uvhs_path.exists():
-        raise FileNotFoundError(f'ne.fdb or ns.fdb or uvh directory not found at {ne_fdb_path} or {ns_fdb_path} or {uvhs_path}')
+    if not ne_fdb_path.exists() or not ns_fdb_path.exists() or not frames_dir.exists():
+        raise FileNotFoundError(f'Mesh or depth frames not found: {ne_fdb_path}, {ns_fdb_path}, {frames_dir}')
     
     # Clean output directory
     output_dir = Path(output_dir)
@@ -168,7 +163,6 @@ def generate_flood_map(cfg: DomainConfig):
     # Prepared Taichi Fields for elements
     x_field = copy_to_taichi(nes.column.x[1:], ti.f32, None)
     y_field = copy_to_taichi(nes.column.y[1:], ti.f32, None)
-    z_field = copy_to_taichi(nes.column.z[1:], ti.f32, None)
     
     # Element dimensions fields
     hw_field = copy_to_taichi(half_widths, ti.f32, None)
@@ -177,8 +171,7 @@ def generate_flood_map(cfg: DomainConfig):
     real_e_cnt = e_cnt - 1  # skip virtual element 0
 
     # Pre-allocate per-timestep Taichi fields once and reuse them to avoid
-    # repeated GPU allocations when processing long UVH sequences.
-    h_field = ti.field(dtype=ti.f32, shape=real_e_cnt)
+    # repeated GPU allocations when processing long depth-frame sequences.
     depth_field = ti.field(dtype=ti.f32, shape=real_e_cnt)
     tile_field = ti.field(dtype=ti.f32, shape=(TILE_SIZE, TILE_SIZE))
 
@@ -211,11 +204,12 @@ def generate_flood_map(cfg: DomainConfig):
             tile_min_y = tile_max_y - t_rows * vr
             if (e_max_x >= tile_min_x and e_min_x < tile_max_x and
                 e_max_y >= tile_min_y and e_min_y < tile_max_y):
-                # Convert world bounds to tile-relative grid coordinates
-                start_col_f = ti.floor((e_min_x - tile_min_x) / hr)
-                end_col_f   = ti.floor((e_max_x - tile_min_x) / hr)
-                start_row_f = ti.floor((tile_max_y - e_max_y) / vr)
-                end_row_f   = ti.floor((tile_max_y - e_min_y) / vr)
+                # Assign pixel centres with half-open cell bounds; neighbouring
+                # cells must never race to write one boundary pixel.
+                start_col_f = ti.ceil((e_min_x - tile_min_x) / hr - 0.5)
+                end_col_f   = (ti.ceil((e_max_x - tile_min_x) / hr - 0.5) - 1)
+                start_row_f = ti.ceil((tile_max_y - e_max_y) / vr - 0.5)
+                end_row_f   = (ti.ceil((tile_max_y - e_min_y) / vr - 0.5) - 1)
 
                 col_start = int(start_col_f)
                 col_end   = int(end_col_f)
@@ -234,25 +228,17 @@ def generate_flood_map(cfg: DomainConfig):
                     for c in range(col_start, col_end + 1):
                         tile[r, c] = d
 
-    # Make flood map for all UVH files in the directory
-    uvh_paths = list(uvhs_path.glob('uvh_*.fdb'))
-    uvh_paths.sort(
-        key=lambda p: datetime.strptime(p.stem.split('_')[-1], '%Y%m%d-%H%M%S').timestamp()
-    )
-    for idx, uvh_file in enumerate(uvh_paths):
-        print(f'Processing UVH file: {uvh_file} ...')
+    # Frames carry depth only; the run start supplies each GeoTIFF's wall time.
+    for idx, (seconds, frame_path) in enumerate(list_depth_frames(frames_dir.parent)):
+        print(f'Processing depth frame: {frame_path} ...')
         
-        # Output file name based on UVH file name (e.g., flood_map_0_20240101-120000.tif)
-        out_name = f'flood_map_{idx}_{uvh_file.stem.split("_")[-1]}.tif'
+        # Preserve wall-time names for the downstream video label.
+        stamp = (cfg.start + timedelta(seconds=seconds)).strftime('%Y%m%d-%H%M%S')
+        out_name = f'flood_map_{idx}_{stamp}.tif'
         out_path = output_dir / out_name
 
-        # Load UVH data
-        uvh_fdb = fdb.ORM.load(str(uvh_file), from_file=True)
-        uvhs = uvh_fdb[UVH][UVH]
-        
-        # Reuse pre-allocated fields; avoids cumulative GPU memory growth.
-        h_field.from_numpy(uvhs.column.h[1:].astype(np.float32))
-        compute_depth(h_field, z_field, depth_field, min_h=min_h, invalid_data=no_data)
+        depth = read_depth_frame(frame_path, expected_count=e_cnt)
+        depth_field.from_numpy(_masked_depth(depth[1:], min_h, no_data))
         
         # Calculate geotransform
         transform = from_origin(min_x, max_y, hr_np, vr_np)
@@ -306,9 +292,9 @@ def generate_flood_map(cfg: DomainConfig):
 
 def generate_max_inundation_extent_map(cfg: DomainConfig, min_depth: float = 0.05, invalid_data: float = -9999.0, is_absolute: bool = False):
     """
-    Generate a single GeoTIFF showing the maximum inundation extent across all UVH timesteps.
+    Generate a GeoTIFF from the per-step maximum water depth.
 
-    For each pixel, the maximum water depth over all output steps is computed.
+    Maximum depth is accumulated by the solver on every completed step.
     Pixels whose maximum depth never reaches `min_depth` are set to `invalid_data` (nodata).
     Pixels that do reach `min_depth` retain their maximum depth value.
 
@@ -318,23 +304,22 @@ def generate_max_inundation_extent_map(cfg: DomainConfig, min_depth: float = 0.0
       - `invalid_data` for pixels outside the domain (e.g., -128)
 
     Uses the same Taichi-accelerated tiled rasterization approach as generate_flood_map.
-    Optimized: accumulates per-element max h on GPU across all timesteps, then rasterizes once.
+    Rasterizes the stored maximum once.
     Output: <domain_dir>/max_inundation/max_inundation.tif
     """
     init_taichi()
 
     ne_fdb_fn = cfg.ne_fdb
     ns_fdb_fn = cfg.ns_fdb
-    uvhs_dir = cfg.uvh_dir
+    extrema_path = Path(cfg.domain_dir) / 'output' / 'extrema.fdb'
     epsg_code = cfg.epsg_code
     output_path = Path(cfg.max_inundation_dir) / 'max_inundation.tif'
 
     # Check input files
-    uvhs_path = Path(uvhs_dir)
     ne_fdb_path = Path(ne_fdb_fn)
     ns_fdb_path = Path(ns_fdb_fn)
-    if not ne_fdb_path.exists() or not ns_fdb_path.exists() or not uvhs_path.exists():
-        raise FileNotFoundError(f'ne.fdb or ns.fdb or uvh directory not found at {ne_fdb_path} or {ns_fdb_path} or {uvhs_path}')
+    if not ne_fdb_path.exists() or not ns_fdb_path.exists() or not extrema_path.exists():
+        raise FileNotFoundError(f'Mesh or extrema not found: {ne_fdb_path}, {ns_fdb_path}, {extrema_path}')
 
     # Calculate area metadata
     (min_x, min_y, max_x, max_y), (vr_np, hr_np), half_widths, half_heights = get_area_meta(str(ne_fdb_path), str(ns_fdb_path))
@@ -356,64 +341,35 @@ def generate_max_inundation_extent_map(cfg: DomainConfig, min_depth: float = 0.0
 
     x_field  = copy_to_taichi(nes.column.x[1:], ti.f32, None)
     y_field  = copy_to_taichi(nes.column.y[1:], ti.f32, None)
-    z_field  = copy_to_taichi(nes.column.z[1:], ti.f32, None)
     hw_field = copy_to_taichi(half_widths, ti.f32, None)
     hh_field = copy_to_taichi(half_heights, ti.f32, None)
 
-    # Sort UVH files chronologically
-    uvh_paths = list(uvhs_path.glob('uvh_*.fdb'))
-    uvh_paths.sort(
-        key=lambda p: datetime.strptime(p.stem.split('_')[-1], '%Y%m%d-%H%M%S').timestamp()
-    )
-
-    if not uvh_paths:
-        print('No UVH files found. Nothing to process.')
-        return
-
     real_e_cnt = e_cnt - 1  # skip virtual element 0
+    max_depth_field = ti.field(dtype=ti.f32, shape=real_e_cnt)
+    max_depth_field.from_numpy(read_extrema(extrema_path, expected_count=e_cnt).max_depth[1:])
 
-    # Per-element max-h accumulator on GPU, initialized to -inf so any real h wins
-    max_h_field = ti.field(dtype=ti.f32, shape=real_e_cnt)
-    max_h_field.fill(-1e10)
-
-    @ti.kernel
-    @no_type_check
-    def update_max_h(h: ti.template(), max_h: ti.template()):
-        for i in h:
-            ti.atomic_max(max_h[i], h[i])
-
-    h_field = ti.field(dtype=ti.f32, shape=real_e_cnt)
-
-    # Pass 1: scan all timesteps, keep per-element maximum h on GPU
-    for uvh_file in uvh_paths:
-        print(f'Processing UVH file: {uvh_file} ...')
-        uvh_fdb = fdb.ORM.load(str(uvh_file), from_file=True)
-        uvhs = uvh_fdb[UVH][UVH]
-        h_field.from_numpy(uvhs.column.h[1:].astype(np.float32))
-        update_max_h(h_field, max_h_field)
-
-    # Pass 2: compute max depth once and rasterize once
+    # Pass 2: threshold maximum depth once and rasterize once
     depth_field = ti.field(dtype=ti.f32, shape=real_e_cnt)
 
     if is_absolute:
         @ti.kernel
         @no_type_check
-        def compute_depth_max(h: ti.template(), z: ti.template(), depth: ti.template()):
-            for i in h:
-                if (h[i] - z[i]) >= min_depth:
+        def compute_depth_max(maximum: ti.template(), depth: ti.template()):
+            for i in maximum:
+                if maximum[i] >= min_depth:
                     depth[i] = 1.0
                 else:
                     depth[i] = 0.0
     else:
         @ti.kernel
         @no_type_check
-        def compute_depth_max(h: ti.template(), z: ti.template(), depth: ti.template()):
-            for i in h:
-                depth[i] = h[i]
-                if (h[i] - z[i]) < min_depth:
-                    depth[i] = -9999.0  # mark as invalid if max depth < threshold
+        def compute_depth_max(maximum: ti.template(), depth: ti.template()):
+            for i in maximum:
+                depth[i] = maximum[i]
+                if maximum[i] < min_depth:
+                    depth[i] = invalid_data
 
-    compute_depth_max(max_h_field, z_field, depth_field)
+    compute_depth_max(max_depth_field, depth_field)
 
     tile_field = ti.field(dtype=ti.f32, shape=(TILE_SIZE, TILE_SIZE))
 
@@ -442,10 +398,10 @@ def generate_max_inundation_extent_map(cfg: DomainConfig, min_depth: float = 0.0
             tile_min_y = tile_max_y - t_rows * vr
             if (e_max_x >= tile_min_x and e_min_x < tile_max_x and
                     e_max_y >= tile_min_y and e_min_y < tile_max_y):
-                start_col_f = ti.floor((e_min_x - tile_min_x) / hr)
-                end_col_f   = ti.floor((e_max_x - tile_min_x) / hr)
-                start_row_f = ti.floor((tile_max_y - e_max_y) / vr)
-                end_row_f   = ti.floor((tile_max_y - e_min_y) / vr)
+                start_col_f = ti.ceil((e_min_x - tile_min_x) / hr - 0.5)
+                end_col_f   = (ti.ceil((e_max_x - tile_min_x) / hr - 0.5) - 1)
+                start_row_f = ti.ceil((tile_max_y - e_max_y) / vr - 0.5)
+                end_row_f   = (ti.ceil((tile_max_y - e_min_y) / vr - 0.5) - 1)
 
                 col_start = ti.max(0, int(start_col_f))
                 col_end   = ti.min(t_cols - 1, int(end_col_f))
@@ -631,18 +587,18 @@ def plot_spatial_mae_curve(
 ) -> list[float]:
     """
     Plot Spatial Mean Absolute Error (MAE) of Water Surface Elevation (WSE)
-    between two simulation configurations across all shared UVH timesteps.
+    between two simulation configurations across shared depth-frame times.
 
     For every timestep t that both configs have produced, computes:
 
         MAE(t) = (1 / N_t) * sum |WSE_ref(t) - WSE_cmp(t)|
 
-    where N_t is the number of raster pixels simultaneously wet (h - z > min_depth)
+    where N_t is the number of raster pixels simultaneously wet (depth >= min_depth)
     in both grids.  The result is a 1-D time-series curve.
 
-    If *force_cfg* is provided and its rain.fdb exists, a rainfall hyetograph is
-    overlaid on an inverted secondary Y-axis (meteorological convention: bars grow
-    downward from the top of the figure).
+    If *force_cfg* is provided, an area-weighted rainfall-intensity hyetograph
+    from its raster bands and interval CSV is overlaid on an inverted secondary
+    Y-axis (meteorological convention: bars grow downward from the top).
 
     Uses Taichi GPU-accelerated tiled rasterisation (same TILE_SIZE as the rest of
     this module) and atomic double-precision reduction for the MAE accumulation.
@@ -651,8 +607,7 @@ def plot_spatial_mae_curve(
     ----------
     cfg_ref      : Reference DomainConfig  (e.g., high-resolution 4 m baseline)
     cfg_cmp      : Comparison DomainConfig (e.g., MRCG)
-    force_cfg    : Optional ForceConfig; when provided the rainfall hyetograph is
-                   overlaid using rain.fdb from its preprocessed directory.
+    force_cfg    : Optional ForceConfig supplying rainfall raster and intervals.
     min_depth    : Minimum water depth (m) threshold for a cell to be considered wet.
     output_path  : If given, the figure is saved to this file path.
     show         : If True, plt.show() is called after rendering.
@@ -670,10 +625,10 @@ def plot_spatial_mae_curve(
     ns_path_ref  = Path(cfg_ref.ns_fdb)
     ne_path_cmp  = Path(cfg_cmp.ne_fdb)
     ns_path_cmp  = Path(cfg_cmp.ns_fdb)
-    uvh_path_ref = Path(cfg_ref.uvh_dir)
-    uvh_path_cmp = Path(cfg_cmp.uvh_dir)
+    output_ref = Path(cfg_ref.domain_dir) / 'output'
+    output_cmp = Path(cfg_cmp.domain_dir) / 'output'
 
-    for p in [ne_path_ref, ns_path_ref, ne_path_cmp, ns_path_cmp, uvh_path_ref, uvh_path_cmp]:
+    for p in [ne_path_ref, ns_path_ref, ne_path_cmp, ns_path_cmp, output_ref, output_cmp]:
         if not p.exists():
             raise FileNotFoundError(f'Required path not found: {p}')
 
@@ -703,13 +658,11 @@ def plot_spatial_mae_curve(
 
     ex_r  = copy_to_taichi(nes_r.column.x[1:], ti.f32, None)
     ey_r  = copy_to_taichi(nes_r.column.y[1:], ti.f32, None)
-    ez_r  = copy_to_taichi(nes_r.column.z[1:], ti.f32, None)
     ehw_r = copy_to_taichi(hws_r,               ti.f32, None)
     ehh_r = copy_to_taichi(hhs_r,               ti.f32, None)
 
     ex_c  = copy_to_taichi(nes_c.column.x[1:], ti.f32, None)
     ey_c  = copy_to_taichi(nes_c.column.y[1:], ti.f32, None)
-    ez_c  = copy_to_taichi(nes_c.column.z[1:], ti.f32, None)
     ehw_c = copy_to_taichi(hws_c,               ti.f32, None)
     ehh_c = copy_to_taichi(hhs_c,               ti.f32, None)
 
@@ -717,10 +670,14 @@ def plot_spatial_mae_curve(
     tile_ref = ti.field(dtype=ti.f32, shape=(TILE_SIZE, TILE_SIZE))
     tile_cmp = ti.field(dtype=ti.f32, shape=(TILE_SIZE, TILE_SIZE))
 
-    # Pre-allocate h fields once; updated each timestep with from_numpy().
+    # Pre-allocate WSE fields once; updated each timestep with from_numpy().
     # Avoids calling ti.field() inside the loop which exhausts Metal's snode limit.
     h_r_field = ti.field(dtype=ti.f32, shape=len(nes_r) - 1)
     h_c_field = ti.field(dtype=ti.f32, shape=len(nes_c) - 1)
+    depth_r_field = ti.field(dtype=ti.f32, shape=len(nes_r) - 1)
+    depth_c_field = ti.field(dtype=ti.f32, shape=len(nes_c) - 1)
+    bed_r = BedTimeline(output_ref, expected_count=len(nes_r))
+    bed_c = BedTimeline(output_cmp, expected_count=len(nes_c))
 
     # ── Taichi kernels ─────────────────────────────────────────────────────────
 
@@ -729,7 +686,7 @@ def plot_spatial_mae_curve(
     def rasterize_wse(
         x: ti.template(), y: ti.template(),
         hw: ti.template(), hh: ti.template(),
-        z: ti.template(), h: ti.template(),
+        depth: ti.template(), h: ti.template(),
         tile: ti.template(),
         tile_min_x: float, tile_max_y: float,
         hr: float, vr: float,
@@ -749,55 +706,53 @@ def plot_spatial_mae_curve(
             if (e_max_x >= tile_min_x and e_min_x < tile_max_x and
                     e_max_y >= tile_min_y and e_min_y < tile_max_y):
                 wse = h[i]
-                if (wse - z[i]) < min_depth:
+                if depth[i] < min_depth:
                     wse = -9999.0
 
-                c0 = ti.max(0, int(ti.floor((e_min_x - tile_min_x) / hr)))
-                c1 = ti.min(t_cols - 1, int(ti.floor((e_max_x - tile_min_x) / hr)))
-                r0 = ti.max(0, int(ti.floor((tile_max_y - e_max_y) / vr)))
-                r1 = ti.min(t_rows - 1, int(ti.floor((tile_max_y - e_min_y) / vr)))
+                c0 = ti.max(0, int(ti.ceil((e_min_x - tile_min_x) / hr - 0.5)))
+                c1 = ti.min(t_cols - 1, int((ti.ceil((e_max_x - tile_min_x) / hr - 0.5) - 1)))
+                r0 = ti.max(0, int(ti.ceil((tile_max_y - e_max_y) / vr - 0.5)))
+                r1 = ti.min(t_rows - 1, int((ti.ceil((tile_max_y - e_min_y) / vr - 0.5) - 1)))
 
                 for r in range(r0, r1 + 1):
                     for c in range(c0, c1 + 1):
                         tile[r, c] = wse
 
-    # ── Discover shared UVH timesteps ──────────────────────────────────────────
-    ts_ref = {p.stem.split('_')[-1]: p for p in uvh_path_ref.glob('uvh_*.fdb')}
-    ts_cmp = {p.stem.split('_')[-1]: p for p in uvh_path_cmp.glob('uvh_*.fdb')}
-    common = sorted(
-        set(ts_ref) & set(ts_cmp),
-        key=lambda t: datetime.strptime(t, '%Y%m%d-%H%M%S').timestamp(),
-    )
+    frames_ref = {cfg_ref.start + timedelta(seconds=seconds): (seconds, path)
+                  for seconds, path in list_depth_frames(output_ref)}
+    frames_cmp = {cfg_cmp.start + timedelta(seconds=seconds): (seconds, path)
+                  for seconds, path in list_depth_frames(output_cmp)}
+    common = sorted(set(frames_ref) & set(frames_cmp))
     if not common:
-        raise ValueError('No common UVH timestamps found between cfg_ref and cfg_cmp.')
-    print(f'Processing {len(common)} shared UVH timesteps ...')
+        raise ValueError('No common depth-frame times found between cfg_ref and cfg_cmp.')
+    print(f'Processing {len(common)} shared depth-frame times ...')
 
     ref_label = Path(cfg_ref.domain_dir).name
     cmp_label = Path(cfg_cmp.domain_dir).name
 
     # ── Optional: load rainfall for hyetograph overlay ─────────────────────────
     rain_dts: list[datetime] | None = None
-    rain_qty: np.ndarray | None = None
+    rain_rates: np.ndarray | None = None
+    rain_widths: np.ndarray | None = None
     if force_cfg is not None:
-        rain_fdb_path = Path(force_cfg.rain_fdb)
-        if rain_fdb_path.exists():
-            rain_dts, rain_qty = _load_rainfall_plot_series(rain_fdb_path)
-        else:
-            print(f'Warning: rain.fdb not found at {rain_fdb_path}, skipping hyetograph.')
+        rain_dts, rain_rates, rain_widths = _load_rainfall_plot_series(cfg_ref, force_cfg)
 
     # ── Per-timestep spatial MAE computation ───────────────────────────────────
     mae_list:  list[float]    = []
     time_axis: list[datetime] = []
 
-    for ts in common:
-        uvh_r = fdb.ORM.load(str(ts_ref[ts]), from_file=True)[UVH][UVH]
-        uvh_c = fdb.ORM.load(str(ts_cmp[ts]), from_file=True)[UVH][UVH]
-        _validate_uvh_snapshot_size(ref_label, ts_ref[ts], ts, len(uvh_r), len(nes_r))
-        _validate_uvh_snapshot_size(cmp_label, ts_cmp[ts], ts, len(uvh_c), len(nes_c))
+    for instant in common:
+        seconds_r, path_r = frames_ref[instant]
+        seconds_c, path_c = frames_cmp[instant]
+        depth_r = read_depth_frame(path_r, expected_count=len(nes_r))
+        depth_c = read_depth_frame(path_c, expected_count=len(nes_c))
+        working_bed_r = bed_r.at(seconds_r)
+        working_bed_c = bed_c.at(seconds_c)
 
-        # Reuse pre-allocated fields; no new ti.field() allocation here
-        h_r_field.from_numpy(uvh_r.column.h[1:].astype(np.float32))
-        h_c_field.from_numpy(uvh_c.column.h[1:].astype(np.float32))
+        h_r_field.from_numpy((working_bed_r[1:] + depth_r[1:]).astype(np.float32))
+        h_c_field.from_numpy((working_bed_c[1:] + depth_c[1:]).astype(np.float32))
+        depth_r_field.from_numpy(depth_r[1:])
+        depth_c_field.from_numpy(depth_c[1:])
 
         mae_sum_acc = 0.0
         mae_cnt_acc = 0
@@ -813,11 +768,11 @@ def plot_spatial_mae_curve(
                 tile_cmp.fill(-9999.0)
 
                 rasterize_wse(
-                    ex_r, ey_r, ehw_r, ehh_r, ez_r, h_r_field,
+                    ex_r, ey_r, ehw_r, ehh_r, depth_r_field, h_r_field,
                     tile_ref, left_x, top_y, g_hr, g_vr, t_rows, t_cols,
                 )
                 rasterize_wse(
-                    ex_c, ey_c, ehw_c, ehh_c, ez_c, h_c_field,
+                    ex_c, ey_c, ehw_c, ehh_c, depth_c_field, h_c_field,
                     tile_cmp, left_x, top_y, g_hr, g_vr, t_rows, t_cols,
                 )
 
@@ -830,10 +785,10 @@ def plot_spatial_mae_curve(
                     mae_sum_acc += float(np.sum(np.abs(tr_np[mask] - tc_np[mask])))
                     mae_cnt_acc += int(mask.sum())
 
-        mae = mae_sum_acc / mae_cnt_acc if mae_cnt_acc > 0 else 0.0
+        mae = mae_sum_acc / mae_cnt_acc if mae_cnt_acc > 0 else float('nan')
         mae_list.append(mae)
-        time_axis.append(datetime.strptime(ts, '%Y%m%d-%H%M%S'))
-        print(f'  {ts}: MAE = {mae:.4f} m  (N_wet = {mae_cnt_acc} px)')
+        time_axis.append(instant.replace(tzinfo=None))
+        print(f'  {instant.isoformat()}: MAE = {mae:.4f} m  (N_wet = {mae_cnt_acc} px)')
 
     # ── Plot ───────────────────────────────────────────────────────────────────
     plt.rcParams['font.family'] = 'Times New Roman'
@@ -847,22 +802,15 @@ def plot_spatial_mae_curve(
     ax1.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d %H:%M'))
     fig.autofmt_xdate()
 
-    if rain_dts is not None and rain_qty is not None and len(rain_dts) > 1:
-        # Clamp rainfall records to the simulation time range
-        sim_start = min(time_axis)
-        sim_end   = max(time_axis)
-        rain_pairs = [(d, q) for d, q in zip(rain_dts, rain_qty) if sim_start <= d <= sim_end]
-        if rain_pairs:
-            rain_dts_clamped, rain_qty_clamped = zip(*rain_pairs)
+    if rain_dts is not None and rain_rates is not None and rain_widths is not None:
+        if rain_dts:
             ax2 = ax1.twinx()
-            dt_sec = (rain_dts[1] - rain_dts[0]).total_seconds()
-            bar_w  = dt_sec / 86400.0   # matplotlib date unit = 1 day
             ax2.bar(
-                rain_dts_clamped, rain_qty_clamped,
-                width=bar_w, align='edge',
-                alpha=0.35, color='dimgray', label='Rainfall (mm)',
+                rain_dts, rain_rates,
+                width=rain_widths / 86400., align='edge',
+                alpha=0.35, color='dimgray', label='Rainfall (mm/hr)',
             )
-            ax2.set_ylabel('Rainfall (mm)', color='dimgray', fontweight='bold')
+            ax2.set_ylabel('Rainfall (mm/hr)', color='dimgray', fontweight='bold')
             ax2.tick_params(axis='y', labelcolor='dimgray')
             ax2.invert_yaxis()   # meteorological convention: bars grow downward from top
             ax2.legend(loc='upper right')

@@ -2,11 +2,11 @@ import numpy as np
 import taichi as ti
 
 _TI_INITIALIZED = False
-def init_taichi(use_gpu: bool = True, profiler: bool = False):
+def init_taichi(use_gpu: bool = True, profiler: bool = False, arch=None):
     global _TI_INITIALIZED
     if not _TI_INITIALIZED:
-        arch = ti.gpu if use_gpu else ti.cpu
-        ti.init(arch = arch, kernel_profiler=profiler, log_level=ti.ERROR)
+        selected = arch if arch is not None else (ti.gpu if use_gpu else ti.cpu)
+        ti.init(arch=selected, kernel_profiler=profiler, log_level=ti.ERROR, enable_fallback=False)
         _TI_INITIALIZED = True
     
 def copy_to_taichi(np_array: np.ndarray, dtype: any, shape: any) -> ti.MatrixField | ti.ScalarField:

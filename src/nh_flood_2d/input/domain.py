@@ -1,27 +1,51 @@
 from pathlib import Path
-from pydantic import BaseModel, field_validator
+from typing import Annotated, Literal
+from pydantic import AwareDatetime, Field, field_validator, model_validator
+from .force import InputModel
 
 def load_domain_config(config_path: str) -> 'DomainConfig':
     """Load input configuration from a JSON file"""
     return DomainConfig.model_validate_json(Path(config_path).read_text())
 
-class DomainConfig(BaseModel):
+
+class HortonInfiltration(InputModel):
+    f0_mm_h: float = Field(ge=0)
+    fc_mm_h: float = Field(ge=0)
+    k_per_h: float = Field(ge=0)
+
+    @model_validator(mode='after')
+    def validate_capacity(self):
+        if self.f0_mm_h < self.fc_mm_h:
+            raise ValueError('f0_mm_h must be at least fc_mm_h')
+        return self
+
+
+class LandParameters(InputModel):
+    manning_n: float = Field(gt=0)
+    infiltration: Literal['none'] | HortonInfiltration
+
+
+class DomainConfig(InputModel):
     ne: str
     ns: str
     epsg_code: int
     domain_dir: str
     
-    afa: float = 0.5        # Courant number (CFL condition)
-    sita: float = 1.0       # time weighting factor
-    min_h: float = 0.02     # minimum water depth (m)
+    afa: float = Field(default=0.5, gt=0, le=1)        # Courant number (CFL condition)
+    sita: float = Field(default=1.0, ge=0, le=1)       # time weighting factor
+    min_h: float = Field(default=0.02, gt=0)     # minimum water depth (m)
     
-    duration: int = -1      # total simulation duration in seconds (default: -1 means auto-detect from input data)
-    yield_step: int = 300   # output every 5 minutes (300 seconds) as default
+    start: AwareDatetime = Field(strict=True)
+    duration: int = Field(gt=0)  # simulation seconds
+    warmup_duration: int = Field(ge=0)
+    land_parameters: dict[Annotated[int, Field(ge=0, le=255)],
+                          LandParameters] = Field(min_length=1)
+    yield_step: int = Field(default=300, gt=0)  # output interval in seconds
     
-    restart_uvh: str = ''  # path to a UVH .fdb file for warm-start (empty = cold start)
+    restart_state: str = ''  # complete checkpoint, empty for a dry cold start
     
-    hydrograph_points: dict[str, tuple[float, float]] = {}  # name -> (x, y)
-    observation_dir: str = ''  # directory for observation data, file_name should be the same as hydrograph_points keys
+    stations: dict[str, tuple[float, float]] = {}  # name -> (x, y)
+    observation_dir: str = ''  # directory for observation data, file_name should be the same as stations keys
     
     @property
     def _domain_path(self) -> Path:
@@ -58,12 +82,24 @@ class DomainConfig(BaseModel):
         return str(boundary_fdb_fn)
     
     @property
-    def uvh_dir(self) -> str:
-        dir_path = self._domain_path / 'uvh'
+    def output_dir(self) -> str:
+        dir_path = self._domain_path / 'output'
         if not dir_path.exists():
             dir_path.mkdir(parents=True, exist_ok=True)
         return str(dir_path)
     
+    @property
+    def frame_dir(self) -> str:
+        path = Path(self.output_dir) / 'frames'
+        path.mkdir(exist_ok=True)
+        return str(path)
+
+    @model_validator(mode='after')
+    def validate_clock_range(self):
+        if self.duration + self.warmup_duration >= 2**24:
+            raise ValueError('Duration plus warmup must fit the two-U32 clock (less than 2**24 seconds)')
+        return self
+
     @property
     def flood_map_dir(self) -> str:
         dir_path = self._domain_path / 'flood_maps'
@@ -78,13 +114,6 @@ class DomainConfig(BaseModel):
             dir_path.mkdir(parents=True, exist_ok=True)
         return str(dir_path)
 
-    @property
-    def hydrograph_dir(self) -> str:
-        dir_path = self._domain_path / 'hydrographs'
-        if not dir_path.exists():
-            dir_path.mkdir(parents=True, exist_ok=True)
-        return str(dir_path)
-    
     def clean_tmp_files(self):
         for tmp_file in [self.tmp_ne, self.tmp_ns]:
             tmp_path = Path(tmp_file)
