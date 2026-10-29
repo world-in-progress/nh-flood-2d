@@ -1,5 +1,6 @@
 """A saved physical state resumes the same rain, Horton, and flow evolution."""
 
+import csv
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -219,6 +220,108 @@ def test_restart_matches_uninterrupted_rain_and_horton_evolution(tmp_path, monke
     assert full_manifest['steps'] == first_manifest['steps'] + resumed_manifest['steps']
     assert json.loads(resumed.metadata_json)['total_steps'] == full_manifest['steps']
     assert json.loads(split.metadata_json)['elapsed_seconds'] == 5
+
+
+@pytest.mark.parametrize('interrupt_at', [-900, 1800])
+def test_periodic_checkpoint_resumes_bitwise(tmp_path, monkeypatch, interrupt_at):
+    from src.nh_flood_2d.core import output, solver_compact
+    from src.nh_flood_2d.core.clock import StepClock
+
+    class Interrupted(RuntimeError):
+        pass
+
+    inputs = tmp_path / 'inputs'
+    _inputs(inputs)
+    (inputs / 'intervals.csv').write_text('interval_start,interval_end\n' + ''.join(
+        f'{(START + timedelta(seconds=a)).isoformat()},'
+        f'{(START + timedelta(seconds=b)).isoformat()}\n'
+        for a, b in [(0, 900), (900, 2100)]))
+    traces, checkpoints = [], []
+    wall = [0.]
+    read_trace, replace = StepClock.read_trace, output.os.replace
+
+    def capture(clock):
+        rows = read_trace(clock)
+        traces.extend(rows[rows[:, 3] == clock.COMPLETED].copy())
+        wall[0] = clock.host_now_seconds
+        return rows
+
+    def interrupt_after_replace(source, target):
+        if Path(target).name != 'state_latest.fdb':
+            return replace(source, target)
+        assert Path(source).parent == Path(target).parent
+        assert Path(source) != Path(target)
+        # The sibling temporary is already a readable complete checkpoint.
+        pending = read_checkpoint(source)
+        seconds = json.loads(pending.metadata_json)['elapsed_seconds']
+        assert seconds % 900 == 0 and seconds != 0
+        if checkpoints:
+            assert json.loads(read_checkpoint(target).metadata_json)[
+                'elapsed_seconds'] == checkpoints[-1]
+        replace(source, target)
+        checkpoints.append(seconds)
+        if seconds == interrupt_at:
+            raise Interrupted('process stopped after atomic checkpoint replacement')
+
+    def run(name, restart=''):
+        wall[0] = 0.
+        domain = DomainConfig(ne=str(inputs / 'ne.txt'), ns=str(inputs / 'ns.txt'),
+            epsg_code=2326, domain_dir=str(tmp_path / name), start=START,
+            duration=2100, warmup_duration=1800, yield_step=300,
+            stations={'left': (5, 5), 'right': (15, 5)}, restart_state=str(restart),
+            land_parameters={10: dict(manning_n=.03, infiltration=dict(
+                f0_mm_h=36, fc_mm_h=18, k_per_h=2))})
+        forcing = ForceConfig(boundaries=[], rainfall=dict(
+            raster=str(inputs / 'rain.tif'), intervals=str(inputs / 'intervals.csv')))
+        preprocess(domain, forcing)
+        budget = solver(domain, forcing)
+        return budget, read_checkpoint(tmp_path / name / 'output/state_final.fdb')
+
+    monkeypatch.setattr(StepClock, 'read_trace', capture)
+    monkeypatch.setattr(solver_compact, 'perf_counter', lambda: wall[0])
+    monkeypatch.setattr(solver_compact, '_CHECKPOINT_INTERVAL_S', float('inf'))
+    full_budget, full = run('full')
+    full_trace = np.array(traces, dtype=np.uint32)
+    assert not (tmp_path / 'full/output/state_latest.fdb').exists()
+
+    # The threshold elapses at a non-frame output (600 s after each checkpoint).
+    monkeypatch.setattr(solver_compact, '_CHECKPOINT_INTERVAL_S', 500)
+    monkeypatch.setattr(output.os, 'replace', interrupt_after_replace)
+    with pytest.raises(Interrupted):
+        run('interrupted')
+    assert checkpoints == ([-900] if interrupt_at < 0 else [-900, 900, 1800])
+    interrupted = tmp_path / 'interrupted/output'
+    assert not (interrupted / 'state_final.fdb').exists()
+    assert sorted(p.name for p in interrupted.glob('state_*.fdb')) == (
+        ['state_latest.fdb'] if interrupt_at < 0 else ['state_latest.fdb', 'state_start.fdb'])
+    assert not list(interrupted.glob('*.tmp'))
+    latest = interrupted / 'state_latest.fdb'
+    saved = read_checkpoint(latest)
+    assert json.loads(saved.metadata_json)['elapsed_seconds'] == interrupt_at
+    if interrupt_at > 0:
+        assert np.any(saved.rain_time > 0) and np.any(saved.q != 0)
+
+    monkeypatch.setattr(output.os, 'replace', replace)
+    traces.clear()
+    resumed_budget, resumed = run('resumed', latest)
+    tick = (saved.clock_hi << 32) | saved.clock_lo
+    full_ticks = (full_trace[:, 1].astype(np.uint64) << 32) | full_trace[:, 2]
+    np.testing.assert_array_equal(full_trace[full_ticks > tick], np.array(traces, dtype=np.uint32))
+    for name in ('depth', 'bed', 'q', 'rain_time', 'infiltration',
+                 'max_depth', 'max_speed', 'first_time_hi', 'first_time_lo'):
+        assert getattr(full, name).tobytes() == getattr(resumed, name).tobytes(), name
+    assert (full.clock_hi, full.clock_lo, full.gate_open) == (
+        resumed.clock_hi, resumed.clock_lo, resumed.gate_open)
+    assert full.metadata_json == resumed.metadata_json
+    assert full_budget == resumed_budget
+    for filename in ('output/stations.csv', 'mass_balance.csv', 'step_statistics.csv'):
+        with (tmp_path / 'full' / filename).open() as stream:
+            expected = [row for row in csv.DictReader(stream)
+                        if float(row['elapsed_seconds']) > interrupt_at]
+        with (tmp_path / 'resumed' / filename).open() as stream:
+            actual = [row for row in csv.DictReader(stream)
+                      if float(row['elapsed_seconds']) > interrupt_at]
+        assert actual == expected, filename
 
 
 def test_formal_restart_discards_warmup_extrema(tmp_path):

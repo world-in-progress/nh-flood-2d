@@ -25,6 +25,7 @@ from .output import (read_checkpoint, write_checkpoint, write_bed, write_depth_f
                      write_extrema, append_station_samples, resolve_station_cells)
 
 _MIN_DT = 1e-4
+_CHECKPOINT_INTERVAL_S = 30 * 60
 
 
 def set_elevation(domain_cfg, elevate_meter: float):
@@ -775,6 +776,7 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
         return True
 
     def checkpoint(path, depth_np):
+        nonlocal last_checkpoint_wall
         metadata = dict(state_identity, run_state=True,
             boundary_identity=boundary_identity,
             clock_origin_before_start_s=origin_before_start,
@@ -792,6 +794,7 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
             gate_open=bool(gate_open[None]), metadata_json=json.dumps(metadata),
             max_depth=max_depth_t.to_numpy(), first_time_hi=peak_hi_t.to_numpy(),
             first_time_lo=peak_lo_t.to_numpy(), max_speed=max_speed_t.to_numpy())
+        last_checkpoint_wall = perf_counter()
 
     def write_output(seconds, phase, *, frame=False, final=False):
         date = domain_cfg.start + timedelta(seconds=seconds)
@@ -809,6 +812,9 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
             write_depth_frame(Path(domain_cfg.frame_dir) / f'depth_{int(seconds)}.fdb', depth_np)
         if seconds == 0. or final:
             checkpoint(root / ('state_final.fdb' if final else 'state_start.fdb'), depth_np)
+        elif frame and perf_counter() - last_checkpoint_wall >= _CHECKPOINT_INTERVAL_S:
+            # write_checkpoint atomically replaces the file from a sibling temporary.
+            checkpoint(root / 'state_latest.fdb', depth_np)
         limits, ids = limit_value_t.to_numpy(), limit_ids_t.to_numpy()
         regular, shortened = np.array(interval_dts), np.array(interval_event_dts)
         stats_writer.writerow(dict(time=date.isoformat(), elapsed_seconds=seconds,
@@ -870,6 +876,7 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
     graph = builder.compile()
     ti.sync()
     phase_started = perf_counter()
+    last_checkpoint_wall = phase_started
     preprocess_seconds = phase_started - record.clock
     warmup_seconds = 0.
     formal_started = phase_started if elapsed >= 0. and end_time > elapsed else None

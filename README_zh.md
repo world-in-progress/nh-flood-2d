@@ -176,7 +176,7 @@ run_simulation(load_domain_config("path/to/domain.json"),
 
 每次运行使用新的 `domain_dir`，已有 manifest、收支记录或输出时直接报错，不覆盖。命令行入口在预处理前创建 manifest，预处理和输入载入失败均记录为失败运行。需要单独预处理时，仍可调用 `preprocess(domain_cfg, force_cfg)` 后再调用 `solver(domain_cfg, force_cfg)`。
 
-预处理在 `domain_dir/preprocessed` 生成 `ne.fdb`、`ns.fdb` 和 `boundary.fdb`。求解器在 `domain_dir/output/bed.fdb` 一次写入起始工作床面。`output/frames/depth_<elapsed_s>.fdb` 仅含 F32 水深，在初始时刻、此后每 900 s 以及终点输出。`output/stations.csv` 为配置的站点记录 `depth`、`level`、`u`、`v`。`output/extrema.fdb` 保存逐步累计的 `max_depth`、其首次出现的双 U32 时钟字、`max_speed`。极值统计正式模拟阶段；独立预热运行则统计预热阶段。`output/state_start.fdb` 是正式起点的检查点；`output/state_final.fdb` 是完整终点检查点。检查点包含工作床面、水深、边流量 q、Horton 累计降雨时间与下渗能力、时钟、极值和精确收支累计状态。预热与正式模拟共用同一时钟和输出格式。预热帧的经过秒数为负。
+预处理在 `domain_dir/preprocessed` 生成 `ne.fdb`、`ns.fdb` 和 `boundary.fdb`。求解器在 `domain_dir/output/bed.fdb` 一次写入起始工作床面。`output/frames/depth_<elapsed_s>.fdb` 仅含 F32 水深，在初始时刻、此后每 900 s 以及终点输出。`output/stations.csv` 为配置的站点记录 `depth`、`level`、`u`、`v`。`output/extrema.fdb` 保存逐步累计的 `max_depth`、其首次出现的双 U32 时钟字、`max_speed`。极值统计正式模拟阶段；独立预热运行则统计预热阶段。`output/state_start.fdb` 是正式起点的检查点；`output/state_final.fdb` 是完整终点检查点。预热和正式期内，距上次检查点（或开始模拟）达到 30 分钟墙钟时间后，在下一个水深帧输出时刻写入 `output/state_latest.fdb`；间隔固定于代码中，不增加截步。检查点先写入同目录临时文件，再原子替换目标，只保留最新一个定期检查点。检查点包含工作床面、水深、边流量 q、Horton 累计降雨时间与下渗能力、时钟、极值和精确收支累计状态。预热与正式模拟共用同一时钟和输出格式。预热帧的经过秒数为负。
 
 网格载入要求正的正方形单元，以满足基于边长的 CFL 尺度。空间水位 MAE 在没有共同湿像元时为 NaN，表示无定义。
 
@@ -228,7 +228,9 @@ CUDA 设备名通过驱动的 `nvidia-smi` 命令读取，该命令须在 PATH �
 
 ## 接续运行
 
-将 `restart_state` 指向完整的 `output/state_final.fdb` 检查点，使用新的 `domain_dir`，保持 `start`、网格、闸门及物理参数一致，并将 `warmup_duration` 设为 0。`duration` 可以延长。恢复时刻晚于本次终点时，在写结果文件前报错；等于终点时以零步完成。边界名称、类型、顺序及选中边集合的哈希必须一致。下一 CFL 候选及控制边诊断由恢复的水深、床面和 q 在同一次归约中求出，不再保存下一 dt 字段。求解器恢复工作床面、水深、q、Horton 状态、双字时钟、极值与精确设备收支累计，不重新施加边界初值。边界与降雨输入须覆盖延长后的正式时窗。地表检查点不含 SWMM actor 状态；接续耦合管网运行会明确报错。
+中断的地表运行可将 `restart_state` 指向原运行的 `output/state_latest.fdb`，换一个新的 `domain_dir`，其余配置保持不变，包括 `start`、`duration`、`warmup_duration`、强迫、网格、闸门及物理参数。例如设置 `"restart_state": "path/to/interrupted-run/output/state_latest.fdb"` 和 `"domain_dir": "path/to/new-resumed-run"`。求解器按保存的时钟接着推进预热或正式期，结果写入新目录。也可从完整的 `output/state_start.fdb` 或 `output/state_final.fdb` 接续；若边界与降雨输入覆盖延长后的时窗，`duration` 可以延长。
+
+恢复时刻晚于本次终点时，在写结果文件前报错；等于终点时以零步完成。边界名称、类型、顺序及选中边集合的哈希必须一致。下一 CFL 候选及控制边诊断由恢复的水深、床面和 q 在同一次归约中求出，不再保存下一 dt 字段。求解器恢复工作床面、水深、q、Horton 状态、双字时钟、极值与精确设备收支累计，不重新施加边界初值。地表检查点不含 SWMM actor 状态；接续耦合管网运行会明确报错。
 
 ## 后处理
 
