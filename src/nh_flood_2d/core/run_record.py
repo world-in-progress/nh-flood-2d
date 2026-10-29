@@ -21,6 +21,18 @@ def sha256(path):
     return digest.hexdigest()
 
 
+def source_tree_sha256(src_root):
+    """Hash sorted source-relative POSIX paths and their complete byte contents."""
+    src_root = Path(src_root)
+    digest = hashlib.sha256(b'nh-flood-2d/src-py-sha256/v1\0')
+    for path in sorted(src_root.rglob('*.py'), key=lambda p: p.relative_to(src_root).as_posix()):
+        content = path.read_bytes()
+        digest.update(path.relative_to(src_root).as_posix().encode('utf-8') + b'\0')
+        digest.update(len(content).to_bytes(8, 'big'))
+        digest.update(content)
+    return digest.hexdigest()
+
+
 class RunRecord:
     def __init__(self, domain, force, pipe=None):
         root = Path(__file__).resolve().parents[3]
@@ -29,9 +41,15 @@ class RunRecord:
         if self.path.exists() or (self.path.parent / 'mass_balance.csv').exists() or (output.exists() and any(output.iterdir())):
             raise FileExistsError(f'Use a new output directory: {domain.domain_dir}')
         self.clock = time.perf_counter()
+        commit = dirty = None
+        if (root / '.git').exists():
+            commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
+            dirty = bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=root, text=True).strip())
         self.data = {
-            'git_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip(),
-            'git_dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=root, text=True).strip()),
+            'source_sha256': source_tree_sha256(root / 'src'),
+            'source_hash_rule': 'nh-flood-2d/src-py-sha256/v1',
+            'git_commit': commit,
+            'git_dirty': dirty,
             'config': {'domain': domain.model_dump(mode='json'), 'force': force.model_dump(mode='json'), 'pipe': pipe.model_dump(mode='json') if pipe else None},
             'input_sha256': {},
             'simulation_start': domain.start.isoformat(),

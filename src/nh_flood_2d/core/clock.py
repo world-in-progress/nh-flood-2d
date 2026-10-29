@@ -32,7 +32,8 @@ def _words(ticks: int) -> np.ndarray:
 class StepClock:
     """Prepare one F32 physics step and commit it only after all update stages.
 
-    Trace columns: F32 dt bit pattern, ending high/low tick words, status.
+    Trace columns: F32 dt bit pattern, ending high/low tick words, status,
+    CFL bits, event-step flag, limited cell/face counts, minimum donor-scale bits.
     Status 0 means no step, 1 completed, 2 invalid/too-small CFL,
     3 unrepresentable F32 dt, 4 clock overshoot beyond the snap tolerance.
     All scalar fields are device state; read_trace() is the one batch readback.
@@ -64,7 +65,7 @@ class StepClock:
         self.active = ti.field(ti.i32, shape=())
         self.local = ti.field(ti.f32, shape=())
         self.end_local = ti.field(ti.f32, shape=())
-        self.trace = ti.field(ti.u32, shape=(batch_size, 6))
+        self.trace = ti.field(ti.u32, shape=(batch_size, 9))
         self.now.from_numpy(_words(self._host_now_ticks))
 
     @property

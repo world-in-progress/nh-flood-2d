@@ -74,7 +74,7 @@ def domain_config(tmp_path, **overrides):
 
 @pytest.mark.parametrize('parameters', [
     .03,
-    {'manning_n': 0., 'infiltration': 'none'},
+    {'manning_n': -.01, 'infiltration': 'none'},
     {'manning_n': float('nan'), 'infiltration': 'none'},
     {'manning_n': .03},
     {'manning_n': .03, 'infiltration': 'invalid'},
@@ -105,3 +105,9 @@ def test_json_land_parameters_accept_horton_and_none(tmp_path):
     restored = DomainConfig.model_validate_json(config.model_dump_json())
     assert restored.land_parameters[1].infiltration.f0_mm_h == pytest.approx(76.2)
     assert json.loads(restored.model_dump_json())['land_parameters']['4']['infiltration'] == 'none'
+
+
+def test_zero_friction_is_valid_for_analytic_experiments(tmp_path):
+    cfg = domain_config(tmp_path, land_parameters={10: dict(manning_n=0, infiltration='none')})
+    n, *_ = map_land_parameters(cfg.land_parameters, np.array([0,10]), np.array([[0,0,0],[2,0,1]]))
+    assert np.all(n == 0)

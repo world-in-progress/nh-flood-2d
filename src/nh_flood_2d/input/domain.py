@@ -21,7 +21,7 @@ class HortonInfiltration(InputModel):
 
 
 class LandParameters(InputModel):
-    manning_n: float = Field(gt=0)
+    manning_n: float = Field(ge=0)
     infiltration: Literal['none'] | HortonInfiltration
 
 
@@ -42,7 +42,7 @@ class DomainConfig(InputModel):
                           LandParameters] = Field(min_length=1)
     yield_step: int = Field(default=300, gt=0)  # output interval in seconds
     
-    restart_state: str = ''  # complete checkpoint, empty for a dry cold start
+    restart_state: str = ''  # complete checkpoint, empty for a cold start
     
     stations: dict[str, tuple[float, float]] = {}  # name -> (x, y)
     observation_dir: str = ''  # directory for observation data, file_name should be the same as stations keys

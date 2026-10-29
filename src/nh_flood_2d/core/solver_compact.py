@@ -15,7 +15,7 @@ import taichi as ti
 from ..input import DomainConfig, ForceConfig
 from ..preprocess import preprocess
 from ..preprocess.force import Forcing, MeshGeometry
-from ..preprocess.hydraulics import map_land_parameters, open_boundary_face_fractions
+from ..preprocess.hydraulics import connected_still_water, map_land_parameters, open_boundary_face_fractions
 from ..schema.feature import Ne, Ns, IndexLike, SideTopoInfo, U8Value
 from ..util.ti import init_taichi, copy_to_taichi
 from .run_record import RunRecord, WaterBudget
@@ -199,6 +199,9 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
     dh_t = ti.field(ti.f32, s_num)
     sq_t = ti.field(ti.f32, s_num)
     donor_scale_t = ti.field(ti.f32, e_num)
+    limited_cells_t = ti.field(ti.u32, ())
+    limited_faces_t = ti.field(ti.u32, ())
+    minimum_scale_t = ti.field(ti.f32, ())
     cfl_t = ti.field(ti.f32, s_num)
     flow_depth_t = ti.field(ti.f32, s_num)
     sdc_t = ti.field(ti.f32, s_num)
@@ -313,6 +316,8 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
     def prepare_step():
         clock.choose(ndt_t[None], batch_slot_t[None])
         if clock.active[None] == 1:
+            limited_cells_t[None], limited_faces_t[None] = 0, 0
+            minimum_scale_t[None] = 1.
             for bi in range(b_num):
                 values_t[bi] = coefficients_t[bi, 0] + coefficients_t[bi, 1] * (clock.local[None] + clock.dt[None] / 2.)
                 level_values_t[bi] = coefficients_t[bi, 0] + coefficients_t[bi, 1] * clock.end_local[None]
@@ -328,6 +333,10 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
 
     @ti.kernel
     def finish_step():
+        if clock.active[None] == 1:
+            clock.trace[batch_slot_t[None], 6] = limited_cells_t[None]
+            clock.trace[batch_slot_t[None], 7] = limited_faces_t[None]
+            clock.trace[batch_slot_t[None], 8] = ti.bit_cast(minimum_scale_t[None], ti.u32)
         clock.commit(batch_slot_t[None])
         batch_slot_t[None] += 1
 
@@ -463,11 +472,15 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
                 donor_scale_t[ei] = 1.
                 if outgoing > available and not (bi >= 0 and kind_t[bi] == 0):
                     donor_scale_t[ei] = available / outgoing
+                    ti.atomic_add(limited_cells_t[None], 1)
+                    ti.atomic_min(minimum_scale_t[None], donor_scale_t[ei])
             # Each shared subedge has a single writer. Both cells receive this flux.
         for si in range(1, s_num):
             if clock.active[None] == 1:
                 so, el, eh = sts_t[si, 0], sts_t[si, 1], sts_t[si, 2]
                 donor = ti.select(sq_t[si] >= 0., el, eh)
+                if sq_t[si] != 0. and donor_scale_t[donor] < 1.:
+                    ti.atomic_add(limited_faces_t[None], 1)
                 sq_t[si] *= donor_scale_t[donor]
         for ei in range(1, e_num):
             if clock.active[None] == 1:
@@ -657,7 +670,6 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
         gate_open[None] = int(state.gate_open)
     bed_np = ez_t.to_numpy()
     root = Path(domain_cfg.output_dir)
-    write_bed(root / 'bed.fdb', bed_np)
     record.data.update(bed_events=[], output={
         'root': 'output', 'frame_interval_s': 900, 'station_budget_interval_s': domain_cfg.yield_step,
         'frames': 'F32 depth only; bed.fdb plus manifest bed_events reconstruct water level',
@@ -665,15 +677,6 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
         'clock_quantum_s': 2.**-40,
         'extrema_window': 'simulation' if end_time > 0 else 'warmup',
     })
-    initial_depth = depth_t.to_numpy()
-    initial_storage = float(np.sum(initial_depth.astype(float) * mesh.area, dtype=np.float64))
-    budget = WaterBudget(Path(domain_cfg.domain_dir) / 'mass_balance.csv', forcing.boundaries, initial_storage)
-    if continuation:
-        saved = state_meta['budget']
-        budget.initial = saved['initial_storage_m3']
-        budget.rain = np.float64(saved['rainfall_m3'])
-        budget.discharge[:] = saved['requested_discharge_m3']
-        device_budget.total_units = list(saved['device_units'])
     elapsed = clock.host_now_seconds - origin_before_start
     next_output = min((math.floor(elapsed / domain_cfg.yield_step) + 1) * domain_cfg.yield_step,
                       0. if elapsed < 0. else end_time)
@@ -697,11 +700,14 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
     stats_file = (Path(domain_cfg.domain_dir) / 'step_statistics.csv').open('w', newline='')
     stats_fields = ['time', 'elapsed_seconds', 'steps', 'standard_dt_min_s', 'standard_dt_max_s', 'standard_dt_mean_s',
                     'standard_steps', 'event_short_steps', 'event_dt_min_s', 'event_dt_sum_s', 'cfl_min_s',
+                    'limited_cell_steps', 'limited_face_steps', 'minimum_donor_scale',
                     'limiting_edge', 'lower_cell', 'higher_cell', 'lower_depth_m',
                     'higher_depth_m', 'face_depth_m', 'face_velocity_m_s']
     stats_writer = csv.DictWriter(stats_file, fieldnames=stats_fields)
     stats_writer.writeheader()
     interval_dts, interval_event_dts = [], []
+    interval_activity = [0, 0, 1.]
+    total_activity = [0, 0, 1.]
     limit_value_t[0] = float('inf')
     gate_has_opened = bool(state.gate_open) if state else False
     gate_tick = (None if forcing.gate_opening_time is None else
@@ -810,15 +816,37 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
             standard_dt_max_s=float(regular.max()) if len(regular) else '', standard_dt_mean_s=float(regular.mean()) if len(regular) else '',
             event_short_steps=len(shortened), event_dt_min_s=float(shortened.min()) if len(shortened) else '',
             event_dt_sum_s=float(shortened.sum()) if len(shortened) else 0.,
+            limited_cell_steps=interval_activity[0], limited_face_steps=interval_activity[1],
+            minimum_donor_scale=interval_activity[2],
             cfl_min_s=float(limits[0]), limiting_edge=int(ids[0]), lower_cell=int(ids[1]), higher_cell=int(ids[2]),
             lower_depth_m=float(limits[1]), higher_depth_m=float(limits[2]), face_depth_m=float(limits[3]),
             face_velocity_m_s=float(limits[4])))
         stats_file.flush()
         interval_dts.clear(); interval_event_dts.clear()
+        interval_activity[:] = [0, 0, 1.]
         limit_value_t[0] = float('inf')
         print(f't={seconds:.6f}s phase={phase} storage={storage:.9g} residual={row["residual_m3"]:.9g} m3', flush=True)
 
     process_gate_event(elapsed, initial=True)
+    if state is None and domain_cfg.warmup_duration > 0:
+        initial_depth, initialization = connected_still_water(
+            bed_np, dh_t.to_numpy(), bd_db[U8Value]['sbf'].column.value,
+            ns_db[SideTopoInfo][SideTopoInfo].column.info.reshape(-1, 3),
+            forcing.boundaries, mesh.area)
+        depth_t.from_numpy(initial_depth)
+        record.data['initialization'] = dict(method='connected_still_water', **initialization)
+    else:
+        record.data['initialization'] = dict(method='checkpoint' if state else 'dry')
+    write_bed(root / 'bed.fdb', state.bed if state else nes.column.z)
+    initial_depth = depth_t.to_numpy()
+    initial_storage = float(np.sum(initial_depth.astype(float) * mesh.area, dtype=np.float64))
+    budget = WaterBudget(Path(domain_cfg.domain_dir) / 'mass_balance.csv', forcing.boundaries, initial_storage)
+    if continuation:
+        saved = state_meta['budget']
+        budget.initial = saved['initial_storage_m3']
+        budget.rain = np.float64(saved['rainfall_m3'])
+        budget.discharge[:] = saved['requested_discharge_m3']
+        device_budget.total_units = list(saved['device_units'])
     if not continuation:
         targets = np.zeros(e_num, dtype='float32')
         for bi, b in enumerate(forcing.boundaries):
@@ -872,13 +900,18 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
             clock.begin(target + origin_before_start, clock.host_now_seconds)
             graph.run({})
             rows = clock.read_trace()
-            for bits, hi, lo, status, cfl_bits, event_short in rows:
+            for bits, hi, lo, status, cfl_bits, event_short, limited_cells, limited_faces, scale_bits in rows:
                 if int(status) == clock.DONE:
                     break
                 if int(status) != clock.COMPLETED:
                     if int(status) == clock.BAD_CFL:
                         supported_dt()
                     raise RuntimeError(f'Device clock status {int(status)} at {elapsed}s')
+                scale = float(np.array(scale_bits, dtype=np.uint32).view(np.float32))
+                for activity in (interval_activity, total_activity):
+                    activity[0] += int(limited_cells)
+                    activity[1] += int(limited_faces)
+                    activity[2] = min(activity[2], scale)
                 dt = float(np.array(bits,dtype=np.uint32).view(np.float32))
                 for bi, b in enumerate(forcing.boundaries):
                     q_exact[bi] = b.series.at(0. if warming else elapsed+dt/2.)
@@ -916,6 +949,8 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
         record.data.update(steps=steps,warmup_steps=warmup_steps,mass_balance_final=budget.last_row,
             dt_seconds={'min':min_dt if steps else 0.,'max':max_dt,'sum':integrated_dt},
             dt_sequence_sha256=dt_hasher.hexdigest(),
+            limiter_activity=dict(limited_cell_steps=total_activity[0], limited_face_steps=total_activity[1],
+                                  minimum_donor_scale=total_activity[2]),
             requested_discharge_peak_m3_s={b.name:float(discharge_peaks[i]) for i,b in enumerate(forcing.boundaries) if b.kind=='discharge'},
             gate_open=bool(gate_open[None]),storage_depth_one_ulp_volume_m3=float(np.sum(
                 np.abs(np.spacing(depth_t.to_numpy()[1:]))*mesh.area[1:],dtype=np.float64)))

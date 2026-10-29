@@ -1,6 +1,50 @@
 """Map validated land-class parameters to mesh cells and sides."""
 import numpy as np
+from networkx.utils import UnionFind
 from ..input.domain import HortonInfiltration, LandParameters
+
+
+def connected_still_water(bed, side_crest, closed_sides, side_topology, boundaries, area):
+    """Fill only water bodies reachable from their prescribed starting levels.
+
+    Bed, crest and closed-side masks are the same working state used by the
+    momentum update, including any gate that opens at the warmup start.
+    """
+    bed = bed.astype(np.float64)
+    side_crest = side_crest.astype(np.float64)
+    levels = {}
+    for boundary in boundaries:
+        if boundary.kind == 'level':
+            levels.setdefault(boundary.series.at(0.), []).append(boundary)
+    depth = np.zeros(len(bed), dtype=np.float32)
+    left, right = side_topology[:, 1], side_topology[:, 2]
+    crest = np.maximum(np.maximum(bed[left], bed[right]), side_crest)
+    internal = (left != 0) & (right != 0) & ~closed_sides.astype(bool)
+    bodies = []
+    for level, group in levels.items():
+        seeds = np.unique(np.concatenate([b.cells for b in group]))
+        seeds = seeds[bed[seeds] < level]
+        if not len(seeds):
+            continue
+        edges = internal & (crest < level)
+        components = UnionFind(range(len(bed)))
+        for a, b in zip(left[edges], right[edges]):
+            components.union(int(a), int(b))
+        labels = np.fromiter((components[i] for i in range(len(bed))), dtype=np.intp)
+        selected = np.unique(labels[seeds])
+        wet = np.isin(labels, selected)
+        for other_level, other_group in levels.items():
+            if other_level != level:
+                for boundary in other_group:
+                    if np.any(wet[boundary.cells]):
+                        names = ', '.join(b.name for b in group)
+                        raise ValueError('Conflicting initial levels on connected water body: '
+                                         f'{names} ({level}) and {boundary.name} ({other_level})')
+        depth[wet] = level - bed[wet].astype(np.float64)
+        bodies.append(dict(level_m=float(level), boundaries=[b.name for b in group],
+                           connected_components=len(selected), wet_cells=int(np.count_nonzero(wet))))
+    return depth, dict(wet_cells=int(np.count_nonzero(depth)),
+                       storage_m3=float(np.dot(depth.astype(np.float64), area)), levels=bodies)
 
 
 def open_boundary_face_fractions(selected_sides, side_lengths, side_topology,

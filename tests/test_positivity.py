@@ -134,6 +134,15 @@ def test_four_outgoing_faces_share_one_cell_inventory(tmp_path):
     assert balance['bed_clamp_nonlevel_m3'] <= 1e-5
     assert abs(balance['residual_m3']) <= 1e-5
     assert manifest['steps'] >= 2
+    activity = manifest['limiter_activity']
+    assert activity['limited_cell_steps'] > 0
+    assert activity['limited_face_steps'] >= 4
+    assert 0 <= activity['minimum_donor_scale'] < 1
+    import csv
+    rows = list(csv.DictReader((tmp_path / 'center/out/step_statistics.csv').open()))
+    assert sum(int(r['limited_cell_steps']) for r in rows) == activity['limited_cell_steps']
+    assert sum(int(r['limited_face_steps']) for r in rows) == activity['limited_face_steps']
+    assert min(float(r['minimum_donor_scale']) for r in rows) == activity['minimum_donor_scale']
 
 
 def test_negative_discharge_and_faces_share_corner_inventory(tmp_path):
