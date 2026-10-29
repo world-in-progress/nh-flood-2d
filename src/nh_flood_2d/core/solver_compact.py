@@ -21,6 +21,7 @@ from ..util.ti import init_taichi, copy_to_taichi
 from .run_record import RunRecord, WaterBudget
 from .device_budget import DeviceBudget
 from .clock import StepClock, _seconds_to_ticks
+from .pressure import hanging_geometry, PressureReconstruction
 from .output import (read_checkpoint, write_checkpoint, write_bed, write_depth_frame,
                      write_extrema, append_station_samples, resolve_station_cells)
 
@@ -302,6 +303,23 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
     station_count = len(station_names)
     station_id_t = copy_to_taichi(np.array(list(station_cells.values()) or [0], dtype=np.int32), ti.i32, None)
     station_sample_t = ti.field(ti.f32, (max(1, station_count), 4))
+    geometry = hanging_geometry(nes.column.x, nes.column.y, nss.column.x, nss.column.y,
+                                ns_db[SideTopoInfo][SideTopoInfo].column.info.reshape(-1, 3))
+    has_hanging = geometry is not None
+    pressure = None
+    if has_hanging:
+        pressure = PressureReconstruction(geometry, bed=ez_t, depth=depth_t,
+            x=ex_t, y=ey_t, lengths=sl_t, topology=sts_t, face_ptr=face_ptr_t,
+            face_count=face_count_t, sides=isl_data_t, min_h=min_h)
+
+        @ti.kernel
+        def update_pressure():
+            for slot in pressure.cells:
+                if clock.active[None] == 1:
+                    pressure.update_cell(slot)
+    record.data['pressure_gradient'] = dict(method='tangential_subedge_reconstruction',
+        hanging_edges=len(geometry.offsets) if geometry is not None else 0,
+        gradient_cells=len(geometry.cells) if geometry is not None else 0)
 
     @ti.func
     def velocity(ei):
@@ -417,7 +435,10 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
                     xq = sq_t[si]
                     xwh = ti.max(hl, hr) - ti.max(ez_t[eil], ez_t[eir], dh_t[si]) # water height in direction x
                     # Calculate the unit discharge quantity caused by pressure gradient in direction x
-                    xdq = (-g * (hr - hl) / dx) * ti.max(xwh, 0.0) * dt
+                    difference = hr - hl
+                    if ti.static(has_hanging):
+                        difference = pressure.difference(si, eil, eir, difference)
+                    xdq = (-g * difference / dx) * ti.max(xwh, 0.0) * dt
                     # Calculate the friction term in direction x (Manning's formula)
                     xf = 1.0 + g * dt * (side_n_t[si] ** 2) * ti.abs(xq / (ti.max(xwh, 0.00001) ** (7.0 / 3.0)))
                     x_neighbors = face_qn_t[eil, 0] + face_qn_t[eir, 1]
@@ -436,7 +457,10 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
                     yq = sq_t[si]
                     ywh = ti.max(hb, ht) - ti.max(ez_t[eib], ez_t[eit], dh_t[si]) # water height in direction y
                     # Calculate the unit discharge quantity caused by pressure gradient in direction y
-                    ydq = (-g * (ht - hb) / dy) * ti.max(ywh, 0.0) * dt
+                    difference = ht - hb
+                    if ti.static(has_hanging):
+                        difference = pressure.difference(si, eib, eit, difference)
+                    ydq = (-g * difference / dy) * ti.max(ywh, 0.0) * dt
                     # Calculate the friction term in direction y (Manning's formula)
                     yf = 1.0 + g * dt * (side_n_t[si] ** 2) * ti.abs(yq / (ti.max(ywh, 0.00001) ** (7.0 / 3.0)))
                     y_neighbors = face_qn_t[eib, 2] + face_qn_t[eit, 3]
@@ -870,6 +894,8 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
     builder = ti.graph.GraphBuilder()
     for _ in range(clock.batch_size):
         builder.dispatch(prepare_step)
+        if has_hanging:
+            builder.dispatch(update_pressure)
         builder.dispatch(tick)
         builder.dispatch(compute_cfl)
         builder.dispatch(finish_step)
