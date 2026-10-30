@@ -169,18 +169,18 @@ wheels = [
 
 [[package]]
 name = "fastdb4py"
-version = "0.1.12"
+version = "0.2.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/bc/7a/26edd78b10a43b1e54257e729c7e5e0fd7793135d810c330deb2387408fd/fastdb4py-0.1.12.tar.gz", hash = "sha256:760617fca4e2964869631bdea9674977661da595113f68494da9396c73d00053", size = 598781, upload-time = "2026-03-04T08:59:25.217Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1d/34/068bf47142cc964f1b9a4e10200053624bc9e8392c38dcfa8f0de24c3206/fastdb4py-0.2.4.tar.gz", hash = "sha256:edaf8855b848cf6c4129f59c69d4236ec4198aa507af65cc134246e2e7f67c33", size = 1066528, upload-time = "2026-10-29T19:31:02.853Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/44/26/82165f610fb8b0865e5bbabd879f5f9705fd233340e6b88fc460cdf69400/fastdb4py-0.1.12-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:6bbfe0bdd0e64a9979dec04c121c5943f796ab43fa47c4c7a9e4fa5d0149b1a3", size = 528579, upload-time = "2026-03-04T08:59:01.308Z" },
-    { url = "https://files.pythonhosted.org/packages/d9/8a/0182d864821cf30881a15a3382c7d078c5bb37b035f49070b4a74d615667/fastdb4py-0.1.12-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:cb8ceaa3d9c775e01011a01471adcf20901355aa57591d51ce15ca19aa031fc0", size = 474885, upload-time = "2026-03-04T08:59:02.482Z" },
-    { url = "https://files.pythonhosted.org/packages/5c/8c/bddcc8e6d635146f31dd3a2bc8773ebe790183b7344b7444d94671e1a6e9/fastdb4py-0.1.12-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ca6551775e770b0517c1cb375c530e4244c5c65e683635f5e18244939d73ba0a", size = 577668, upload-time = "2026-03-04T08:59:03.646Z" },
-    { url = "https://files.pythonhosted.org/packages/55/b4/42feb89308a6c823c451aa4ec68c8ae8668fdc2bcc42f16b15aec7ba81e1/fastdb4py-0.1.12-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:711a28ed5a374ee968a19e981ba72c639532d8f99fa6cc4e4f268c4bdf1c13be", size = 606981, upload-time = "2026-03-04T08:59:04.996Z" },
-    { url = "https://files.pythonhosted.org/packages/bf/7c/03e7c7268e2699e3b584f910d578e76aa578bf1f2bd0395bb6e2ee8bfc08/fastdb4py-0.1.12-cp310-cp310-win_amd64.whl", hash = "sha256:9e4388c077da1a8b8e68b50d35521d16d7249ba9d065f897f9e4d8e9375458f6", size = 183618, upload-time = "2026-03-04T08:59:05.988Z" },
+    { url = "https://files.pythonhosted.org/packages/0d/09/c88f91b0cde0646d1d93df213beac118fe9eab44cd0c7fc68d33ef8cdc03/fastdb4py-0.2.4-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:932d52bfb8f2ff3762fa2a1dff18c6e042ad8e4dad0b683856e6d9e041581cd0", size = 1134687, upload-time = "2026-10-29T19:30:00.903Z" },
+    { url = "https://files.pythonhosted.org/packages/89/bf/dc8e030940b06af995f669dac058647297927a92ef6e7e7b6ff16627f529/fastdb4py-0.2.4-cp310-cp310-macosx_11_0_x86_64.whl", hash = "sha256:f99c451974801dd07f6e82d138f31048f76c5916e2bcf9e675eea97313488ad6", size = 1239408, upload-time = "2026-10-29T19:30:03.213Z" },
+    { url = "https://files.pythonhosted.org/packages/d6/eb/8853ea6fadb9e3e86507d282007bbbc5ba13eeca2c7970718cab164f6e35/fastdb4py-0.2.4-cp310-cp310-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:4f8156729f33ab70c838749a66afb395846616745b6652f20433d79153e46c0c", size = 1348453, upload-time = "2026-10-29T19:30:05.325Z" },
+    { url = "https://files.pythonhosted.org/packages/c3/17/1168291fb2de919647e8b43b6bd9133495fa5ccea04f48bc74ddaaea6e03/fastdb4py-0.2.4-cp310-cp310-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:036f222c58f71929ccf49184c4a341e9e044da64e3d012e9c1e755fc4533dbaa", size = 1661884, upload-time = "2026-10-29T19:30:07.042Z" },
+    { url = "https://files.pythonhosted.org/packages/fb/26/8e3bb9ee721557ee5865bb51264d889da2590c8cd1e057733a2a1b97b9e7/fastdb4py-0.2.4-cp310-cp310-win_amd64.whl", hash = "sha256:4adaf3242b7bce2f50b8c7ca6fa1743615f54bcfa276fbdf7ae7a715e22a68c2", size = 798570, upload-time = "2026-10-29T19:30:08.562Z" },
 ]
 
 [[package]]
@@ -413,7 +413,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fastdb4py", specifier = "==0.1.12" },
+    { name = "fastdb4py", specifier = "==0.2.4" },
     { name = "geopandas", specifier = ">=1.1.3" },
     { name = "imageio", specifier = ">=2.34" },
     { name = "imageio-ffmpeg", specifier = ">=0.5" },

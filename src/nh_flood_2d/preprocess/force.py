@@ -34,13 +34,13 @@ class MeshGeometry:
 
     @classmethod
     def from_fdb(cls, ne_db, ns_db):
-        ne, ns = ne_db[Ne][Ne], ns_db[Ns][Ns]
+        ne, ns = ne_db.table(Ne), ns_db.table(Ns)
         x, y = ne.column.x.astype(float), ne.column.y.astype(float)
-        sides = ne_db[IndexLike]['isl_data'].column.index
+        sides = ne_db.table(IndexLike, name='isl_data').column.index
         coords = []
         for key, values in [('l', ns.column.x), ('b', ns.column.y),
                             ('r', ns.column.x), ('t', ns.column.y)]:
-            ptr = ne_db[IndexLike][f'isl_ptr_{key}'].column.index
+            ptr = ne_db.table(IndexLike, name=f'isl_ptr_{key}').column.index
             coords.append(values[sides[ptr]].astype(float))
         bounds = np.column_stack(coords)
         widths = bounds[:, 2] - bounds[:, 0]
@@ -51,7 +51,7 @@ class MeshGeometry:
             raise ValueError('Mesh cells must have positive rectangular areas')
         if np.any(widths[1:] != heights[1:]):
             raise ValueError('Mesh cells must be square for the edge-length CFL scale')
-        topo = ns_db[SideTopoInfo][SideTopoInfo].column.info.reshape(-1, 3)
+        topo = ns_db.table(SideTopoInfo).column.info.reshape(-1, 3)
         outer = (topo[:, 1] == 0) ^ (topo[:, 2] == 0)
         side_ids = np.flatnonzero(outer)
         cells = topo[side_ids, 1] + topo[side_ids, 2]

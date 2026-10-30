@@ -1,4 +1,5 @@
 import csv
+from contextlib import closing
 import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -35,16 +36,12 @@ def test_rectangular_non_square_mesh_is_rejected(tmp_path):
         duration=1, warmup_duration=0,
         land_parameters={10: dict(manning_n=.03, infiltration='none')})
     prepare_domain(cfg)
-    ns = fdb.ORM.load(cfg.ns_fdb, from_file=True)
-    ne = fdb.ORM.load(cfg.ne_fdb, from_file=True)
-    try:
-        column = ns[Ns][Ns].column
+    with closing(fdb.RecordEngine.load(cfg.ns_fdb, from_file=True)) as ns, \
+            closing(fdb.RecordEngine.load(cfg.ne_fdb, from_file=True)) as ne:
+        column = ns.table(Ns).column
         column.y[column.y == 10] = 20
         with pytest.raises(ValueError, match='square'):
             MeshGeometry.from_fdb(ne, ns)
-    finally:
-        ne.close()
-        ns.close()
 
 
 @pytest.fixture

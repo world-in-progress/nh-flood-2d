@@ -3,6 +3,8 @@
 import csv
 from pathlib import Path
 
+from contextlib import closing
+
 import fastdb4py as fdb
 import numpy as np
 import pytest
@@ -30,9 +32,9 @@ def test_depth_frames_are_single_f32_arrays_and_bed_events_rebuild_wse(tmp_path)
     depth = read_depth_frame(root / 'frames/depth_900.fdb', expected_count=3)
     assert depth.dtype == np.float32
     np.testing.assert_array_equal(depth, [0, .25, .5])
-    db = fdb.ORM.load(str(root / 'frames/depth_900.fdb'), from_file=True)
+    db = fdb.RecordEngine.load(str(root / 'frames/depth_900.fdb'), from_file=True)
     try:
-        np.testing.assert_array_equal(db[F32Value]['depth'].column.value, depth)
+        np.testing.assert_array_equal(db.table(F32Value, name='depth').column.value, depth)
     finally:
         db.close()
     with pytest.raises(ValueError, match='expected 4'):
@@ -77,23 +79,21 @@ def test_checkpoint_preserves_exact_f32_and_metadata_and_extrema(tmp_path):
 
 
 def _two_cell_mesh(ne_path: Path, ns_path: Path):
-    ne_db = fdb.ORM.truncate([fdb.TableDefn(Ne, 3),
-        fdb.TableDefn(IndexLike, 9, 'isl_data'),
-        *[fdb.TableDefn(IndexLike, 3, f'isl_ptr_{side}') for side in 'lrbt']])
-    ne_db[Ne][Ne].column.x[:] = [0, 5, 15]
-    ne_db[Ne][Ne].column.y[:] = [0, 5, 5]
-    ne_db[IndexLike]['isl_data'].column.index[:] = [0, 1, 2, 2, 3, 4, 5, 6, 7]
-    for side, pointers in {'l': [0, 1, 2], 'r': [0, 3, 4],
-                           'b': [0, 5, 6], 't': [0, 7, 8]}.items():
-        ne_db[IndexLike][f'isl_ptr_{side}'].column.index[:] = pointers
-    ne_db.save(str(ne_path))
-    ne_db.unlink()
+    with closing(fdb.RecordEngine.truncate([fdb.Layout(Ne, 3),
+        fdb.Layout(IndexLike, 9, 'isl_data'),
+        *[fdb.Layout(IndexLike, 3, f'isl_ptr_{side}') for side in 'lrbt']])) as ne_db:
+        ne_db.table(Ne).column.x[:] = [0, 5, 15]
+        ne_db.table(Ne).column.y[:] = [0, 5, 5]
+        ne_db.table(IndexLike, name='isl_data').column.index[:] = [0, 1, 2, 2, 3, 4, 5, 6, 7]
+        for side, pointers in {'l': [0, 1, 2], 'r': [0, 3, 4],
+                               'b': [0, 5, 6], 't': [0, 7, 8]}.items():
+            ne_db.table(IndexLike, name=f'isl_ptr_{side}').column.index[:] = pointers
+        ne_db.save(str(ne_path))
 
-    ns_db = fdb.ORM.truncate([fdb.TableDefn(Ns, 8)])
-    ns_db[Ns][Ns].column.x[:] = [0, 0, 10, 20, 5, 15, 5, 15]
-    ns_db[Ns][Ns].column.y[:] = [0, 5, 5, 5, 0, 0, 10, 10]
-    ns_db.save(str(ns_path))
-    ns_db.unlink()
+    with closing(fdb.RecordEngine.truncate([fdb.Layout(Ns, 8)])) as ns_db:
+        ns_db.table(Ns).column.x[:] = [0, 0, 10, 20, 5, 15, 5, 15]
+        ns_db.table(Ns).column.y[:] = [0, 5, 5, 5, 0, 0, 10, 10]
+        ns_db.save(str(ns_path))
 
 
 def test_station_boundary_chooses_smallest_cell_and_csv_has_one_row_per_station(tmp_path):

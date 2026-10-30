@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
+from contextlib import closing
+
 import fastdb4py as fdb
 import numpy as np
 import pytest
@@ -81,30 +83,23 @@ def test_shared_cells_and_outfall_conserve_exchange():
 
 
 def _pipe_fdb(path: Path, primary_cells=(1, 2)):
-    db = fdb.ORM.create()
-    for i, (name, outfall) in enumerate([('J1', False), ('O1', True)]):
-        node = Node()
-        node.index, node.name, node.x, node.y, node.is_outfall = i, name, 5 + i * 10, 5, outfall
-        db.push(node)
-        primary = IndexLike()
-        primary.index = primary_cells[i]
-        db.push(primary, 'node_primary_ei')
-        rim = F32Value()
-        rim.value = 2. if not outfall else 0.
-        db.push(rim, 'node_rim')
-    for value in (0, 0, 0):
-        row = IndexLike()
-        row.index = value
-        db.push(row, 'topo_ptr')
-    count = IndexLike()
-    count.index = 2
-    db.push(count, 'node_count')
-    # FDB requires a nonempty table even when CSR has no secondary entries.
-    dummy = PipeTopo()
-    dummy.ei = 0
-    db.push(dummy)
-    db.save(str(path))
-    db.unlink()
+    with closing(fdb.RecordEngine.truncate([
+        fdb.Layout(Node, 2),
+        fdb.Layout(IndexLike, 2, 'node_primary_ei'),
+        fdb.Layout(F32Value, 2, 'node_rim'),
+        fdb.Layout(IndexLike, 3, 'topo_ptr'),
+        fdb.Layout(IndexLike, 1, 'node_count'),
+        fdb.Layout(PipeTopo, 1),
+    ])) as db:
+        db.table(Node).fill(index=[0, 1], name=['J1', 'O1'], x=[5, 15], y=[5, 5],
+                            is_outfall=[False, True])
+        db.table(IndexLike, name='node_primary_ei').column.index[:] = primary_cells
+        db.table(F32Value, name='node_rim').column.value[:] = [2., 0.]
+        db.table(IndexLike, name='topo_ptr').column.index[:] = 0
+        db.table(IndexLike, name='node_count').column.index[:] = 2
+        # FDB requires a nonempty table even when CSR has no secondary entries.
+        db.table(PipeTopo).column.ei[:] = 0
+        db.save(str(path))
 
 
 def test_continuous_swmm_actor_keeps_warmup_clock(tmp_path):

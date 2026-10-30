@@ -5,14 +5,16 @@ from pathlib import Path
 import numpy as np
 import pytest
 import rasterio
+import taichi as ti
 from rasterio.transform import from_origin
 
 from src.nh_flood_2d.core.output import read_checkpoint, write_checkpoint
-from src.nh_flood_2d.core.pressure import hanging_geometry
+from src.nh_flood_2d.core.pressure import PressureReconstruction, hanging_geometry
 from src.nh_flood_2d.core.run_record import RunRecord, sha256
 from src.nh_flood_2d.core.solver_compact import _solve
 from src.nh_flood_2d.input import DomainConfig, ForceConfig
 from src.nh_flood_2d.preprocess import preprocess
+from src.nh_flood_2d.util.ti import copy_to_taichi
 from test_solver_forcing import START
 
 pytestmark = pytest.mark.usefixtures('taichi_cpu')
@@ -147,3 +149,82 @@ def test_aligned_mesh_allocates_no_reconstruction(tmp_path):
     cells = [(x, x+4, y, y+4) for x in (0, 4) for y in (0, 4, 8)]
     xy, _, topo, side_xy = square_mesh(tmp_path, cells, lambda x, y, i: 0.)
     assert hanging_geometry(xy[:, 0], xy[:, 1], side_xy[:, 0], side_xy[:, 1], topo) is None
+
+
+def split_face_reconstruction():
+    """A coarse cell has two upper and two right subedges of unequal neighbours."""
+    # 1: coarse centre; 2/3: right neighbours; 4: bottom; 5/6: upper neighbours.
+    x = np.array([0, 4, 10, 10, 4, 2, 6], dtype=np.float32)
+    y = np.array([0, 4, 2, 6, -4, 10, 10], dtype=np.float32)
+    side_x = np.array([0, 8, 8, 4, 2, 6], dtype=np.float32)
+    side_y = np.array([0, 2, 6, 0, 8, 8], dtype=np.float32)
+    topology = np.array([[0, 0, 0], [2, 1, 2], [2, 1, 3],
+                         [1, 4, 1], [1, 1, 5], [1, 1, 6]], dtype=np.int32)
+    layout = hanging_geometry(x, y, side_x, side_y, topology)
+    np.testing.assert_array_equal(layout.cells, [1])
+    np.testing.assert_array_equal(layout.axes, [[1, 1]])
+    face_ptr = np.zeros((len(x), 4), dtype=np.int32)
+    face_count = np.zeros_like(face_ptr)
+    # Direction order is left, right, bottom, top, as used by the solver.
+    face_ptr[1] = [0, 0, 2, 3]
+    face_count[1] = [0, 2, 1, 2]
+    depth = ti.field(ti.f32, shape=len(x))
+    pressure = PressureReconstruction(layout,
+        bed=copy_to_taichi(np.zeros(len(x), dtype=np.float32), ti.f32, None), depth=depth,
+        x=copy_to_taichi(x, ti.f32, None), y=copy_to_taichi(y, ti.f32, None),
+        lengths=copy_to_taichi(np.array([0, 4, 4, 8, 4, 4], dtype=np.float32), ti.f32, None),
+        topology=copy_to_taichi(topology, ti.i32, None),
+        face_ptr=copy_to_taichi(face_ptr, ti.i32, None),
+        face_count=copy_to_taichi(face_count, ti.i32, None),
+        sides=copy_to_taichi(np.array([1, 2, 3, 4, 5], dtype=np.int32), ti.i32, None),
+        min_h=.25)
+    differences = ti.field(ti.f32, shape=2)
+
+    @ti.kernel
+    def update():
+        for slot in pressure.cells:
+            pressure.update_cell(slot)
+
+    @ti.kernel
+    def reconstruct():
+        for side in range(1, 3):
+            lower, higher = pressure.topology[side, 1], pressure.topology[side, 2]
+            raw = pressure.depth[higher] - pressure.depth[lower]
+            differences[side - 1] = pressure.difference(side, lower, higher, raw)
+
+    def step(values):
+        depth.from_numpy(np.array([0, *values], dtype=np.float32))
+        update()
+        reconstruct()
+        return pressure.gradients.to_numpy()[0, 1], differences.to_numpy()
+
+    return step
+
+
+def test_partly_dry_split_neighbour_face_uses_other_face_fallback():
+    step = split_face_reconstruction()
+    # The upper face has a wet half and a half exactly at min_h. Its wet half
+    # must not be mistaken for a complete usable face.
+    for upper_wet in (1.5, 2.0):
+        gradient, difference = step([1., 1., 1., .5, upper_wet, .25])
+        assert gradient == pytest.approx(.5 / 8, abs=1e-7)
+        np.testing.assert_allclose(difference, [.125, -.125], atol=2e-7, rtol=0)
+
+
+def test_consecutive_threshold_crossings_recompute_gradients_and_differences():
+    step = split_face_reconstruction()
+    # Each row is a new time step on the same Taichi fields and reconstruction.
+    # Check both the cached gradient and the corrected hanging-edge differences.
+    states = [
+        ([1., 1., 1., .5, 1.5, .25], .5 / 8, [.125, -.125]),
+        ([1., 1., 1., .5, 1.5, 1.75], 1.125 / 14, [2 * 1.125 / 14, -2 * 1.125 / 14]),
+        ([1., 1., 1., .25, 1.5, 1.75], .625 / 6, [2 * .625 / 6, -2 * .625 / 6]),
+        ([.25, 1., 1., .5, 1.5, 1.75], 0., [.75, .75]),
+        ([1.25, 1., 1., .5, 1.5, .25], .75 / 8, [-.25 + 2 * .75 / 8, -.25 - 2 * .75 / 8]),
+        ([1.25, .25, 1., .5, 1.5, .25], .75 / 8, [-1., -.25 - 2 * .75 / 8]),
+        ([1.25, 1., 1., .25, .25, .25], 0., [-.25, -.25]),
+    ]
+    for depths, expected_gradient, expected_difference in states:
+        gradient, difference = step(depths)
+        assert gradient == pytest.approx(expected_gradient, abs=2e-7)
+        np.testing.assert_allclose(difference, expected_difference, atol=3e-7, rtol=0)

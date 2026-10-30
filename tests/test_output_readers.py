@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
+from contextlib import closing
+
 import fastdb4py as fdb
 import numpy as np
 import pytest
@@ -17,12 +19,11 @@ START = datetime(2023, 9, 7, 17, 30, tzinfo=timezone.utc)
 
 
 def _ne(path):
-    db = fdb.ORM.truncate([fdb.TableDefn(Ne, 3)])
-    column = db[Ne][Ne].column
-    column.x[:] = [0, 5, 15]
-    column.y[:] = [0, 5, 5]
-    db.save(str(path))
-    db.unlink()
+    with closing(fdb.RecordEngine.truncate([fdb.Layout(Ne, 3)])) as db:
+        column = db.table(Ne).column
+        column.x[:] = [0, 5, 15]
+        column.y[:] = [0, 5, 5]
+        db.save(str(path))
 
 
 def _output(root, depth, bed, maximum=None, events=None):

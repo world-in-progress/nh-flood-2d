@@ -5,6 +5,7 @@ device reductions, and the meaning of checkpoint metadata.
 """
 
 import csv
+from contextlib import closing
 from dataclasses import dataclass
 import json
 import os
@@ -69,19 +70,19 @@ def _save(path, definitions, fill):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f'.{path.name}.{os.getpid()}.tmp')
-    db = fdb.ORM.truncate(definitions)
+    db = fdb.RecordEngine.truncate(definitions)
     try:
         fill(db)
         db.save(str(temporary))
     finally:
-        db.unlink()
+        db.close()
     os.replace(temporary, path)
 
 
 def _read_named(path, feature, name, column, expected_count=None):
-    db = fdb.ORM.load(str(path), from_file=True)
+    db = fdb.RecordEngine.load(str(path), from_file=True)
     try:
-        values = getattr(db[feature][name].column, column).copy()
+        values = getattr(db.table(feature, name=name).column, column).copy()
     finally:
         db.close()
     if expected_count is not None and len(values) != expected_count:
@@ -91,8 +92,8 @@ def _read_named(path, feature, name, column, expected_count=None):
 
 def write_bed(path, bed):
     values = _float_array(bed, 'bed')
-    _save(path, [fdb.TableDefn(F32Value, len(values), 'bed')],
-          lambda db: db[F32Value]['bed'].column.value.__setitem__(slice(None), values))
+    _save(path, [fdb.Layout(F32Value, len(values), 'bed')],
+          lambda db: db.table(F32Value, name='bed').column.value.__setitem__(slice(None), values))
 
 
 def read_bed(path, expected_count=None):
@@ -103,8 +104,8 @@ def write_depth_frame(path, depth):
     values = _float_array(depth, 'depth')
     if np.any(values < 0):
         raise ValueError('depth must be nonnegative')
-    _save(path, [fdb.TableDefn(F32Value, len(values), 'depth')],
-          lambda db: db[F32Value]['depth'].column.value.__setitem__(slice(None), values))
+    _save(path, [fdb.Layout(F32Value, len(values), 'depth')],
+          lambda db: db.table(F32Value, name='depth').column.value.__setitem__(slice(None), values))
 
 
 def read_depth_frame(path, expected_count=None):
@@ -135,28 +136,28 @@ def write_extrema(path, max_depth, first_time_hi, first_time_lo, max_speed):
     }
     if len({len(a) for a in arrays.values()}) != 1:
         raise ValueError('extrema arrays must have the same number of cells')
-    definitions = [fdb.TableDefn(F32Value, len(arrays[name]), name)
+    definitions = [fdb.Layout(F32Value, len(arrays[name]), name)
                    for name in ('max_depth', 'max_speed')]
-    definitions += [fdb.TableDefn(IndexLike, len(arrays[name]), name)
+    definitions += [fdb.Layout(IndexLike, len(arrays[name]), name)
                     for name in ('first_time_hi', 'first_time_lo')]
 
     def fill(db):
         for name in ('max_depth', 'max_speed'):
-            db[F32Value][name].column.value[:] = arrays[name]
+            db.table(F32Value, name=name).column.value[:] = arrays[name]
         for name in ('first_time_hi', 'first_time_lo'):
-            db[IndexLike][name].column.index[:] = arrays[name]
+            db.table(IndexLike, name=name).column.index[:] = arrays[name]
 
     _save(path, definitions, fill)
 
 
 def read_extrema(path, expected_count=None):
-    db = fdb.ORM.load(str(path), from_file=True)
+    db = fdb.RecordEngine.load(str(path), from_file=True)
     try:
         result = Extrema(
-            db[F32Value]['max_depth'].column.value.copy(),
-            db[IndexLike]['first_time_hi'].column.index.copy(),
-            db[IndexLike]['first_time_lo'].column.index.copy(),
-            db[F32Value]['max_speed'].column.value.copy(),
+            db.table(F32Value, name='max_depth').column.value.copy(),
+            db.table(IndexLike, name='first_time_hi').column.index.copy(),
+            db.table(IndexLike, name='first_time_lo').column.index.copy(),
+            db.table(F32Value, name='max_speed').column.value.copy(),
         )
     finally:
         db.close()
@@ -192,31 +193,31 @@ def write_checkpoint(path, *, depth, bed, q, rain_time, infiltration,
     integers = [_uint_array([value], name) for name, value in
                 [('clock_hi', clock_hi), ('clock_lo', clock_lo), ('gate_open', int(gate_open))]]
     encoded = metadata_json.encode('utf-8')
-    definitions = [fdb.TableDefn(F32Value, len(array), name) for name, array in arrays.items()]
-    definitions += [fdb.TableDefn(IndexLike, 1, name) for name in _CHECKPOINT_INTS]
-    definitions += [fdb.TableDefn(IndexLike, len(value), name)
+    definitions = [fdb.Layout(F32Value, len(array), name) for name, array in arrays.items()]
+    definitions += [fdb.Layout(IndexLike, 1, name) for name in _CHECKPOINT_INTS]
+    definitions += [fdb.Layout(IndexLike, len(value), name)
                     for name, value in times.items()]
-    definitions.append(fdb.TableDefn(U8Value, len(encoded), 'state_meta'))
+    definitions.append(fdb.Layout(U8Value, len(encoded), 'state_meta'))
 
     def fill(db):
         for name, array in arrays.items():
-            db[F32Value][name].column.value[:] = array
+            db.table(F32Value, name=name).column.value[:] = array
         for name, array in zip(_CHECKPOINT_INTS, integers):
-            db[IndexLike][name].column.index[:] = array
+            db.table(IndexLike, name=name).column.index[:] = array
         for name, array in times.items():
-            db[IndexLike][name].column.index[:] = array
-        db[U8Value]['state_meta'].column.value[:] = np.frombuffer(encoded, dtype=np.uint8)
+            db.table(IndexLike, name=name).column.index[:] = array
+        db.table(U8Value, name='state_meta').column.value[:] = np.frombuffer(encoded, dtype=np.uint8)
 
     _save(path, definitions, fill)
 
 
 def read_checkpoint(path, expected_cells=None, expected_sides=None):
-    db = fdb.ORM.load(str(path), from_file=True)
+    db = fdb.RecordEngine.load(str(path), from_file=True)
     try:
-        floats = {name: db[F32Value][name].column.value.copy() for name in _CHECKPOINT_FLOATS}
-        ints = {name: db[IndexLike][name].column.index.copy() for name in _CHECKPOINT_INTS}
-        times = {name: db[IndexLike][name].column.index.copy() for name in _CHECKPOINT_TIME}
-        metadata_json = db[U8Value]['state_meta'].column.value.tobytes().decode('utf-8')
+        floats = {name: db.table(F32Value, name=name).column.value.copy() for name in _CHECKPOINT_FLOATS}
+        ints = {name: db.table(IndexLike, name=name).column.index.copy() for name in _CHECKPOINT_INTS}
+        times = {name: db.table(IndexLike, name=name).column.index.copy() for name in _CHECKPOINT_TIME}
+        metadata_json = db.table(U8Value, name='state_meta').column.value.tobytes().decode('utf-8')
     finally:
         db.close()
     if len({len(floats[name]) for name in ('depth', 'bed', 'rain_time', 'infiltration',
@@ -244,16 +245,15 @@ def read_checkpoint(path, expected_cells=None, expected_sides=None):
 
 def resolve_station_cells(points, ne_fdb_path, ns_fdb_path):
     """Resolve closed rectangle overlaps by the smallest real element ID."""
-    ne_db = fdb.ORM.load(str(ne_fdb_path), from_file=True)
-    ns_db = fdb.ORM.load(str(ns_fdb_path), from_file=True)
-    try:
-        ne = ne_db[Ne][Ne]
-        ns = ns_db[Ns][Ns]
-        sides = ne_db[IndexLike]['isl_data'].column.index
+    with closing(fdb.RecordEngine.load(str(ne_fdb_path), from_file=True)) as ne_db, \
+            closing(fdb.RecordEngine.load(str(ns_fdb_path), from_file=True)) as ns_db:
+        ne = ne_db.table(Ne)
+        ns = ns_db.table(Ns)
+        sides = ne_db.table(IndexLike, name='isl_data').column.index
         bounds = []
         for direction, coordinates in [('l', ns.column.x), ('b', ns.column.y),
                                        ('r', ns.column.x), ('t', ns.column.y)]:
-            pointers = ne_db[IndexLike][f'isl_ptr_{direction}'].column.index
+            pointers = ne_db.table(IndexLike, name=f'isl_ptr_{direction}').column.index
             bounds.append(coordinates[sides[pointers]].astype(np.float64))
         left, bottom, right, top = bounds
         resolved = {}
@@ -266,9 +266,6 @@ def resolve_station_cells(points, ne_fdb_path, ns_fdb_path):
                 raise ValueError(f'Station {name}: ({x}, {y}) lies outside the mesh')
             resolved[name] = int(candidates[0] + 1)
         return resolved
-    finally:
-        ne_db.close()
-        ns_db.close()
 
 
 def append_station_samples(path, *, elapsed_seconds, time, samples):

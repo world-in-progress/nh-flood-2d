@@ -1,5 +1,6 @@
 """Local-inertial solver with absolute-time spatial forcing and water accounting."""
 import csv
+from contextlib import closing
 import hashlib
 import json
 import math
@@ -44,73 +45,72 @@ def set_elevation(domain_cfg, elevate_meter: float):
     # Load ne.fdb and update z values based on the elevation points
     ne_fdb_fn = Path(domain_cfg.ne_fdb)
     ns_fdb_fn = Path(domain_cfg.ns_fdb) # use ns to calculate the bbox of ne
-    ne_fdb = fdb.ORM.load(str(ne_fdb_fn), from_file=True)
-    ns_fdb = fdb.ORM.load(str(ns_fdb_fn), from_file=True)
+    with closing(fdb.RecordEngine.load(str(ne_fdb_fn), from_file=True)) as ne_fdb, \
+            closing(fdb.RecordEngine.load(str(ns_fdb_fn), from_file=True)) as ns_fdb:
+        nes = ne_fdb.table(Ne)
+        nss = ns_fdb.table(Ns)
 
-    nes = ne_fdb[Ne][Ne]
-    nss = ns_fdb[Ns][Ns]
+        # Lengths and counts
+        e_num = len(nes)                                                # number of hydro elements
+        p_num = len(pts)                                                # number of elevation points
 
-    # Lengths and counts
-    e_num = len(nes)                                                # number of hydro elements
-    p_num = len(pts)                                                # number of elevation points
+        init_taichi(use_gpu=True, profiler=False)
 
-    init_taichi(use_gpu=True, profiler=False)
+        # Coordinate fields
+        ex_t = copy_to_taichi(nes.column.x,  ti.f32, None)
+        ey_t = copy_to_taichi(nes.column.y,  ti.f32, None)
+        sx_t = copy_to_taichi(nss.column.x,  ti.f32, None)
+        sy_t = copy_to_taichi(nss.column.y,  ti.f32, None)
 
-    # Coordinate fields
-    ex_t = copy_to_taichi(nes.column.x,  ti.f32, None)
-    ey_t = copy_to_taichi(nes.column.y,  ti.f32, None)
-    sx_t = copy_to_taichi(nss.column.x,  ti.f32, None)
-    sy_t = copy_to_taichi(nss.column.y,  ti.f32, None)
+        # Compact side-index fields for bounding-box calculation
+        isl_data_t  = copy_to_taichi(ne_fdb.table(IndexLike, name='isl_data').column.index,  ti.i32, None)
+        isl_ptr_l_t = copy_to_taichi(ne_fdb.table(IndexLike, name='isl_ptr_l').column.index, ti.i32, None)
+        isl_ptr_b_t = copy_to_taichi(ne_fdb.table(IndexLike, name='isl_ptr_b').column.index, ti.i32, None)
 
-    # Compact side-index fields for bounding-box calculation
-    isl_data_t  = copy_to_taichi(ne_fdb[IndexLike]['isl_data'].column.index,  ti.i32, None)
-    isl_ptr_l_t = copy_to_taichi(ne_fdb[IndexLike]['isl_ptr_l'].column.index, ti.i32, None)
-    isl_ptr_b_t = copy_to_taichi(ne_fdb[IndexLike]['isl_ptr_b'].column.index, ti.i32, None)
+        # Points field and result flag field
+        pts_t          = copy_to_taichi(pts, ti.f32, (p_num, 2))
+        needs_elevate_t = ti.field(dtype=ti.i32, shape=e_num)
 
-    # Points field and result flag field
-    pts_t          = copy_to_taichi(pts, ti.f32, (p_num, 2))
-    needs_elevate_t = ti.field(dtype=ti.i32, shape=e_num)
-
-    @ti.kernel
-    @no_type_check
-    def find_elements_to_elevate():
-        for ei in range(1, e_num):
-            # Determine bounding box from leftmost and bottommost side positions
-            lsi = isl_data_t[isl_ptr_l_t[ei]]
-            bsi = isl_data_t[isl_ptr_b_t[ei]]
+        @ti.kernel
+        @no_type_check
+        def find_elements_to_elevate():
+            for ei in range(1, e_num):
+                # Determine bounding box from leftmost and bottommost side positions
+                lsi = isl_data_t[isl_ptr_l_t[ei]]
+                bsi = isl_data_t[isl_ptr_b_t[ei]]
             
-            half_width = ex_t[ei] - sx_t[lsi]
-            half_height = ey_t[ei] - sy_t[bsi]
+                half_width = ex_t[ei] - sx_t[lsi]
+                half_height = ey_t[ei] - sy_t[bsi]
             
-            x_min = ex_t[ei] - half_width
-            x_max = ex_t[ei] + half_width
-            y_min = ey_t[ei] - half_height
-            y_max = ey_t[ei] + half_height
-            for pi in range(p_num):
-                px = pts_t[pi, 0]
-                py = pts_t[pi, 1]
-                if x_min <= px <= x_max and y_min <= py <= y_max:
-                    needs_elevate_t[ei] = 1
-                    break
+                x_min = ex_t[ei] - half_width
+                x_max = ex_t[ei] + half_width
+                y_min = ey_t[ei] - half_height
+                y_max = ey_t[ei] + half_height
+                for pi in range(p_num):
+                    px = pts_t[pi, 0]
+                    py = pts_t[pi, 1]
+                    if x_min <= px <= x_max and y_min <= py <= y_max:
+                        needs_elevate_t[ei] = 1
+                        break
 
-    find_elements_to_elevate()
+        find_elements_to_elevate()
     
-    # Check if ei 354070 in picked elements
-    if needs_elevate_t[354070] == 1:
-        print(f'Element 354070 needs elevation. Its center is at ({ex_t[354070]}, {ey_t[354070]}), z = {nes.column.z[354070]}')
-    else:
-        print('OK!')
+        # Check if ei 354070 in picked elements
+        if needs_elevate_t[354070] == 1:
+            print(f'Element 354070 needs elevation. Its center is at ({ex_t[354070]}, {ey_t[354070]}), z = {nes.column.z[354070]}')
+        else:
+            print('OK!')
 
-    # Update z values where a point fell inside the element bbox and current z is below the target
-    flags = needs_elevate_t.to_numpy()
-    z_arr = nes.column.z
-    mask = (flags > 0) & (z_arr < elevate_meter)
-    z_arr[mask] = elevate_meter
-    print(f'set_elevation: {mask.sum()} elements elevated to {elevate_meter} m')
+        # Update z values where a point fell inside the element bbox and current z is below the target
+        flags = needs_elevate_t.to_numpy()
+        z_arr = nes.column.z
+        mask = (flags > 0) & (z_arr < elevate_meter)
+        z_arr[mask] = elevate_meter
+        print(f'set_elevation: {mask.sum()} elements elevated to {elevate_meter} m')
 
-    # Save updated ne.fdb back to disk
-    ne_fdb.save(str(ne_fdb_fn))
-    print(f'set_elevation: ne.fdb saved to {ne_fdb_fn}')
+        # Save updated ne.fdb back to disk
+        ne_fdb.save(str(ne_fdb_fn))
+        print(f'set_elevation: ne.fdb saved to {ne_fdb_fn}')
 
 
 @ti.func
@@ -177,22 +177,35 @@ def _solve(domain_cfg, force_cfg, record, pipe_cfg=None, end_time=None):
 def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
     init_taichi(use_gpu=True, profiler=False)
     record.device()
-    ne_db = fdb.ORM.load(domain_cfg.ne_fdb, from_file=True)
-    ns_db = fdb.ORM.load(domain_cfg.ns_fdb, from_file=True)
-    bd_db = fdb.ORM.load(domain_cfg.boundary_fdb, from_file=True)
-    nes, nss = ne_db[Ne][Ne], ns_db[Ns][Ns]
-    mesh = MeshGeometry.from_fdb(ne_db, ns_db)
+    # Retain owned host arrays; FDB engines are closed before the time loop.
+    with closing(fdb.RecordEngine.load(domain_cfg.ne_fdb, from_file=True)) as ne_db, \
+            closing(fdb.RecordEngine.load(domain_cfg.ns_fdb, from_file=True)) as ns_db, \
+            closing(fdb.RecordEngine.load(domain_cfg.boundary_fdb, from_file=True)) as bd_db:
+        nes, nss = ne_db.table(Ne), ns_db.table(Ns)
+        mesh = MeshGeometry.from_fdb(ne_db, ns_db)
+        ex, ey, bed = (getattr(nes.column, name).copy() for name in ('x', 'y', 'z'))
+        land_types = nes.column.type.copy()
+        side_x, side_y, side_lengths = (getattr(nss.column, name).copy()
+                                        for name in ('x', 'y', 'length'))
+        side_topology = ns_db.table(SideTopoInfo).column.info.copy().reshape(-1, 3)
+        side_flags = bd_db.table(U8Value, name='sbf').column.value.copy()
+        isl_data = ne_db.table(IndexLike, name='isl_data').column.index.copy()
+        face_ptrs = np.column_stack([
+            ne_db.table(IndexLike, name=f'isl_ptr_{direction}').column.index
+            for direction in ('l', 'r', 'b', 't')])
+        face_counts = np.column_stack([
+            getattr(nes.column, f'{direction}_side_num')
+            for direction in ('l', 'r', 'b', 't')])
     forcing = Forcing.load(domain_cfg, force_cfg, mesh)
-    e_num, s_num = len(nes), len(nss)
+    e_num, s_num = len(ex), len(side_lengths)
     b_num = len(forcing.boundaries)
     side_n, cell_f0, cell_fc, cell_k = map_land_parameters(
-        domain_cfg.land_parameters, nes.column.type,
-        ns_db[SideTopoInfo][SideTopoInfo].column.info.reshape(-1, 3))
+        domain_cfg.land_parameters, land_types, side_topology)
     g, afa, sita, min_h = 9.81, domain_cfg.afa, domain_cfg.sita, domain_cfg.min_h
-    ex_t = copy_to_taichi(nes.column.x, ti.f32, None)
-    ey_t = copy_to_taichi(nes.column.y, ti.f32, None)
-    ez_t = copy_to_taichi(nes.column.z, ti.f32, None)
-    eu_t = copy_to_taichi(nes.column.type, ti.i32, None)
+    ex_t = copy_to_taichi(ex, ti.f32, None)
+    ey_t = copy_to_taichi(ey, ti.f32, None)
+    ez_t = copy_to_taichi(bed, ti.f32, None)
+    eu_t = copy_to_taichi(land_types, ti.i32, None)
     area_t = copy_to_taichi(mesh.area.astype('float32'), ti.f32, None)
     eq_t = ti.field(ti.f32, (e_num, 4))
     increment_t = ti.field(ti.f32, e_num)
@@ -207,20 +220,14 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
     cfl_t = ti.field(ti.f32, s_num)
     flow_depth_t = ti.field(ti.f32, s_num)
     sdc_t = ti.field(ti.f32, s_num)
-    sl_t = copy_to_taichi(nss.column.length, ti.f32, None)
+    sl_t = copy_to_taichi(side_lengths, ti.f32, None)
     side_n_t = copy_to_taichi(side_n, ti.f32, None)
     infiltration_f0_t = copy_to_taichi(cell_f0, ti.f32, None)
     infiltration_fc_t = copy_to_taichi(cell_fc, ti.f32, None)
     infiltration_k_t = copy_to_taichi(cell_k, ti.f32, None)
-    sbf_t = copy_to_taichi(bd_db[U8Value]['sbf'].column.value, ti.u8, None)
-    sts_t = copy_to_taichi(ns_db[SideTopoInfo][SideTopoInfo].column.info, ti.i32, (s_num, 3))
-    isl_data_t = copy_to_taichi(ne_db[IndexLike]['isl_data'].column.index, ti.i32, None)
-    face_ptrs = np.column_stack([
-        ne_db[IndexLike][f'isl_ptr_{direction}'].column.index
-        for direction in ('l', 'r', 'b', 't')])
-    face_counts = np.column_stack([
-        getattr(nes.column, f'{direction}_side_num')
-        for direction in ('l', 'r', 'b', 't')])
+    sbf_t = copy_to_taichi(side_flags, ti.u8, None)
+    sts_t = copy_to_taichi(side_topology.reshape(-1), ti.i32, (s_num, 3))
+    isl_data_t = copy_to_taichi(isl_data, ti.i32, None)
     face_ptr_t = copy_to_taichi(face_ptrs, ti.i32, None)
     face_count_t = copy_to_taichi(face_counts, ti.i32, None)
     face_qn_t = ti.field(ti.f32, (e_num, 4))
@@ -244,9 +251,9 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
         selected_sides[b.side_ids] = True
     if sita != 1.:
         open_faces = open_boundary_face_fractions(
-            selected_sides, nss.column.length,
-            ns_db[SideTopoInfo][SideTopoInfo].column.info.reshape(-1, 3),
-            face_ptrs, face_counts, ne_db[IndexLike]['isl_data'].column.index)
+            selected_sides, side_lengths,
+            side_topology,
+            face_ptrs, face_counts, isl_data)
     open_face_t = copy_to_taichi(open_faces, ti.f32, None)
     weight_t = copy_to_taichi(weights, ti.f32, None)
     kind_t = copy_to_taichi(kinds, ti.i32, None)
@@ -303,8 +310,8 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
     station_count = len(station_names)
     station_id_t = copy_to_taichi(np.array(list(station_cells.values()) or [0], dtype=np.int32), ti.i32, None)
     station_sample_t = ti.field(ti.f32, (max(1, station_count), 4))
-    geometry = hanging_geometry(nes.column.x, nes.column.y, nss.column.x, nss.column.y,
-                                ns_db[SideTopoInfo][SideTopoInfo].column.info.reshape(-1, 3))
+    geometry = hanging_geometry(ex, ey, side_x, side_y,
+                                side_topology)
     has_hanging = geometry is not None
     pressure = None
     if has_hanging:
@@ -620,7 +627,7 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
         candidate = float(ndt_t[None])
         if candidate < _MIN_DT:
             si = int(cfl_arg_t[None])
-            cells = ns_db[SideTopoInfo][SideTopoInfo].column.info.reshape(-1, 3)[si, 1:]
+            cells = side_topology[si, 1:]
             depths = depth_t.to_numpy()[cells]
             h = float(flow_depth_t[si])
             q = float(sq_t[si])
@@ -711,7 +718,7 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
     previous_warmup_steps = state_meta['total_warmup_steps'] if continuation else 0
     min_dt, max_dt, integrated_dt = float('inf'), 0., 0.
     discharge_peaks = np.zeros(b_num, dtype=np.float64)
-    gate_cells = np.flatnonzero(nes.column.type[1:] == gate_type) + 1 if gate else np.empty(0,dtype=int)
+    gate_cells = np.flatnonzero(land_types[1:] == gate_type) + 1 if gate else np.empty(0,dtype=int)
     record.data['gate_cell_count'] = len(gate_cells)
     record.data['station_cells'] = station_cells
     coefficients = np.zeros((max(1, b_num), 2), dtype=np.float32)
@@ -860,14 +867,14 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
     process_gate_event(elapsed, initial=True)
     if state is None and domain_cfg.warmup_duration > 0:
         initial_depth, initialization = connected_still_water(
-            bed_np, dh_t.to_numpy(), bd_db[U8Value]['sbf'].column.value,
-            ns_db[SideTopoInfo][SideTopoInfo].column.info.reshape(-1, 3),
+            bed_np, dh_t.to_numpy(), side_flags,
+            side_topology,
             forcing.boundaries, mesh.area)
         depth_t.from_numpy(initial_depth)
         record.data['initialization'] = dict(method='connected_still_water', **initialization)
     else:
         record.data['initialization'] = dict(method='checkpoint' if state else 'dry')
-    write_bed(root / 'bed.fdb', state.bed if state else nes.column.z)
+    write_bed(root / 'bed.fdb', state.bed if state else bed)
     initial_depth = depth_t.to_numpy()
     initial_storage = float(np.sum(initial_depth.astype(float) * mesh.area, dtype=np.float64))
     budget = WaterBudget(Path(domain_cfg.domain_dir) / 'mass_balance.csv', forcing.boundaries, initial_storage)
@@ -917,7 +924,7 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
                     pipe_volume_t.fill(0); pipe_correction_t.fill(0)
                 window_end = min(elapsed + coupling.pipe_cfg.coupling_interval, 0. if warming else end_time)
                 source = coupling.begin_window(elapsed, window_end-elapsed,
-                    depth_t.to_numpy(), ez_t.to_numpy(), mesh.area, nes.column.type.copy())
+                    depth_t.to_numpy(), ez_t.to_numpy(), mesh.area, land_types.copy())
                 pipe_q_t.from_numpy(source)
                 pipe_pending, pipe_end = True, window_end
             target = min(next_output, next_frame, 0. if warming else end_time)

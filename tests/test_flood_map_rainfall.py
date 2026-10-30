@@ -23,7 +23,7 @@ def test_rainfall_plot_uses_cell_area_interval_duration_and_domain_timezone(tmp_
                                     np.array([], dtype=int), np.array([], dtype=float),
                                     np.empty((0, 2, 2))),
     )
-    monkeypatch.setattr(flood_map.fdb.ORM, 'load', lambda *args, **kwargs: object())
+    monkeypatch.setattr(flood_map.fdb.RecordEngine, 'load', lambda *args, **kwargs: SimpleNamespace(close=lambda: None))
     monkeypatch.setattr(flood_map.MeshGeometry, 'from_fdb', lambda *args: mesh)
 
     raster = tmp_path / 'rain.tif'

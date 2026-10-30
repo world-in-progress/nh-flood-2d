@@ -1,15 +1,19 @@
 import fastdb4py as fdb
 
-class IndexLike(fdb.Feature):
+@fdb.feature
+class IndexLike:
     index: fdb.U32
 
-class U8Value(fdb.Feature):
+@fdb.feature
+class U8Value:
     value: fdb.U8
 
-class F32Value(fdb.Feature):
+@fdb.feature
+class F32Value:
     value: fdb.F32
 
-class Ne(fdb.Feature):
+@fdb.feature
+class Ne:
     index: fdb.U32
     x: fdb.F32
     y: fdb.F32
@@ -20,7 +24,8 @@ class Ne(fdb.Feature):
     t_side_num: fdb.U32
     type: fdb.U8
 
-class SideTopoInfo(fdb.Feature):
+@fdb.feature
+class SideTopoInfo:
     """
     Used to store side topology information for NsData
     A side has 5 topology info:
@@ -30,7 +35,8 @@ class SideTopoInfo(fdb.Feature):
     """
     info: fdb.U32
 
-class Ns(fdb.Feature):
+@fdb.feature
+class Ns:
     index: fdb.U32
     length: fdb.F32
     x: fdb.F32
@@ -38,14 +44,16 @@ class Ns(fdb.Feature):
     z: fdb.F32
     attr: fdb.U8
 
-class Node(fdb.Feature):
+@fdb.feature
+class Node:
     index: fdb.U32
     name: fdb.STR
     x: fdb.F32
     y: fdb.F32
     is_outfall: fdb.BOOL
 
-class PipeTopo(fdb.Feature):
+@fdb.feature
+class PipeTopo:
     """
     CSR data array for pipe-node to 2D-element topology.
 

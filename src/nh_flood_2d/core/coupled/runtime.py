@@ -43,18 +43,18 @@ class PipeCoupling:
         self._load_topology()
 
     def _load_topology(self) -> None:
-        db = fdb.ORM.load(str(self.pipe_cfg.pipe_fdb), from_file=True)
+        db = fdb.RecordEngine.load(str(self.pipe_cfg.pipe_fdb), from_file=True)
         try:
-            count = int(db[IndexLike]['node_count'][0].index)
-            nodes = db[Node]['Node']
+            count = int(db.table(IndexLike, name='node_count')[0].index)
+            nodes = db.table(Node, name='Node')
             self.node_names = [str(nodes[i].name) for i in range(count)]
             self.is_outfall = np.array([bool(nodes[i].is_outfall) for i in range(count)], dtype=bool)
-            self.primary_ei = db[IndexLike]['node_primary_ei'].column.index.copy()
-            self.topo_ei = db[PipeTopo]['PipeTopo'].column.ei.copy()
-            self.topo_ptr = db[IndexLike]['topo_ptr'].column.index.copy()
-            self.rims = db[F32Value]['node_rim'].column.value.copy()
+            self.primary_ei = db.table(IndexLike, name='node_primary_ei').column.index.copy()
+            self.topo_ei = db.table(PipeTopo, name='PipeTopo').column.ei.copy()
+            self.topo_ptr = db.table(IndexLike, name='topo_ptr').column.index.copy()
+            self.rims = db.table(F32Value, name='node_rim').column.value.copy()
         finally:
-            del db
+            db.close()
         if len(self.primary_ei) != count or len(self.rims) != count or len(self.topo_ptr) != count + 1:
             raise ValueError('pipe topology and node arrays have inconsistent sizes')
         if self.topo_ptr[0] != 0 or np.any(np.diff(self.topo_ptr.astype(np.int64)) < 0) or self.topo_ptr[-1] > len(self.topo_ei):

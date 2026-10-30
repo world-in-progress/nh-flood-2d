@@ -1,3 +1,5 @@
+from contextlib import closing
+
 import numpy as np
 import taichi as ti
 import fastdb4py as fdb
@@ -17,15 +19,16 @@ def build_boundary_fdb(cfg: DomainConfig):
     init_taichi(use_gpu=True, profiler=True)
     
     # Load necessaray information from fdbs
-    es = fdb.ORM.load(ne_fdb_fn, from_file=True)[Ne][Ne]
-    ss = fdb.ORM.load(ns_fdb_fn, from_file=True)[Ns][Ns]
-    s_ts = fdb.ORM.load(ns_fdb_fn, from_file=True)[SideTopoInfo][SideTopoInfo]
-    e_num = len(es)
-    s_num = len(ss)
-    e_xs_t = copy_to_taichi(es.column.x, ti.f32, None)
-    e_ys_t = copy_to_taichi(es.column.y, ti.f32, None)
-    s_ts_t = copy_to_taichi(s_ts.column.info, ti.u32, [s_num, 3])
-    
+    with closing(fdb.RecordEngine.load(ne_fdb_fn, from_file=True)) as ne_db, \
+            closing(fdb.RecordEngine.load(ns_fdb_fn, from_file=True)) as ns_db:
+        es, ss = ne_db.table(Ne), ns_db.table(Ns)
+        s_ts = ns_db.table(SideTopoInfo)
+        e_num = len(es)
+        s_num = len(ss)
+        e_xs_t = copy_to_taichi(es.column.x, ti.f32, None)
+        e_ys_t = copy_to_taichi(es.column.y, ti.f32, None)
+        s_ts_t = copy_to_taichi(s_ts.column.info, ti.u32, [s_num, 3])
+
     # Set Taichi fields
     sbf_t = ti.field(dtype=ti.u8, shape=s_num)          # side boundary flag
     bi_t = ti.field(dtype=ti.u32, shape=e_num)          # boundary element indices
@@ -64,20 +67,19 @@ def build_boundary_fdb(cfg: DomainConfig):
     
     # Create boundary FDB
     capacity = int(bcount_t.to_numpy()[None][0])
-    db = fdb.ORM.truncate([
-        fdb.TableDefn(IndexLike, capacity, 'bdei'),
-        fdb.TableDefn(U8Value, s_num, 'sbf')
-    ])
-    bdei: np.ndarray = db[IndexLike]['bdei'].column.index
-    bdei[:] = bi_t.to_numpy()[:capacity]
-    sbf: np.ndarray = db[U8Value]['sbf'].column.value
-    sbf[:] = sbf_t.to_numpy()[:s_num]
+    with closing(fdb.RecordEngine.truncate([
+        fdb.Layout(IndexLike, capacity, 'bdei'),
+        fdb.Layout(U8Value, s_num, 'sbf')
+    ])) as db:
+        bdei: np.ndarray = db.table(IndexLike, name='bdei').column.index
+        bdei[:] = bi_t.to_numpy()[:capacity]
+        sbf: np.ndarray = db.table(U8Value, name='sbf').column.value
+        sbf[:] = sbf_t.to_numpy()[:s_num]
     
-    # Save to file
-    fdb_path = Path(fdb_fn)
-    fdb_path.parent.mkdir(parents=True, exist_ok=True)
-    db.save(str(fdb_path))
-    db.unlink()
+        # Save to file
+        fdb_path = Path(fdb_fn)
+        fdb_path.parent.mkdir(parents=True, exist_ok=True)
+        db.save(str(fdb_path))
 
 def _check_boundary_fdb(test_fn: str, fdb_fn: str):
     """Check created boundary FDB"""
@@ -89,15 +91,15 @@ def _check_boundary_fdb(test_fn: str, fdb_fn: str):
     test_bd_ie = sorted(test_bd_ie)
     
     # Load created boundary FDB
-    db = fdb.ORM.load(fdb_fn, from_file=True)
-    bdei = db[IndexLike]['bdei'].column.index
-    fdb_bd_ie = sorted(bdei.tolist())
+    with closing(fdb.RecordEngine.load(fdb_fn, from_file=True)) as db:
+        bdei = db.table(IndexLike, name='bdei').column.index
+        fdb_bd_ie = sorted(bdei.tolist())
     
-    # Compare
-    for i in range(len(test_bd_ie)):
-        if test_bd_ie[i] != fdb_bd_ie[i]:
-            print(f"Boundary index mismatch at position {i}: test {test_bd_ie[i]} vs fdb {fdb_bd_ie[i]}")
-    print("Boundary FDB check passed!")
+        # Compare
+        for i in range(len(test_bd_ie)):
+            if test_bd_ie[i] != fdb_bd_ie[i]:
+                print(f"Boundary index mismatch at position {i}: test {test_bd_ie[i]} vs fdb {fdb_bd_ie[i]}")
+        print("Boundary FDB check passed!")
 
 if __name__ == '__main__':
     import time

@@ -1,4 +1,5 @@
 import shutil
+from contextlib import closing
 import rasterio
 import numpy as np
 import taichi as ti
@@ -27,9 +28,9 @@ def _load_rainfall_plot_series(
     Frame wall times derive from ``domain_cfg.start``. Matplotlib receives
     naive wall times for both rainfall and model series.
     """
-    ne_db = fdb.ORM.load(domain_cfg.ne_fdb, from_file=True)
-    ns_db = fdb.ORM.load(domain_cfg.ns_fdb, from_file=True)
-    mesh = MeshGeometry.from_fdb(ne_db, ns_db)
+    with closing(fdb.RecordEngine.load(domain_cfg.ne_fdb, from_file=True)) as ne_db, \
+            closing(fdb.RecordEngine.load(domain_cfg.ns_fdb, from_file=True)) as ns_db:
+        mesh = MeshGeometry.from_fdb(ne_db, ns_db)
     rain = RainField.load(force_cfg.rainfall, mesh, domain_cfg.epsg_code,
                           domain_cfg.start, 0, domain_cfg.duration)
     area = mesh.area[1:]
@@ -59,21 +60,20 @@ def get_area_meta(ne_fdb_fn: str, ns_fdb_fn: str):
     """
     init_taichi()
     
-    ne_fdb = fdb.ORM.load(ne_fdb_fn, from_file=True)
-    ns_fdb = fdb.ORM.load(ns_fdb_fn, from_file=True)
+    with closing(fdb.RecordEngine.load(ne_fdb_fn, from_file=True)) as ne_fdb, \
+            closing(fdb.RecordEngine.load(ns_fdb_fn, from_file=True)) as ns_fdb:
+        nes = ne_fdb.table(Ne)
+        nss = ns_fdb.table(Ns)
     
-    nes = ne_fdb[Ne][Ne]
-    nss = ns_fdb[Ns][Ns]
+        e_cnt = len(nes)
     
-    e_cnt = len(nes)
-    
-    exs = copy_to_taichi(nes.column.x, ti.f32, None)
-    eys = copy_to_taichi(nes.column.y, ti.f32, None)
-    sxs = copy_to_taichi(nss.column.x, ti.f32, None)
-    sys = copy_to_taichi(nss.column.y, ti.f32, None)
-    isl_data  = copy_to_taichi(ne_fdb[IndexLike]['isl_data'].column.index,  ti.i32, None)
-    isl_ptr_l = copy_to_taichi(ne_fdb[IndexLike]['isl_ptr_l'].column.index, ti.i32, None)
-    isl_ptr_b = copy_to_taichi(ne_fdb[IndexLike]['isl_ptr_b'].column.index, ti.i32, None)
+        exs = copy_to_taichi(nes.column.x, ti.f32, None)
+        eys = copy_to_taichi(nes.column.y, ti.f32, None)
+        sxs = copy_to_taichi(nss.column.x, ti.f32, None)
+        sys = copy_to_taichi(nss.column.y, ti.f32, None)
+        isl_data  = copy_to_taichi(ne_fdb.table(IndexLike, name='isl_data').column.index,  ti.i32, None)
+        isl_ptr_l = copy_to_taichi(ne_fdb.table(IndexLike, name='isl_ptr_l').column.index, ti.i32, None)
+        isl_ptr_b = copy_to_taichi(ne_fdb.table(IndexLike, name='isl_ptr_b').column.index, ti.i32, None)
     
     vr = ti.field(dtype=ti.f32, shape=())           # vertical resolution of cell in finest level
     hr = ti.field(dtype=ti.f32, shape=())           # horizontal resolution of cell in finest level
@@ -152,17 +152,17 @@ def generate_flood_map(cfg: DomainConfig):
     print(f'Flood Map Size: {width} x {height}')
         
     # Load mesh data
-    ne_fdb = fdb.ORM.load(str(ne_fdb_path), from_file=True)
-    nes = ne_fdb[Ne][Ne]
-    e_cnt = len(nes)
+    with closing(fdb.RecordEngine.load(str(ne_fdb_path), from_file=True)) as ne_fdb:
+        nes = ne_fdb.table(Ne)
+        e_cnt = len(nes)
     
-    if e_cnt == 0:
-        print('No elements to process. Check if ne.fdb is correct and has elements.')
-        return
+        if e_cnt == 0:
+            print('No elements to process. Check if ne.fdb is correct and has elements.')
+            return
     
-    # Prepared Taichi Fields for elements
-    x_field = copy_to_taichi(nes.column.x[1:], ti.f32, None)
-    y_field = copy_to_taichi(nes.column.y[1:], ti.f32, None)
+        # Prepared Taichi Fields for elements
+        x_field = copy_to_taichi(nes.column.x[1:], ti.f32, None)
+        y_field = copy_to_taichi(nes.column.y[1:], ti.f32, None)
     
     # Element dimensions fields
     hw_field = copy_to_taichi(half_widths, ti.f32, None)
@@ -331,16 +331,16 @@ def generate_max_inundation_extent_map(cfg: DomainConfig, min_depth: float = 0.0
     print(f'Max Inundation Map Size: {width} x {height}')
 
     # Load mesh data into Taichi fields
-    ne_fdb = fdb.ORM.load(str(ne_fdb_path), from_file=True)
-    nes = ne_fdb[Ne][Ne]
-    e_cnt = len(nes)
+    with closing(fdb.RecordEngine.load(str(ne_fdb_path), from_file=True)) as ne_fdb:
+        nes = ne_fdb.table(Ne)
+        e_cnt = len(nes)
 
-    if e_cnt == 0:
-        print('No elements to process. Check if ne.fdb is correct and has elements.')
-        return
+        if e_cnt == 0:
+            print('No elements to process. Check if ne.fdb is correct and has elements.')
+            return
 
-    x_field  = copy_to_taichi(nes.column.x[1:], ti.f32, None)
-    y_field  = copy_to_taichi(nes.column.y[1:], ti.f32, None)
+        x_field  = copy_to_taichi(nes.column.x[1:], ti.f32, None)
+        y_field  = copy_to_taichi(nes.column.y[1:], ti.f32, None)
     hw_field = copy_to_taichi(half_widths, ti.f32, None)
     hh_field = copy_to_taichi(half_heights, ti.f32, None)
 
@@ -651,20 +651,22 @@ def plot_spatial_mae_curve(
     print(f'Common raster grid: {g_width} x {g_height} px  @  {g_hr} m x {g_vr} m')
 
     # ── Load element geometry into Taichi fields ───────────────────────────────
-    ne_fdb_r = fdb.ORM.load(str(ne_path_ref), from_file=True)
-    nes_r    = ne_fdb_r[Ne][Ne]
-    ne_fdb_c = fdb.ORM.load(str(ne_path_cmp), from_file=True)
-    nes_c    = ne_fdb_c[Ne][Ne]
+    with closing(fdb.RecordEngine.load(str(ne_path_ref), from_file=True)) as ne_fdb_r, \
+            closing(fdb.RecordEngine.load(str(ne_path_cmp), from_file=True)) as ne_fdb_c:
+        nes_r    = ne_fdb_r.table(Ne)
+        nes_c    = ne_fdb_c.table(Ne)
 
-    ex_r  = copy_to_taichi(nes_r.column.x[1:], ti.f32, None)
-    ey_r  = copy_to_taichi(nes_r.column.y[1:], ti.f32, None)
-    ehw_r = copy_to_taichi(hws_r,               ti.f32, None)
-    ehh_r = copy_to_taichi(hhs_r,               ti.f32, None)
+        e_cnt_r, e_cnt_c = len(nes_r), len(nes_c)
 
-    ex_c  = copy_to_taichi(nes_c.column.x[1:], ti.f32, None)
-    ey_c  = copy_to_taichi(nes_c.column.y[1:], ti.f32, None)
-    ehw_c = copy_to_taichi(hws_c,               ti.f32, None)
-    ehh_c = copy_to_taichi(hhs_c,               ti.f32, None)
+        ex_r  = copy_to_taichi(nes_r.column.x[1:], ti.f32, None)
+        ey_r  = copy_to_taichi(nes_r.column.y[1:], ti.f32, None)
+        ehw_r = copy_to_taichi(hws_r,               ti.f32, None)
+        ehh_r = copy_to_taichi(hhs_r,               ti.f32, None)
+
+        ex_c  = copy_to_taichi(nes_c.column.x[1:], ti.f32, None)
+        ey_c  = copy_to_taichi(nes_c.column.y[1:], ti.f32, None)
+        ehw_c = copy_to_taichi(hws_c,               ti.f32, None)
+        ehh_c = copy_to_taichi(hhs_c,               ti.f32, None)
 
     # Two tile buffers (one per mesh) for tiled GPU rasterisation
     tile_ref = ti.field(dtype=ti.f32, shape=(TILE_SIZE, TILE_SIZE))
@@ -672,12 +674,12 @@ def plot_spatial_mae_curve(
 
     # Pre-allocate WSE fields once; updated each timestep with from_numpy().
     # Avoids calling ti.field() inside the loop which exhausts Metal's snode limit.
-    h_r_field = ti.field(dtype=ti.f32, shape=len(nes_r) - 1)
-    h_c_field = ti.field(dtype=ti.f32, shape=len(nes_c) - 1)
-    depth_r_field = ti.field(dtype=ti.f32, shape=len(nes_r) - 1)
-    depth_c_field = ti.field(dtype=ti.f32, shape=len(nes_c) - 1)
-    bed_r = BedTimeline(output_ref, expected_count=len(nes_r))
-    bed_c = BedTimeline(output_cmp, expected_count=len(nes_c))
+    h_r_field = ti.field(dtype=ti.f32, shape=e_cnt_r - 1)
+    h_c_field = ti.field(dtype=ti.f32, shape=e_cnt_c - 1)
+    depth_r_field = ti.field(dtype=ti.f32, shape=e_cnt_r - 1)
+    depth_c_field = ti.field(dtype=ti.f32, shape=e_cnt_c - 1)
+    bed_r = BedTimeline(output_ref, expected_count=e_cnt_r)
+    bed_c = BedTimeline(output_cmp, expected_count=e_cnt_c)
 
     # ── Taichi kernels ─────────────────────────────────────────────────────────
 
@@ -744,8 +746,8 @@ def plot_spatial_mae_curve(
     for instant in common:
         seconds_r, path_r = frames_ref[instant]
         seconds_c, path_c = frames_cmp[instant]
-        depth_r = read_depth_frame(path_r, expected_count=len(nes_r))
-        depth_c = read_depth_frame(path_c, expected_count=len(nes_c))
+        depth_r = read_depth_frame(path_r, expected_count=e_cnt_r)
+        depth_c = read_depth_frame(path_c, expected_count=e_cnt_c)
         working_bed_r = bed_r.at(seconds_r)
         working_bed_c = bed_c.at(seconds_c)
 
