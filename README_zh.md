@@ -41,14 +41,14 @@ uv run python fix_macos_codesign.py
 
 ```bash
 uv lock --check
-uv run python -m pytest tests/test_forcing.py tests/test_solver_forcing.py \
+uv run pytest tests/test_forcing.py tests/test_solver_forcing.py \
   tests/test_clock.py tests/test_device_budget.py tests/test_face_flux.py \
   tests/test_open_boundary.py tests/test_hydraulics.py \
   tests/test_positivity.py tests/test_inventory_rounding.py tests/test_restart.py \
   tests/test_coupling.py tests/test_output_io.py \
   tests/test_output_readers.py tests/test_flood_map_frame_validation.py \
   tests/test_flood_map_rainfall.py
-uv run python -m pytest
+uv run pytest
 ```
 
 专项检查覆盖强迫、设备时钟与收支、边流量、边界、耦合、检查点读写、水深帧与后处理。全量命令检查仓库其他部分，其中部分测试可能需要本地 DEM 数据或 GMT。
@@ -58,8 +58,6 @@ uv run python -m pytest
 compact 求解器使用独立的计算域与强迫 JSON 文件。路径相对于进程工作目录解析，计算域和强迫模型拒绝未知字段；管网模型校验规则见下文。`start`、`duration`、`warmup_duration`、`land_parameters` 必填；模拟时长和输出间隔为正整数秒，预热时长允许 0。`duration + warmup_duration` 必须小于 `2**24` 秒。
 
 ### 计算域配置
-
-提供方授权使用的案例海床数据，以及由其派生的网格、模型输入与输出，须保留在本地，不得再分发。
 
 计算域、强迫及其嵌套参数模型均拒绝未知字段和 NaN/Infinity。数值类型采用 Pydantic 的常规转换规则，例如整数值 `300.0` 可能被整数类型接受；下表描述通过校验后的取值。“必填”表示模型没有默认值。
 

@@ -13,7 +13,7 @@ The solver uses Taichi kernels for the main numerical work and stores meshes, de
 - DEM fusion and TIN helper code (`src/nh_flood_2d/dem`, `examples`, `docs/dem_fusion_mask_replacement_usage.md`).
 - Utility scripts for SWMM `.inp` conversion and solver self-checks (`tools`).
 
-Large local inputs and generated outputs live under `resource/` and are ignored by Git. Provider-authorized case bathymetry and its derived meshes, model inputs and outputs must remain local and must not be redistributed. A fresh clone does not include the project-specific DEM, NE/NS mesh, rainfall, tide, gate, observation, SWMM, or checkpoint files needed by your local configurations.
+Large local inputs and generated outputs live under `resource/` and are ignored by Git. A fresh clone does not include the project-specific DEM, NE/NS mesh, rainfall, tide, gate, observation, SWMM, or checkpoint files needed by your local configurations.
 
 [中文说明](README_zh.md) · [Configuration reference](docs/configuration.md) · [Output and restart](docs/solver-output.md)
 
@@ -41,14 +41,14 @@ uv run python fix_macos_codesign.py
 
 ```bash
 uv lock --check
-uv run python -m pytest tests/test_forcing.py tests/test_solver_forcing.py \
+uv run pytest tests/test_forcing.py tests/test_solver_forcing.py \
   tests/test_clock.py tests/test_device_budget.py tests/test_face_flux.py \
   tests/test_open_boundary.py tests/test_hydraulics.py \
   tests/test_positivity.py tests/test_inventory_rounding.py tests/test_restart.py \
   tests/test_coupling.py tests/test_output_io.py \
   tests/test_output_readers.py tests/test_flood_map_frame_validation.py \
   tests/test_flood_map_rainfall.py
-uv run python -m pytest
+uv run pytest
 ```
 
 The focused checks cover forcing, the device clock and budget, face fluxes, boundaries, coupling, checkpoint I/O, depth frames, and post-processing. The full command checks the rest of the repository, including tests that may require local DEM data or GMT.

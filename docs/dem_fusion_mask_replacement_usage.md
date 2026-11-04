@@ -40,14 +40,17 @@ The Python entry point is
 It takes the five required paths followed by the optional keywords above.
 There is no maximum-triangle-area argument in the current API or CLI.
 
-The older `examples/run_dem_fusion.sh` and
-`examples/run_dem_fusion_mask_replacement.py` still pass that removed argument;
-use the direct CLI above. The Python runner also checks the output path as
-though it were an input and adds the parent of the repository to `sys.path`.
-These runners require a code update before they are usable from a fresh clone.
-The data-dependent fusion run requires local DEM, mask and point-cloud inputs;
+The examples `examples/run_dem_fusion.sh` and
+`examples/run_dem_fusion_mask_replacement.py` use the same current API and CLI.
+They resolve the repository root from their own file locations and expect the
+DEM, mask and point-cloud files under `resource/dem_rebuilt/input/`. They create
+the output directory under `resource/dem_rebuilt/output/`; the output file does
+not need to exist before running.
+
+The data-dependent fusion run requires local DEM, mask and point-cloud inputs.
 The synthetic-test module `tests/test_dem_fusion_mask_replacement.py` skips
-without GMT; when enabled it currently imports the removed
-`create_tin_from_points` symbol, so it also needs a code update before it can
-validate this path. The active interpolation calls GMT with raster bounds
-and spacing but no explicit pixel registration; raster alignment needs validation for the supplied inputs.
+without GMT. It tests resampling, rasterization, point readers and TIN helpers;
+the test for the removed `create_tin_from_points` function has been removed.
+The active interpolation calls GMT with raster bounds and spacing but no
+explicit pixel registration; raster alignment needs validation for the supplied
+inputs.

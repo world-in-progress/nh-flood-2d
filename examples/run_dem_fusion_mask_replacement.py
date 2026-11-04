@@ -6,9 +6,11 @@ DEM融合脚本使用示例
 
 import os
 import sys
+from pathlib import Path
 
-# 添加项目根目录到路径
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# Add the repository root so the src package can be imported.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.nh_flood_2d.dem.dem_fusion_mask_replacement import fuse_dem_with_mask_replacement
 
@@ -16,18 +18,19 @@ def main():
     """示例：融合DEM与高精度点云"""
 
     # 输入文件路径（根据实际项目结构调整）
-    base_dir = "resource/dem_rebuilt"
+    base_dir = PROJECT_ROOT / "resource" / "dem_rebuilt"
 
     inputs = {
         'dem_path': os.path.join(base_dir, 'input', 'study_area_dem.tif'),
         'mask_shp_path': os.path.join(base_dir, 'input', 'study_area_dem_mask.shp'),
         'bay_points_path': os.path.join(base_dir, 'input', 'bay', 'bay', 'bay.txt'),
-        'shenzhenhe_points_path': os.path.join(base_dir, 'input', 'bay', 'bay', 'shenzhenhe-fix.csv'),
-        'output_path': os.path.join(base_dir, 'output', 'fused_dem_4m.tif')
+        'shenzhenhe_points_path': os.path.join(base_dir, 'input', 'bay', 'bay', 'shenzhenhe-fix.csv')
     }
 
-    # 检查输入文件是否存在
-    for key, path in inputs.items():
+    output_path = base_dir / "output" / "fused_dem_4m.tif"
+
+    # Check only input files; the output does not exist on the first run.
+    for path in inputs.values():
         if not os.path.exists(path):
             print(f"警告: 输入文件不存在: {path}")
             print(f"请确保文件位于正确位置")
@@ -38,12 +41,14 @@ def main():
                 print(f"找到可能的文件: {possible_files[:3]}")
             return
 
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
     print("开始DEM融合处理...")
     print(f"原始DEM: {inputs['dem_path']}")
     print(f"掩模文件: {inputs['mask_shp_path']}")
     print(f"bay.txt点云: {inputs['bay_points_path']}")
     print(f"shenzhenhe.csv点云: {inputs['shenzhenhe_points_path']}")
-    print(f"输出文件: {inputs['output_path']}")
+    print(f"输出文件: {output_path}")
 
     try:
         # 执行融合
@@ -52,9 +57,8 @@ def main():
             mask_shp_path=inputs['mask_shp_path'],
             bay_points_path=inputs['bay_points_path'],
             shenzhenhe_points_path=inputs['shenzhenhe_points_path'],
-            output_path=inputs['output_path'],
+            output_path=str(output_path),
             output_resolution=4.0,
-            max_triangle_area=8.0,
             nodata_value=-9999.0
         )
 

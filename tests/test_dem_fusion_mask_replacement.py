@@ -21,7 +21,7 @@ if ctypes.util.find_library('gmt') is None:
     pytest.skip('External libgmt is unavailable; this module imports PyGMT', allow_module_level=True)
 
 # 导入待测试模块
-from src.nh_flood_2d.dem.dem_fusion_mask_replacement import resample_dem_to_4m, rasterize_mask, read_bay_points, read_shenzhenhe_points, merge_point_clouds, create_tin_from_points
+from src.nh_flood_2d.dem.dem_fusion_mask_replacement import resample_dem_to_4m, rasterize_mask, read_bay_points, read_shenzhenhe_points, merge_point_clouds
 
 
 def test_resample_dem_to_4m():
@@ -262,31 +262,3 @@ def test_create_constrained_tin():
         area = triangle_area(tri_points[0], tri_points[1], tri_points[2])
 
         assert area <= 5.0 * 1.1, f"三角形面积{area}超过限制5.0平方米"
-
-
-def test_create_tin_from_points():
-    """测试从点云创建TIN"""
-    # 创建测试点云数据（分散的点，避免共线）
-    points = np.array([
-        [100.0, 200.0, 10.5],
-        [110.0, 190.0, 11.2],
-        [105.0, 205.0, 12.8],
-        [95.0, 195.0, 13.1],
-        [115.0, 210.0, 14.2],
-        [90.0, 185.0, 15.5]
-    ])
-
-    # 测试TIN创建（使用较大的面积限制，避免触发分割逻辑）
-    tin, xy_points = create_tin_from_points(points, max_triangle_area=100.0)
-
-    # 验证结果
-    assert tin is not None
-    assert hasattr(tin, 'simplices')
-    assert len(tin.simplices) > 0
-
-    assert xy_points is not None
-    assert xy_points.shape[0] == len(points)
-    assert xy_points.shape[1] == 2  # 只有xy坐标
-
-    # 验证TIN使用正确的点
-    assert np.array_equal(xy_points, points[:, :2])
