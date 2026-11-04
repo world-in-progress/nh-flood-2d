@@ -1,23 +1,19 @@
 import fastdb4py as fdb
 
-class Rainfall(fdb.Feature):
-    time: fdb.F64
-    quantity: fdb.F64
-
-class Tide(fdb.Feature):
-    time: fdb.F64
-    level: fdb.F64
-
-class IndexLike(fdb.Feature):
+@fdb.feature
+class IndexLike:
     index: fdb.U32
 
-class U8Value(fdb.Feature):
+@fdb.feature
+class U8Value:
     value: fdb.U8
 
-class F32Value(fdb.Feature):
+@fdb.feature
+class F32Value:
     value: fdb.F32
 
-class Ne(fdb.Feature):
+@fdb.feature
+class Ne:
     index: fdb.U32
     x: fdb.F32
     y: fdb.F32
@@ -28,7 +24,8 @@ class Ne(fdb.Feature):
     t_side_num: fdb.U32
     type: fdb.U8
 
-class SideTopoInfo(fdb.Feature):
+@fdb.feature
+class SideTopoInfo:
     """
     Used to store side topology information for NsData
     A side has 5 topology info:
@@ -38,7 +35,8 @@ class SideTopoInfo(fdb.Feature):
     """
     info: fdb.U32
 
-class Ns(fdb.Feature):
+@fdb.feature
+class Ns:
     index: fdb.U32
     length: fdb.F32
     x: fdb.F32
@@ -46,14 +44,16 @@ class Ns(fdb.Feature):
     z: fdb.F32
     attr: fdb.U8
 
-class Node(fdb.Feature):
+@fdb.feature
+class Node:
     index: fdb.U32
     name: fdb.STR
     x: fdb.F32
     y: fdb.F32
     is_outfall: fdb.BOOL
 
-class PipeTopo(fdb.Feature):
+@fdb.feature
+class PipeTopo:
     """
     CSR data array for pipe-node to 2D-element topology.
 
@@ -66,19 +66,3 @@ class PipeTopo(fdb.Feature):
         in IndexLike['node_primary_ei'] and must NOT appear in this table.
     """
     ei: fdb.U32
-
-class Gate(fdb.Feature):
-    """
-    Gate information
-    Note:
-    0: upstream Ne index
-    1: downstream Ne index
-    2: gate height
-    3 - 99: influenced Ne indices
-    """
-    info: fdb.U32
-
-class UVH(fdb.Feature):
-    u: fdb.F32
-    v: fdb.F32
-    h: fdb.F32

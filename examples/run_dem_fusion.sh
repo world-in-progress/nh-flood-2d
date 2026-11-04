@@ -32,7 +32,6 @@ python "$PROJECT_ROOT/src/nh_flood_2d/dem/dem_fusion_mask_replacement.py" \
     --shenzhenhe-points "$SHENZHENHE_POINTS" \
     --output "$OUTPUT_FILE" \
     --resolution 4.0 \
-    --max-triangle-area 8.0 \
     --nodata -9999.0
 
 # 检查输出

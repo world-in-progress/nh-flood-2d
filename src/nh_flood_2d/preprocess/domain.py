@@ -1,10 +1,11 @@
 import os
+from contextlib import closing
 import linecache
 import numpy as np
 import taichi as ti
 import fastdb4py as fdb
 from pathlib import Path
-import multiprocessing as mp
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 from functools import partial
 
@@ -23,61 +24,61 @@ def create_ne_fdb(ne_fn: str, fdb_fn: str):
     element_count = sum(1 for _ in ne_f) + 1  # including virtual element 0
     ne_f.close()
     
-    db = fdb.ORM.truncate([
-        fdb.TableDefn(IndexLike, element_count * 10, 'isl1'),
-        fdb.TableDefn(IndexLike, element_count * 10, 'isl2'),
-        fdb.TableDefn(IndexLike, element_count * 10, 'isl3'),
-        fdb.TableDefn(IndexLike, element_count * 10, 'isl4'),
-        fdb.TableDefn(Ne, element_count)
-    ])
+    with closing(fdb.RecordEngine.truncate([
+        fdb.Layout(IndexLike, element_count * 10, 'isl1'),
+        fdb.Layout(IndexLike, element_count * 10, 'isl2'),
+        fdb.Layout(IndexLike, element_count * 10, 'isl3'),
+        fdb.Layout(IndexLike, element_count * 10, 'isl4'),
+        fdb.Layout(Ne, element_count)
+    ])) as db:
     
-    nes = db[Ne][Ne]
-    e_xs = nes.column.x
-    e_ys = nes.column.y
-    e_zs = nes.column.z
-    e_types = nes.column.type
-    e_indices = nes.column.index
-    e_lcount = nes.column.l_side_num
-    e_rcount = nes.column.r_side_num
-    e_bcount = nes.column.b_side_num
-    e_tcount = nes.column.t_side_num
+        nes = db.table(Ne)
+        e_xs = nes.column.x
+        e_ys = nes.column.y
+        e_zs = nes.column.z
+        e_types = nes.column.type
+        e_indices = nes.column.index
+        e_lcount = nes.column.l_side_num
+        e_rcount = nes.column.r_side_num
+        e_bcount = nes.column.b_side_num
+        e_tcount = nes.column.t_side_num
     
-    isl1 = db[IndexLike]['isl1'].column.index
-    isl2 = db[IndexLike]['isl2'].column.index
-    isl3 = db[IndexLike]['isl3'].column.index
-    isl4 = db[IndexLike]['isl4'].column.index
+        isl1 = db.table(IndexLike, name='isl1').column.index
+        isl2 = db.table(IndexLike, name='isl2').column.index
+        isl3 = db.table(IndexLike, name='isl3').column.index
+        isl4 = db.table(IndexLike, name='isl4').column.index
     
-    for idx in range(1, element_count):
-        ne_record = linecache.getline(str(ne_path), idx)
-        data = ne_record.split(',')
-        indices_array = np.array([int(v) for v in data[5:-4]], dtype=np.uint32)
+        for idx in range(1, element_count):
+            ne_record = linecache.getline(str(ne_path), idx)
+            data = ne_record.split(',')
+            indices_array = np.array([int(v) for v in data[5:-4]], dtype=np.uint32)
         
-        # Set hydro element data directly to np arrays
-        e_indices[idx] = int(data[0])
-        e_xs[idx] = float(data[-4])
-        e_ys[idx] = float(data[-3])
-        e_zs[idx] = float(data[-2])
-        e_types[idx] = int(data[-1])
-        e_lcount[idx] = int(data[1])
-        e_rcount[idx] = int(data[2])
-        e_bcount[idx] = int(data[3])
-        e_tcount[idx] = int(data[4])
+            # Set hydro element data directly to np arrays
+            e_indices[idx] = int(data[0])
+            e_xs[idx] = float(data[-4])
+            e_ys[idx] = float(data[-3])
+            e_zs[idx] = float(data[-2])
+            e_types[idx] = int(data[-1])
+            e_lcount[idx] = int(data[1])
+            e_rcount[idx] = int(data[2])
+            e_bcount[idx] = int(data[3])
+            e_tcount[idx] = int(data[4])
         
-        # Set side indices
-        si_offset = idx * 10
-        l_count = e_lcount[idx]
-        r_count = e_rcount[idx]
-        b_count = e_bcount[idx]
-        t_count = e_tcount[idx]
-        isl1[si_offset:si_offset + l_count] = indices_array[0:l_count]
-        isl2[si_offset:si_offset + r_count] = indices_array[l_count:l_count + r_count]
-        isl3[si_offset:si_offset + b_count] = indices_array[l_count + r_count:l_count + r_count + b_count]
-        isl4[si_offset:si_offset + t_count] = indices_array[l_count + r_count + b_count:l_count + r_count + b_count + t_count]
+            # Set side indices
+            si_offset = idx * 10
+            l_count = e_lcount[idx]
+            r_count = e_rcount[idx]
+            b_count = e_bcount[idx]
+            t_count = e_tcount[idx]
+            isl1[si_offset:si_offset + l_count] = indices_array[0:l_count]
+            isl2[si_offset:si_offset + r_count] = indices_array[l_count:l_count + r_count]
+            isl3[si_offset:si_offset + b_count] = indices_array[l_count + r_count:l_count + r_count + b_count]
+            isl4[si_offset:si_offset + t_count] = indices_array[l_count + r_count + b_count:l_count + r_count + b_count + t_count]
     
-    # Save to file and remove shared database
-    fdb_path = Path(fdb_fn)
-    fdb_path.parent.mkdir(parents=True, exist_ok=True)
-    db.save(str(fdb_path))
+        # Save to file and remove shared database
+        fdb_path = Path(fdb_fn)
+        fdb_path.parent.mkdir(parents=True, exist_ok=True)
+        db.save(str(fdb_path))
 
 def create_ne_fdb_compact(ne_fn: str, fdb_fn: str):
     """Create NE FDB using a compact (CSR-like) side-index layout.
@@ -112,69 +113,69 @@ def create_ne_fdb_compact(ne_fn: str, fdb_fn: str):
         data = line.split(',')
         total_sides += int(data[1]) + int(data[2]) + int(data[3]) + int(data[4])
 
-    db = fdb.ORM.truncate([
-        fdb.TableDefn(IndexLike, total_sides,   'isl_data'),
-        fdb.TableDefn(IndexLike, element_count, 'isl_ptr_l'),
-        fdb.TableDefn(IndexLike, element_count, 'isl_ptr_r'),
-        fdb.TableDefn(IndexLike, element_count, 'isl_ptr_b'),
-        fdb.TableDefn(IndexLike, element_count, 'isl_ptr_t'),
-        fdb.TableDefn(Ne, element_count)
-    ])
+    with closing(fdb.RecordEngine.truncate([
+        fdb.Layout(IndexLike, total_sides,   'isl_data'),
+        fdb.Layout(IndexLike, element_count, 'isl_ptr_l'),
+        fdb.Layout(IndexLike, element_count, 'isl_ptr_r'),
+        fdb.Layout(IndexLike, element_count, 'isl_ptr_b'),
+        fdb.Layout(IndexLike, element_count, 'isl_ptr_t'),
+        fdb.Layout(Ne, element_count)
+    ])) as db:
 
-    nes       = db[Ne][Ne]
-    e_xs      = nes.column.x
-    e_ys      = nes.column.y
-    e_zs      = nes.column.z
-    e_types   = nes.column.type
-    e_indices = nes.column.index
-    e_lcount  = nes.column.l_side_num
-    e_rcount  = nes.column.r_side_num
-    e_bcount  = nes.column.b_side_num
-    e_tcount  = nes.column.t_side_num
+        nes       = db.table(Ne)
+        e_xs      = nes.column.x
+        e_ys      = nes.column.y
+        e_zs      = nes.column.z
+        e_types   = nes.column.type
+        e_indices = nes.column.index
+        e_lcount  = nes.column.l_side_num
+        e_rcount  = nes.column.r_side_num
+        e_bcount  = nes.column.b_side_num
+        e_tcount  = nes.column.t_side_num
 
-    isl_data  = db[IndexLike]['isl_data'].column.index
-    isl_ptr_l = db[IndexLike]['isl_ptr_l'].column.index
-    isl_ptr_r = db[IndexLike]['isl_ptr_r'].column.index
-    isl_ptr_b = db[IndexLike]['isl_ptr_b'].column.index
-    isl_ptr_t = db[IndexLike]['isl_ptr_t'].column.index
+        isl_data  = db.table(IndexLike, name='isl_data').column.index
+        isl_ptr_l = db.table(IndexLike, name='isl_ptr_l').column.index
+        isl_ptr_r = db.table(IndexLike, name='isl_ptr_r').column.index
+        isl_ptr_b = db.table(IndexLike, name='isl_ptr_b').column.index
+        isl_ptr_t = db.table(IndexLike, name='isl_ptr_t').column.index
 
-    data_offset = 0
-    for idx, line in enumerate(ne_lines, start=1):
-        data    = line.split(',')
-        l_count = int(data[1])
-        r_count = int(data[2])
-        b_count = int(data[3])
-        t_count = int(data[4])
-        total   = l_count + r_count + b_count + t_count
+        data_offset = 0
+        for idx, line in enumerate(ne_lines, start=1):
+            data    = line.split(',')
+            l_count = int(data[1])
+            r_count = int(data[2])
+            b_count = int(data[3])
+            t_count = int(data[4])
+            total   = l_count + r_count + b_count + t_count
 
-        indices_array = np.array([int(v) for v in data[5:5 + total]], dtype=np.uint32)
+            indices_array = np.array([int(v) for v in data[5:5 + total]], dtype=np.uint32)
 
-        e_indices[idx] = int(data[0])
-        e_xs[idx]      = float(data[-4])
-        e_ys[idx]      = float(data[-3])
-        e_zs[idx]      = float(data[-2])
-        e_types[idx]   = int(data[-1])
-        e_lcount[idx]  = l_count
-        e_rcount[idx]  = r_count
-        e_bcount[idx]  = b_count
-        e_tcount[idx]  = t_count
+            e_indices[idx] = int(data[0])
+            e_xs[idx]      = float(data[-4])
+            e_ys[idx]      = float(data[-3])
+            e_zs[idx]      = float(data[-2])
+            e_types[idx]   = int(data[-1])
+            e_lcount[idx]  = l_count
+            e_rcount[idx]  = r_count
+            e_bcount[idx]  = b_count
+            e_tcount[idx]  = t_count
 
-        isl_data[data_offset:data_offset + total] = indices_array
+            isl_data[data_offset:data_offset + total] = indices_array
 
-        isl_ptr_l[idx] = data_offset
-        isl_ptr_r[idx] = data_offset + l_count
-        isl_ptr_b[idx] = data_offset + l_count + r_count
-        isl_ptr_t[idx] = data_offset + l_count + r_count + b_count
+            isl_ptr_l[idx] = data_offset
+            isl_ptr_r[idx] = data_offset + l_count
+            isl_ptr_b[idx] = data_offset + l_count + r_count
+            isl_ptr_t[idx] = data_offset + l_count + r_count + b_count
 
-        data_offset += total
+            data_offset += total
 
-    fdb_path = Path(fdb_fn)
-    fdb_path.parent.mkdir(parents=True, exist_ok=True)
-    db.save(str(fdb_path))
+        fdb_path = Path(fdb_fn)
+        fdb_path.parent.mkdir(parents=True, exist_ok=True)
+        db.save(str(fdb_path))
 
 def create_ne_fdb_parallel(ne_fn: str, fdb_fn: str):
     """Create NE FDB from NE file in parallel"""
-    shared_name = 'shared_ne'
+    shared_name = f'shared_ne_{os.getpid()}'
     ne_path = Path(ne_fn)
     if not ne_path.exists():
         raise FileNotFoundError(f'NE file not found: {ne_path}')
@@ -184,37 +185,38 @@ def create_ne_fdb_parallel(ne_fn: str, fdb_fn: str):
     element_count = sum(1 for _ in ne_f) + 1  # including virtual element 0
     ne_f.close()
     
-    db = fdb.ORM.truncate([
-        fdb.TableDefn(IndexLike, element_count * 10, 'isl1'),
-        fdb.TableDefn(IndexLike, element_count * 10, 'isl2'),
-        fdb.TableDefn(IndexLike, element_count * 10, 'isl3'),
-        fdb.TableDefn(IndexLike, element_count * 10, 'isl4'),
-        fdb.TableDefn(Ne, element_count)
-    ])
+    with closing(fdb.RecordEngine.truncate([
+        fdb.Layout(IndexLike, element_count * 10, 'isl1'),
+        fdb.Layout(IndexLike, element_count * 10, 'isl2'),
+        fdb.Layout(IndexLike, element_count * 10, 'isl3'),
+        fdb.Layout(IndexLike, element_count * 10, 'isl4'),
+        fdb.Layout(Ne, element_count)
+    ])) as db:
+        try:
     
-    db.share(shared_name, close_after=False)
+            db.share(shared_name, close_after=False)
     
-    # Add actual hydro elements in parallel
-    batch_size = 50000
-    batch_args = [i for i in range(1, element_count, batch_size)]
-    batch_func = partial(
-        _batch_ne_worker,
-        ne_count=element_count,
-        fdb_fn=shared_name,
-        batch_size=batch_size,
-        ne_file=ne_fn
-    )
+            # Add actual hydro elements in parallel
+            batch_size = 50000
+            batch_args = [i for i in range(1, element_count, batch_size)]
+            batch_func = partial(
+                _batch_ne_worker,
+                ne_count=element_count,
+                fdb_fn=shared_name,
+                batch_size=batch_size,
+                ne_file=ne_fn
+            )
     
-    # num_procs = min(mp.cpu_count(), len(batch_args))
-    num_procs = 1
-    with mp.Pool(processes=num_procs) as pool:
-        pool.map(batch_func, batch_args)
+            num_procs = 1
+            with ProcessPoolExecutor(max_workers=num_procs) as pool:
+                list(pool.map(batch_func, batch_args))
     
-    # Save to file and remove shared database
-    fdb_path = Path(fdb_fn)
-    fdb_path.parent.mkdir(parents=True, exist_ok=True)
-    db.save(str(fdb_path))
-    db.unlink()
+            # Save to file and remove shared database
+            fdb_path = Path(fdb_fn)
+            fdb_path.parent.mkdir(parents=True, exist_ok=True)
+            db.save(str(fdb_path))
+        finally:
+            db.unlink()
 
 def _filter_ne_ns(ne_fn: str, ns_fn: str, out_ne_fn: str, out_ns_fn: str):
     """
@@ -346,7 +348,7 @@ def _filter_ne_ns(ne_fn: str, ns_fn: str, out_ne_fn: str, out_ns_fn: str):
 
 def create_ns_fdb_parallel(ns_fn: str, fdb_fn: str):
     """Create NS FDB from NS file in parallel"""
-    shared_name = 'shared_ns'
+    shared_name = f'shared_ns_{os.getpid()}'
     ns_path = Path(ns_fn)
     if not ns_path.exists():
         raise FileNotFoundError(f'NS file not found: {ns_path}')
@@ -356,39 +358,40 @@ def create_ns_fdb_parallel(ns_fn: str, fdb_fn: str):
     side_count = sum(1 for _ in ns_f) + 1  # including virtual side 0
     ns_f.close()
     
-    db = fdb.ORM.truncate([
-        fdb.TableDefn(Ns, side_count),
-        fdb.TableDefn(SideTopoInfo, side_count * 3)
-    ])
+    with closing(fdb.RecordEngine.truncate([
+        fdb.Layout(Ns, side_count),
+        fdb.Layout(SideTopoInfo, side_count * 3)
+    ])) as db:
+        try:
     
-    db.share(shared_name, close_after=False)
+            db.share(shared_name, close_after=False)
     
-    # Add actual sides in parallel
-    batch_size = 50000000
-    batch_args = [i for i in range(1, side_count, batch_size)]
-    batch_func = partial(
-        _batch_ns_worker,
-        ns_count=side_count,
-        fdb_fn=shared_name,
-        batch_size=batch_size,
-        ns_file=ns_fn
-    )
+            # Add actual sides in parallel
+            batch_size = 50000000
+            batch_args = [i for i in range(1, side_count, batch_size)]
+            batch_func = partial(
+                _batch_ns_worker,
+                ns_count=side_count,
+                fdb_fn=shared_name,
+                batch_size=batch_size,
+                ns_file=ns_fn
+            )
     
-    num_procs = min(mp.cpu_count(), len(batch_args))
-    num_procs = 1
-    with mp.Pool(processes=num_procs) as pool:
-        pool.map(batch_func, batch_args)
+            num_procs = 1
+            with ProcessPoolExecutor(max_workers=num_procs) as pool:
+                list(pool.map(batch_func, batch_args))
         
-    # Save to file and remove shared database
-    fdb_path = Path(fdb_fn)
-    fdb_path.parent.mkdir(parents=True, exist_ok=True)
-    db.save(str(fdb_path))
-    db.unlink()
+            # Save to file and remove shared database
+            fdb_path = Path(fdb_fn)
+            fdb_path.parent.mkdir(parents=True, exist_ok=True)
+            db.save(str(fdb_path))
+        finally:
+            db.unlink()
 
 def _batch_ne_worker(ne_si: int, ne_count: int, fdb_fn: str, batch_size: int, ne_file: str):
+    db = fdb.RecordEngine.load(fdb_fn)
     try:
-        db = fdb.ORM.load(fdb_fn)
-        nes = db[Ne][Ne]
+        nes = db.table(Ne)
         e_xs = nes.column.x
         e_ys = nes.column.y
         e_zs = nes.column.z
@@ -399,10 +402,10 @@ def _batch_ne_worker(ne_si: int, ne_count: int, fdb_fn: str, batch_size: int, ne
         e_bcount = nes.column.b_side_num
         e_tcount = nes.column.t_side_num
         
-        isl1 = db[IndexLike]['isl1'].column.index
-        isl2 = db[IndexLike]['isl2'].column.index
-        isl3 = db[IndexLike]['isl3'].column.index
-        isl4 = db[IndexLike]['isl4'].column.index
+        isl1 = db.table(IndexLike, name='isl1').column.index
+        isl2 = db.table(IndexLike, name='isl2').column.index
+        isl3 = db.table(IndexLike, name='isl3').column.index
+        isl4 = db.table(IndexLike, name='isl4').column.index
         
         for idx in range(ne_si, min(ne_si + batch_size, ne_count)):
             ne_record = linecache.getline(ne_file, idx)
@@ -434,9 +437,9 @@ def _batch_ne_worker(ne_si: int, ne_count: int, fdb_fn: str, batch_size: int, ne
         db.close() 
 
 def _batch_ns_worker(ns_si: int, ns_count: int, fdb_fn: str, batch_size: int, ns_file: str):
+    db = fdb.RecordEngine.load(fdb_fn)
     try:
-        db = fdb.ORM.load(fdb_fn)
-        nss = db[Ns][Ns]
+        nss = db.table(Ns)
         s_indices = nss.column.index
         s_lengths = nss.column.length
         s_xs = nss.column.x
@@ -444,7 +447,7 @@ def _batch_ns_worker(ns_si: int, ns_count: int, fdb_fn: str, batch_size: int, ns
         s_zs = nss.column.z
         s_attrs = nss.column.attr
         
-        sts = db[SideTopoInfo][SideTopoInfo].column.info
+        sts = db.table(SideTopoInfo).column.info
         
         for idx in range(ns_si, min(ns_si + batch_size, ns_count)):
             ns_record = linecache.getline(ns_file, idx)
@@ -467,162 +470,96 @@ def _batch_ns_worker(ns_si: int, ns_count: int, fdb_fn: str, batch_size: int, ns
         db.close()
 
 def build_boundary_fdb(cfg: DomainConfig):
-    """Create boundary hydro element FDB from NE FDB and NS FDB"""
-    ne_fdb_fn: str = cfg.ne_fdb
-    ns_fdb_fn: str = cfg.ns_fdb
-    fdb_fn: str = cfg.boundary_fdb
-    
-    # Init Taichi
-    init_taichi(use_gpu=True, profiler=True)
-    
-    # Load necessaray information from fdbs
-    es = fdb.ORM.load(ne_fdb_fn, from_file=True)[Ne][Ne]
-    ss = fdb.ORM.load(ns_fdb_fn, from_file=True)[Ns][Ns]
-    s_ts = fdb.ORM.load(ns_fdb_fn, from_file=True)[SideTopoInfo][SideTopoInfo]
-    e_num = len(es)
-    s_num = len(ss)
-    e_xs_t = copy_to_taichi(es.column.x, ti.f32, None)
-    e_ys_t = copy_to_taichi(es.column.y, ti.f32, None)
-    s_ts_t = copy_to_taichi(s_ts.column.info, ti.u32, [s_num, 3])
-    
-    # Set Taichi fields
-    sbf_t = ti.field(dtype=ti.u8, shape=s_num)          # side boundary flag
-    bi_t = ti.field(dtype=ti.u32, shape=e_num)          # boundary element indices
-    bcount_t = ti.field(dtype=ti.u32, shape=())         # boundary element count
-    is_boundary = ti.field(dtype=ti.u8, shape=e_num)    # mark boundary elements
-    bcount_t[None] = 0
-    
-    @ti.kernel
-    def mark_boundary_elements():
-        for si in range(1, s_num):
-            ei = 0
-            sbf_t[si] = 0
-            orient = s_ts_t[si, 0]
-            el = s_ts_t[si, 1]
-            eh = s_ts_t[si, 2]
-            
-            if orient == 1 and el * eh == 0:    # horizontal side
-                ei = el if eh == 0 else eh
-                sbf_t[si] = 1
-            elif orient == 2 and el * eh == 0:  # vertical side
-                ei = el if eh == 0 else eh
-                sbf_t[si] = 1
-            
-            # 808411.0 for mrcg
-            if ei != 0 and e_xs_t[ei] < 808411.0 and e_ys_t[ei] < 837066.0:
-            # if ei != 0 and e_xs_t[ei] < 808361.0 and e_ys_t[ei] < 837066.0:
-                is_boundary[ei] = 1
-
-    @ti.kernel
-    def collect_boundary_elements():
-        for i in range(1, e_num):
-            if is_boundary[i] == 1:
-                idx = ti.atomic_add(bcount_t[None], 1)
-                bi_t[idx] = i
-    
-    mark_boundary_elements()
-    collect_boundary_elements()
-    
-    # Create boundary FDB
-    capacity = int(bcount_t.to_numpy()[None][0])
-    print(f'Boundary element count: {capacity}')
-    db = fdb.ORM.truncate([
-        fdb.TableDefn(IndexLike, capacity, 'bdei'),
-        fdb.TableDefn(U8Value, s_num, 'sbf')
-    ])
-    bdei: np.ndarray = db[IndexLike]['bdei'].column.index
-    bdei[:] = bi_t.to_numpy()[:capacity]
-    sbf: np.ndarray = db[U8Value]['sbf'].column.value
-    sbf[:] = sbf_t.to_numpy()[:s_num]
-    
-    # Save to file
-    fdb_path = Path(fdb_fn)
-    fdb_path.parent.mkdir(parents=True, exist_ok=True)
-    db.save(str(fdb_path))
-    db.unlink()
+    """All exterior sides are closed; cell forcing is loaded separately."""
+    with closing(fdb.RecordEngine.load(cfg.ns_fdb, from_file=True)) as ns_db:
+        topo = ns_db.table(SideTopoInfo).column.info.reshape(-1, 3)
+        flags = ((topo[:, 1] == 0) ^ (topo[:, 2] == 0)).astype(np.uint8)
+    with closing(fdb.RecordEngine.truncate([fdb.Layout(U8Value, len(flags), 'sbf')])) as db:
+        db.table(U8Value, name='sbf').column.value[:] = flags
+        db.save(cfg.boundary_fdb)
 
 def _check_ne_fdb(ne_fn: str, fdb_fn: str):
-    db = fdb.ORM.load(fdb_fn, from_file=True)
-    nes = db[Ne][Ne]
-    isl1 = db[IndexLike]['isl1'].column.index
-    isl2 = db[IndexLike]['isl2'].column.index
-    isl3 = db[IndexLike]['isl3'].column.index
-    isl4 = db[IndexLike]['isl4'].column.index
+    with closing(fdb.RecordEngine.load(fdb_fn, from_file=True)) as db:
+        nes = db.table(Ne)
+        isl1 = db.table(IndexLike, name='isl1').column.index
+        isl2 = db.table(IndexLike, name='isl2').column.index
+        isl3 = db.table(IndexLike, name='isl3').column.index
+        isl4 = db.table(IndexLike, name='isl4').column.index
     
-    with open(ne_fn, 'r', encoding='utf-8') as f:
-        for line in f:
-            record = line.split(',')
-            idx = int(record[0])
-            left_edge_num = int(record[1])
-            right_edge_num = int(record[2])
-            bottom_edge_num = int(record[3])
-            top_edge_num = int(record[4])
-            start = 5
-            left_edges = [int(edge_idx) for edge_idx in record[start:start + left_edge_num]]
-            start += left_edge_num
-            right_edges = [int(edge_idx) for edge_idx in record[start:start + right_edge_num]]
-            start += right_edge_num
-            bottom_edges = [int(edge_idx) for edge_idx in record[start:start + bottom_edge_num]]
-            start += bottom_edge_num
-            top_edges = [int(edge_idx) for edge_idx in record[start:start + top_edge_num]]
+        with open(ne_fn, 'r', encoding='utf-8') as f:
+            for line in f:
+                record = line.split(',')
+                idx = int(record[0])
+                left_edge_num = int(record[1])
+                right_edge_num = int(record[2])
+                bottom_edge_num = int(record[3])
+                top_edge_num = int(record[4])
+                start = 5
+                left_edges = [int(edge_idx) for edge_idx in record[start:start + left_edge_num]]
+                start += left_edge_num
+                right_edges = [int(edge_idx) for edge_idx in record[start:start + right_edge_num]]
+                start += right_edge_num
+                bottom_edges = [int(edge_idx) for edge_idx in record[start:start + bottom_edge_num]]
+                start += bottom_edge_num
+                top_edges = [int(edge_idx) for edge_idx in record[start:start + top_edge_num]]
 
-            ne_element = nes[idx]
-            assert ne_element.index == idx, f'Index mismatch: {ne_element.index} != {idx}'
-            assert ne_element.l_side_num == left_edge_num, f'Left edge count mismatch at index {idx}'
-            assert ne_element.r_side_num == right_edge_num, f'Right edge count mismatch at index {idx}'
-            assert ne_element.b_side_num == bottom_edge_num, f'Bottom edge count mismatch at index {idx}'
-            assert ne_element.t_side_num == top_edge_num, f'Top edge count mismatch at index {idx}'
+                ne_element = nes[idx]
+                assert ne_element.index == idx, f'Index mismatch: {ne_element.index} != {idx}'
+                assert ne_element.l_side_num == left_edge_num, f'Left edge count mismatch at index {idx}'
+                assert ne_element.r_side_num == right_edge_num, f'Right edge count mismatch at index {idx}'
+                assert ne_element.b_side_num == bottom_edge_num, f'Bottom edge count mismatch at index {idx}'
+                assert ne_element.t_side_num == top_edge_num, f'Top edge count mismatch at index {idx}'
 
-            si_offset = idx * 10
-            l_edges_db = isl1[si_offset:si_offset + left_edge_num].tolist()
-            r_edges_db = isl2[si_offset:si_offset + right_edge_num].tolist()
-            b_edges_db = isl3[si_offset:si_offset + bottom_edge_num].tolist()
-            t_edges_db = isl4[si_offset:si_offset + top_edge_num].tolist()
+                si_offset = idx * 10
+                l_edges_db = isl1[si_offset:si_offset + left_edge_num].tolist()
+                r_edges_db = isl2[si_offset:si_offset + right_edge_num].tolist()
+                b_edges_db = isl3[si_offset:si_offset + bottom_edge_num].tolist()
+                t_edges_db = isl4[si_offset:si_offset + top_edge_num].tolist()
 
-            assert l_edges_db == left_edges, f'Left edges mismatch at index {idx}'
-            assert r_edges_db == right_edges, f'Right edges mismatch at index {idx}'
-            assert b_edges_db == bottom_edges, f'Bottom edges mismatch at index {idx}'
-            assert t_edges_db == top_edges, f'Top edges mismatch at index {idx}'
+                assert l_edges_db == left_edges, f'Left edges mismatch at index {idx}'
+                assert r_edges_db == right_edges, f'Right edges mismatch at index {idx}'
+                assert b_edges_db == bottom_edges, f'Bottom edges mismatch at index {idx}'
+                assert t_edges_db == top_edges, f'Top edges mismatch at index {idx}'
 
-    print('FDB NE data verification passed.')
+        print('FDB NE data verification passed.')
 
 def _check_ns_fdb(ns_fn: str, fdb_fn: str):
-    db = fdb.ORM.load(fdb_fn, from_file=True)
-    nss = db[Ns][Ns]
+    with closing(fdb.RecordEngine.load(fdb_fn, from_file=True)) as db:
+        nss = db.table(Ns)
     
-    with open(ns_fn, 'r', encoding='utf-8') as f:
-        for line in f:
-            record = line.split(',')
-            idx = int(record[0])
-            orient = int(record[1])
-            left = int(record[2])
-            right = int(record[3])
-            bottom = int(record[4])
-            top = int(record[5])
-            length = float(record[6])
-            x = float(record[7])
-            y = float(record[8])
-            z = float(record[9])
-            attr = int(record[10])
+        with open(ns_fn, 'r', encoding='utf-8') as f:
+            for line in f:
+                record = line.split(',')
+                idx = int(record[0])
+                orient = int(record[1])
+                left = int(record[2])
+                right = int(record[3])
+                bottom = int(record[4])
+                top = int(record[5])
+                length = float(record[6])
+                x = float(record[7])
+                y = float(record[8])
+                z = float(record[9])
+                attr = int(record[10])
 
-            ns_element = nss[idx]
-            ns_topo = db[SideTopoInfo][SideTopoInfo].column.info[idx * 3:(idx + 1) * 3]
-            assert ns_element.index == idx, f'Index mismatch: {ns_element.index} != {idx}'
-            if orient == 1:  # horizontal
-                assert ns_topo[0] == orient, f'Orient mismatch at index {idx}'
-                assert ns_topo[1] == bottom, f'Bottom mismatch at index {idx}'
-                assert ns_topo[2] == top, f'Top mismatch at index {idx}'
-            else:  # vertical
-                assert ns_topo[0] == orient, f'Orient mismatch at index {idx}'
-                assert ns_topo[1] == left, f'Left mismatch at index {idx}'
-                assert ns_topo[2] == right, f'Right mismatch at index {idx}'
-            assert abs(ns_element.length - length) < 1e-3, f'Length mismatch at index {idx}'
-            assert abs(ns_element.x - x) < 0.1, f'X mismatch at index {idx}'
-            assert abs(ns_element.y - y) < 0.1, f'Y mismatch at index {idx}'
-            assert abs(ns_element.z - z) < 1e-3, f'Z mismatch at index {idx}'
-            assert ns_element.attr == attr, f'Attr mismatch at index {idx}'
+                ns_element = nss[idx]
+                ns_topo = db.table(SideTopoInfo).column.info[idx * 3:(idx + 1) * 3]
+                assert ns_element.index == idx, f'Index mismatch: {ns_element.index} != {idx}'
+                if orient == 1:  # horizontal
+                    assert ns_topo[0] == orient, f'Orient mismatch at index {idx}'
+                    assert ns_topo[1] == bottom, f'Bottom mismatch at index {idx}'
+                    assert ns_topo[2] == top, f'Top mismatch at index {idx}'
+                else:  # vertical
+                    assert ns_topo[0] == orient, f'Orient mismatch at index {idx}'
+                    assert ns_topo[1] == left, f'Left mismatch at index {idx}'
+                    assert ns_topo[2] == right, f'Right mismatch at index {idx}'
+                assert abs(ns_element.length - length) < 1e-3, f'Length mismatch at index {idx}'
+                assert abs(ns_element.x - x) < 0.1, f'X mismatch at index {idx}'
+                assert abs(ns_element.y - y) < 0.1, f'Y mismatch at index {idx}'
+                assert abs(ns_element.z - z) < 1e-3, f'Z mismatch at index {idx}'
+                assert ns_element.attr == attr, f'Attr mismatch at index {idx}'
 
-    print('FDB NS data verification passed.')
+        print('FDB NS data verification passed.')
 
 def _check_boundary_fdb(test_fn: str, fdb_fn: str):
     """Check created boundary FDB"""
@@ -634,15 +571,15 @@ def _check_boundary_fdb(test_fn: str, fdb_fn: str):
     test_bd_ie = sorted(test_bd_ie)
     
     # Load created boundary FDB
-    db = fdb.ORM.load(fdb_fn, from_file=True)
-    bdei = db[IndexLike]['bdei'].column.index
-    fdb_bd_ie = sorted(bdei.tolist())
+    with closing(fdb.RecordEngine.load(fdb_fn, from_file=True)) as db:
+        bdei = db.table(IndexLike, name='bdei').column.index
+        fdb_bd_ie = sorted(bdei.tolist())
     
-    # Compare
-    for i in range(len(test_bd_ie)):
-        if test_bd_ie[i] != fdb_bd_ie[i]:
-            print(f"Boundary index mismatch at position {i}: test {test_bd_ie[i]} vs fdb {fdb_bd_ie[i]}")
-    print("Boundary FDB check passed!")
+        # Compare
+        for i in range(len(test_bd_ie)):
+            if test_bd_ie[i] != fdb_bd_ie[i]:
+                print(f"Boundary index mismatch at position {i}: test {test_bd_ie[i]} vs fdb {fdb_bd_ie[i]}")
+        print("Boundary FDB check passed!")
 
 def _create_worker(cfg: DomainConfig, idx: int):
     if idx == 0:
