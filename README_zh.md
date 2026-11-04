@@ -15,9 +15,11 @@
 
 大型本地输入和模拟输出位于 `resource/`，该目录已被 Git 忽略。全新克隆不包含本地配置所需的 DEM、NE/NS 网格、降雨、潮位、闸门、观测、SWMM 或检查点文件。
 
+[English](README.md) · [配置参考](docs/configuration.md) · [输出与续跑](docs/solver-output.md)
+
 ## 环境要求
 
-- Python `3.10.17`。
+- Python `3.10.17`，固定依赖 `fastdb4py==0.2.4`。
 - 使用 `uv` 管理依赖。
 - 求解运行需要 Taichi 支持的计算后端。
 - GIS 和 SWMM 相关依赖由 `pyproject.toml` 安装。
@@ -26,36 +28,67 @@
 安装依赖：
 
 ```bash
-uv sync
+uv sync --locked
 ```
 
 macOS 上如果加载 `swmm-toolkit` 时因为 wheel 内置 dylib 签名问题导致进程退出，可运行：
 
 ```bash
-uv run fix-macos-codesign
+uv run python fix_macos_codesign.py
 ```
 
 ## 验证命令
 
 ```bash
 uv lock --check
-uv run pytest tests/test_forcing.py tests/test_solver_forcing.py \
+uv run python -m pytest tests/test_forcing.py tests/test_solver_forcing.py \
   tests/test_clock.py tests/test_device_budget.py tests/test_face_flux.py \
   tests/test_open_boundary.py tests/test_hydraulics.py \
   tests/test_positivity.py tests/test_inventory_rounding.py tests/test_restart.py \
   tests/test_coupling.py tests/test_output_io.py \
   tests/test_output_readers.py tests/test_flood_map_frame_validation.py \
   tests/test_flood_map_rainfall.py
-uv run pytest
+uv run python -m pytest
 ```
 
 专项检查覆盖强迫、设备时钟与收支、边流量、边界、耦合、检查点读写、水深帧与后处理。全量命令检查仓库其他部分，其中部分测试可能需要本地 DEM 数据或 GMT。
 
 ## 数据与配置
 
-compact 求解器使用独立的计算域与强迫 JSON 文件。路径相对于进程工作目录解析，未知字段直接报错。`start`、`duration`、`warmup_duration`、`land_parameters` 必填；模拟时长和输出间隔为正整数秒，预热时长允许 0。`duration + warmup_duration` 必须小于 `2**24` 秒。
+compact 求解器使用独立的计算域与强迫 JSON 文件。路径相对于进程工作目录解析，计算域和强迫模型拒绝未知字段；管网模型校验规则见下文。`start`、`duration`、`warmup_duration`、`land_parameters` 必填；模拟时长和输出间隔为正整数秒，预热时长允许 0。`duration + warmup_duration` 必须小于 `2**24` 秒。
 
 ### 计算域配置
+
+提供方授权使用的案例海床数据，以及由其派生的网格、模型输入与输出，须保留在本地，不得再分发。
+
+计算域、强迫及其嵌套参数模型均拒绝未知字段和 NaN/Infinity。数值类型采用 Pydantic 的常规转换规则，例如整数值 `300.0` 可能被整数类型接受；下表描述通过校验后的取值。“必填”表示模型没有默认值。
+
+| 计算域字段 | 单位 / 默认值 | 校验与含义 |
+| --- | --- | --- |
+| `ne`, `ns` | 路径；必填 | 必须存在的原始网格文本文件；相对路径从工作目录解析 |
+| `epsg_code` | 整数；必填 | 网格 CRS 的 EPSG 编码；载入时要求强迫 CRS 一致 |
+| `domain_dir` | 路径；必填 | 配置校验时创建；每次使用新的运行目录 |
+| `start` | ISO 8601 时间；必填 | 必须含时区；正式模拟起点 |
+| `duration` | 秒；必填 | 正整数；正式模拟时长 |
+| `warmup_duration` | 秒；必填 | 非负整数；预热位于 `start` 之前 |
+| `land_parameters` | 映射；必填 | 非空；地类整数键为 0–255；须覆盖所有真实网格地类 |
+| `afa` | 无量纲；`0.5` | `0 < afa <= 1`；缩放 CFL 步长上限 |
+| `sita` | 无量纲；`1.0` | `0 <= sita <= 1`；θ 控制旧时刻本边流量与邻边流量的权重 |
+| `min_h` | 米；`0.02` | 正值；湿水深阈值，不是初始水深 |
+| `yield_step` | 秒；`300` | 正整数；站点、收支及步长统计的输出间隔 |
+| `restart_state` | 路径；`""` | 空值表示冷启动，否则在运行时载入完整检查点 |
+| `stations` | 坐标；`{}` | 名称到网格 CRS 下两个有限 x/y 值的映射；域外点在运行时报错 |
+| `observation_dir` | 路径；`""` | 水文过程线对比使用；求解器运行不需要 |
+
+要求 `duration + warmup_duration < 2**24` 秒。计算域模型检查 `ne`/`ns` 是否存在，文件格式由预处理校验。即使其他字段随后校验失败，载入配置仍可能创建 `domain_dir`。
+
+| 地类参数字段 | 单位 / 默认值 | 校验 |
+| --- | --- | --- |
+| `manning_n` | s/m^(1/3)；必填 | 有限、非负 |
+| `infiltration` | 必填 | 字面量 `"none"` 或 Horton 对象 |
+| `f0_mm_h` | mm/h；Horton 对象必填 | 非负初始下渗能力 |
+| `fc_mm_h` | mm/h；Horton 对象必填 | 非负稳定下渗能力，且 `fc_mm_h <= f0_mm_h` |
+| `k_per_h` | 1/h；Horton 对象必填 | 非负衰减系数 |
 
 ```json
 {
@@ -75,7 +108,8 @@ compact 求解器使用独立的计算域与强迫 JSON 文件。路径相对于
     "6": {"manning_n": 0.035, "infiltration": {"f0_mm_h": 101.6, "fc_mm_h": 7.62, "k_per_h": 2}},
     "7": {"manning_n": 0.03, "infiltration": "none"},
     "8": {"manning_n": 0.03, "infiltration": "none"},
-    "9": {"manning_n": 0.06, "infiltration": {"f0_mm_h": 152.4, "fc_mm_h": 25.4, "k_per_h": 3}}
+    "9": {"manning_n": 0.06, "infiltration": {"f0_mm_h": 152.4, "fc_mm_h": 25.4, "k_per_h": 3}},
+    "11": {"manning_n": 0.03, "infiltration": "none"}
   },
   "afa": 0.5,
   "sita": 1.0,
@@ -89,7 +123,7 @@ compact 求解器使用独立的计算域与强迫 JSON 文件。路径相对于
 
 `start` 必须带时区。所有时间戳按绝对时间对齐，不依赖计算机本地时区。边界序列和降雨时段必须覆盖正式时窗 `start` 到 `start + duration`，覆盖不足即报错，正式模拟不外推或用首末值补齐。预热只使用 `start` 时刻的值，不读取 start 之前的数据。网格、边界线和降雨栅格必须使用同一 EPSG，不执行坐标变换。
 
-`land_parameters` 必须覆盖网格中实际出现的每个地类，缺失即报错；JSON 键为地类编码。上面 1–9 类的数值取自论文附录，仅作为输入示例，程序没有内置默认表。网格如有其他地类，需添加相应配置。每类必填非负 `manning_n`（0 用于无摩阻解析试验），下渗可设为 `"none"`，或填写 Horton 参数 `f0_mm_h`、`fc_mm_h`、`k_per_h`。下渗率单位为 mm/h，衰减系数单位为 1/h；三者均须非负，且 `f0_mm_h` 不小于 `fc_mm_h`。内边的 n 取两侧单元 n 的算术平均；闭外边沿用内侧值，域外 0 号单元不算地类。
+`land_parameters` 必须覆盖网格中实际出现的每个地类，缺失即报错；JSON 键为地类编码。上方数值仅作为输入示例，程序没有内置默认表。网格如有其他地类，需添加相应配置；示例中的地类 11 是演示闸口条目。每类必填非负 `manning_n`（0 用于无摩阻解析试验），下渗可设为 `"none"`，或填写 Horton 参数 `f0_mm_h`、`fc_mm_h`、`k_per_h`。下渗率单位为 mm/h，衰减系数单位为 1/h；三者均须非负，且 `f0_mm_h` 不小于 `fc_mm_h`。内边的 n 取两侧单元 n 的算术平均；闭外边沿用内侧值，域外 0 号单元不算地类。
 
 `afa`、`sita`、`min_h` 分别控制 CFL、时间权重和有效水深阈值。θ<1 时，相邻面单宽流量取该面所有子边按边长加权的平均；单边面保持原值。θ 模板只在被边界线选中的 level 或 discharge 外露边上进行线性延拓。外露比例按边长加权；一侧邻面完全缺失时，两邻面的平均等于本边旧流量。真实外边通量为 0，边界交换由指定水位和单元流量源项完成。θ=1 跳过邻面模板。
 
@@ -98,6 +132,23 @@ compact 求解器使用独立的计算域与强迫 JSON 文件。路径相对于
 `stations` 将站名映射到网格坐标：包含坐标的闭矩形单元都是候选，取最小真实单元 ID；坐标落在网格外即报错。`observation_dir` 提供对比观测数据。`yield_step` 默认 300 s，控制站点采样、收支行和步长统计的间隔；水深帧固定每 900 s 输出。
 
 ### 强迫配置
+
+| 强迫字段 | 默认值 / 单位 | 校验与含义 |
+| --- | --- | --- |
+| `boundaries` | 列表；必填 | 可为空；名称必须唯一 |
+| `boundaries[].name` | 字符串；必填 | 至少一个字符 |
+| `boundaries[].kind` | 必填 | `"level"` 或 `"discharge"` |
+| `boundaries[].line` | 路径；必填 | GeoJSON 线；载入时校验几何、CRS 和网格选择 |
+| `boundaries[].series` | 路径；必填 | `time,value` CSV；水位单位为米，流量为 m³/s |
+| `rainfall` | 对象；必填 | 无雨运行也须提供显式零雨量波段 |
+| `rainfall.raster` | 路径；必填 | 多波段 GeoTIFF；波段累计雨量单位为 mm |
+| `rainfall.intervals` | 路径；必填 | `interval_start,interval_end` CSV，时间必须含时区 |
+| `gate` | `null` | 可选的一次开闸规则 |
+| `gate.threshold` | 设置闸口时必填；米 | 有限水面高程，采用网格垂直基准 |
+| `gate.land_type` | 设置闸口时必填 | 整数 0–255；全部匹配单元均为闸口目标 |
+| `gate.level_boundary` | 设置闸口时必填 | 必须指向已配置的 `level` 边界 |
+
+强迫模型中路径是字符串；文件存在性、CSV 覆盖范围、雨场采样和几何重叠在预处理或求解载入时校验。
 
 ```json
 {
@@ -154,13 +205,44 @@ interval_start,interval_end
 2023-09-07T17:00:00+08:00,2023-09-07T18:00:00+08:00
 ```
 
-时段长度必须为正，连续、不重叠，记录数与波段数一致。无雨时段显式写 0。本例可使用 2、1 mm 两个波段。载入时按单元中心映射像元；中心落在栅格外，或所采像元为 NoData、非有限值、负雨量时均报错。时段内雨强恒定，等于波段 mm × 0.001 / 时段秒数。一个覆盖全域的像元就是均匀降雨特例。配置的 Horton 下渗能力为 `fc + (f0 - fc) exp(-k t / 3600)`，第一次有雨时容量为 `f0`。各单元仅在本格雨强为正时累计降雨时间 `t`；`none` 对应零下渗。实际 Horton 移除量为容量 × dt 与通量和降雨更新后剩余水量的较小值。
+时段长度必须为正，连续、不重叠，记录数与波段数一致。无雨时段显式写 0。本例可使用 2、1 mm 两个波段。载入时按单元中心映射像元；中心落在栅格外，或所采像元为 NoData、非有限值、负雨量时均报错。时段内雨强恒定，等于波段 mm × 0.001 / 时段秒数。一个覆盖全域的像元就是均匀降雨特例。配置的 Horton 下渗能力为 `fc + (f0 - fc) exp(-k t / 3600)`，累计雨时为零时能力为 `f0`。各单元仅在本格雨强为正时累计降雨时间 `t`；`none` 对应零下渗。实际 Horton 移除量为容量 × dt 与通量和降雨更新后剩余水量的较小值。
 
 `gate` 可省略或设为 `null`。所参照的边界必须为 `level`；该边界超过 `threshold` 后，将 `land_type` 的全部单元床面高程一次性改为 0 m，同时保持水深和水量不变。阈值与 level 使用同一基准。时间步会在闸门阈值跨越时刻截断，manifest 记录目标单元数和是否已开闸。
 
 `warmup_duration > 0` 的冷启动先建立连通静水。各 level 边界以 `start` 时刻的值（`series.at(0)`）作为填充水位；只有未关闭的内边、且有效过水高程严格低于该水位时，才可连通相邻单元。有效高程取两侧工作床面与动量所用边堤顶的最大值。预热起点应开启的闸门先开，再搜索。隔离低地、围闭鱼塘与关闸会阻断填充；鱼塘沿用输入等效地形，不按地类额外补水。不同起点水位到达同一水体时直接报错。初始 q 为 0，填入的水计入初始库存。后续开闸由动力过程输水，不再瞬时填充。没有预热时沿用干床初值；检查点沿用保存的物理状态。
 
 预热期间各边界保持 `start` 时刻的值，河流从起点即按该恒定流量入流，无降雨，下渗照常扣水；之后同一引擎连续完成正式模拟。预热时长应依据站点和边界邻带余振、库存漂移以及完整的河流／海界／下渗平衡实测确定。`warmup_solver(domain_cfg, force_cfg)` 对已预处理的计算域只执行预热，到 `start` 停止。
+
+对于逐小时雨场，每个波段是该小时的累计雨量，小时内雨强恒定；载入器也接受其他正时长的连续区间。Horton 雨时为零时能力为 `f0`；每个有雨步先增加累计雨时，再计算该步使用的下渗能力，无雨步保持前一步能力。
+
+内边的 CFL 上限为 `afa * side_length / (sqrt(9.81 * face_depth) + abs(q) / face_depth)`，其中 CFL 面水深至少为 0.01 m，q 的单位为 m²/s。减小 `afa` 会降低允许步长。动量更新分子使用 `sita * q_old + (1 - sita) * (q_left + q_right) / 2 + pressure_increment`，分母处理摩阻；θ=1 时旧流量权重只取本边。
+
+JSON 和模型校验发生在运行记录创建之前，这类错误不产生失败 manifest；运行记录建立后的预处理和输入载入错误会记为失败。
+
+## 可复现的小算例
+
+仓库自带的合成自检会创建网格、强迫与检查点输入，不需要案例海床数据：
+
+```bash
+uv run python tools/solver_selfcheck.py --arch cpu --output runs/selfcheck-cpu
+```
+
+每次使用新的输出目录。用生成的高床面降雨输入验证 CLI 时，先指定新的运行目录：
+
+```bash
+uv run python - <<'PYRUN'
+import json
+from pathlib import Path
+p = Path("runs/selfcheck-cpu/high_bed_rain/domain.json")
+config = json.loads(p.read_text())
+config["domain_dir"] = "runs/cli-rain"
+config["stations"] = {"S1": [5, 5]}
+Path("runs/cli-domain.json").write_text(json.dumps(config, indent=2) + "\n")
+PYRUN
+uv run python main.py --domain runs/cli-domain.json --force runs/selfcheck-cpu/high_bed_rain/force.json
+```
+
+两个互不连通、面积各 100 m² 的单元在 60 s 内接收 0.01 mm 降雨，最终储水约为 0.002 m³。自检还覆盖干湿闸口、检查点接续、库存舍入与精确收支累计。其他含 `path/to/...` 的命令展示需自备数据的工作流。
 
 ## 运行二维求解器
 
@@ -178,7 +260,7 @@ run_simulation(load_domain_config("path/to/domain.json"),
 
 每次运行使用新的 `domain_dir`，已有 manifest、收支记录或输出时直接报错，不覆盖。命令行入口在预处理前创建 manifest，预处理和输入载入失败均记录为失败运行。需要单独预处理时，仍可调用 `preprocess(domain_cfg, force_cfg)` 后再调用 `solver(domain_cfg, force_cfg)`。
 
-预处理在 `domain_dir/preprocessed` 生成 `ne.fdb`、`ns.fdb` 和 `boundary.fdb`。求解器在 `domain_dir/output/bed.fdb` 一次写入起始工作床面。`output/frames/depth_<elapsed_s>.fdb` 仅含 F32 水深，在初始时刻、此后每 900 s 以及终点输出。`output/stations.csv` 为配置的站点记录 `depth`、`level`、`u`、`v`。`output/extrema.fdb` 保存逐步累计的 `max_depth`、其首次出现的双 U32 时钟字、`max_speed`。极值统计正式模拟阶段；独立预热运行则统计预热阶段。`output/state_start.fdb` 是正式起点的检查点；`output/state_final.fdb` 是完整终点检查点。预热和正式期内，距上次检查点（或开始模拟）达到 30 分钟墙钟时间后，在下一个水深帧输出时刻写入 `output/state_latest.fdb`；间隔固定于代码中，不增加截步。检查点先写入同目录临时文件，再原子替换目标，只保留最新一个定期检查点。检查点包含工作床面、水深、边流量 q、Horton 累计降雨时间与下渗能力、时钟、极值和精确收支累计状态。预热与正式模拟共用同一时钟和输出格式。预热帧的经过秒数为负。
+预处理在 `domain_dir/preprocessed` 生成 `ne.fdb`、`ns.fdb` 和 `boundary.fdb`。求解器在 `domain_dir/output/bed.fdb` 一次写入起始工作床面。`output/frames/depth_<elapsed_s>.fdb` 仅含 F32 水深，在初始或恢复时刻、此后每 900 s 以及终点输出。配置站点时，`output/stations.csv` 为站点记录 `depth`、`level`、`u`、`v`。`output/extrema.fdb` 保存逐步累计的 `max_depth`、其首次出现的双 U32 时钟字、`max_speed`。时钟字编码自 manifest 的 `output.extrema_time_origin` 起以 `2**-40` 秒为单位的 tick 数。极值统计正式模拟阶段；独立预热运行则统计预热阶段。`output/state_start.fdb` 是完整运行正式起点的检查点；独立预热运行将终点写为 `state_final.fdb`；`output/state_final.fdb` 是完整终点检查点。预热和正式期内，距上次检查点（或开始模拟）达到 30 分钟墙钟时间后，在下一个水深帧输出时刻写入 `output/state_latest.fdb`；间隔固定于代码中，不增加截步。检查点先写入同目录临时文件，再原子替换目标，只保留最新一个定期检查点。检查点包含工作床面、水深、边流量 q、Horton 累计降雨时间与下渗能力、时钟、极值和精确收支累计状态。预热与正式模拟共用同一时钟和输出格式。预热帧的经过秒数为负。
 
 网格载入要求正的正方形单元，以满足基于边长的 CFL 尺度。空间水位 MAE 在没有共同湿像元时为 NaN，表示无定义。
 
@@ -214,6 +296,16 @@ coupled 驱动与 compact 共用同一水深引擎、强迫载入、时钟、收
 uv run python main.py --domain path/to/domain.json --force path/to/force.json --pipe path/to/pipe.json
 ```
 
+| 管网字段 | 默认值 / 单位 | 校验 |
+| --- | --- | --- |
+| `inp` | 路径；必填 | 必须存在 |
+| `pipe_dir` | 路径；必填 | 校验时创建 |
+| `coupling_interval` | `600` 秒 | 正整数 |
+| `exchange_timeout` | `600.0` 秒 | 正浮点数 |
+| `weak_dist_thresh` | `50.0` 米 | 浮点数；模型无范围约束 |
+
+`PipeConfig` 忽略未知字段，且不继承计算域和强迫模型的有限数限制。应使用有限值和非负搜索距离。已实现的交换与拓扑见[耦合文档](docs/coupling-exchange-design.md)。
+
 管网交换有独立的源项场，与 discharge 相加后写入 `ssq_t`。共享单元的排水按不同 junction 关系分配，outfall 仅设置水位、不扣除地表水。一个 SWMM actor 完整推进每个交换窗，预热照常推进，在正式起点连续接续、不重启；耦合起点须精确到整秒。INP 必须声明 `FLOW_UNITS CMS`，使流量与水头单位为 m³/s 和 m。运行时 INP、报告和输出写入 `pipe_dir`，原 INP 只读。manifest 包含管网配置、输入哈希与真实 SWMM 时钟和交换窗记录。交换公式保留既有的 3 m 溢流压头上限及 0.5 松弛系数。
 
 ## 后端自检
@@ -236,9 +328,10 @@ CUDA 设备名通过驱动的 `nvidia-smi` 命令读取，该命令须在 PATH �
 
 ## 后处理
 
-常用输出函数：
+常用输出函数（计算域 JSON 须指向已有的完成运行；水文过程线还需要对应站点的观测 CSV）：
 
 ```python
+from src.nh_flood_2d.input import load_domain_config
 from src.nh_flood_2d.output.flood_map import (
     generate_flood_map,
     generate_max_inundation_extent_map,
@@ -251,6 +344,7 @@ from src.nh_flood_2d.output.hydrograph import (
     compare_hydrograph_panels,
 )
 
+domain_cfg = load_domain_config("path/to/domain.json")
 generate_flood_map(domain_cfg)
 generate_max_inundation_extent_map(domain_cfg, min_depth=0.05)
 generate_flood_video(domain_cfg, output_path="path/to/flood_video.mp4")
@@ -276,7 +370,7 @@ uv run python src/nh_flood_2d/dem/dem_fusion_mask_replacement.py \
   --nodata -9999.0
 ```
 
-SWMM `.inp` 转 shapefile：
+SWMM `.inp` 转 shapefile（分节输出命名和参数见[工具文档](docs/inp-to-shapefile.md)）：
 
 ```bash
 uv run python tools/inp2shp.py path/to/network.inp -o path/to/shapefiles --epsg 4547
@@ -311,10 +405,10 @@ src/nh_flood_2d/
   dem/              DEM 融合和 TIN 工具
   util/             Taichi 初始化和计时辅助函数
 tools/              独立维护和转换脚本
-examples/           DEM 融合运行示例
+examples/           旧版 DEM 运行示例；限制见 DEM 使用文档
 docs/               设计说明和使用文档
 ```
 
-每次运行始终以 `source_sha256` 记录源码内容身份。规则 `nh-flood-2d/src-py-sha256/v1`：SHA-256 先输入 UTF-8 字节串 `nh-flood-2d/src-py-sha256/v1` 与一个 NUL 字节；枚举 `src/` 下全部 `.py` 文件，按相对 `src/` 的 POSIX 路径排序。每个文件依次输入 UTF-8 相对路径与一个 NUL 字节、8 字节无符号大端整数表示的文件字节数、完整文件字节。移动源码目录不会改变身份，路径名或内容变化会改变身份。Git 检出另记 `git_commit` 与 `git_dirty`；源码根目录无 `.git` 时，两者为 JSON `null`，运行不依赖 Git。
+每次运行始终以 `source_sha256` 记录源码内容身份。规则 `nh-flood-2d/src-py-sha256/v1`：SHA-256 先输入 UTF-8 字节串 `nh-flood-2d/src-py-sha256/v1` 与一个 NUL 字节；枚举 `src/` 下全部 `.py` 文件，按相对 `src/` 的 POSIX 路径排序。每个文件依次输入 UTF-8 相对路径与一个 NUL 字节、8 字节无符号大端整数表示的文件字节数、完整文件字节。移动源码目录不会改变身份，路径名或内容变化会改变身份。Git 检出另记 `git_commit` 与 `git_dirty`；源码根目录无 `.git` 时，两者为 JSON `null`，运行不依赖 Git。该源码哈希仅覆盖 `src/**/*.py`，不含 `main.py`、`tools/` 和依赖元数据。输入哈希范围与检查点兼容性见[输出与续跑](docs/solver-output.md)；强迫文件内容是否保持一致由调用方保证。
 
 每条步长统计还记录该输出间隔的 `limited_cell_steps`、`limited_face_steps` 和 `minimum_donor_scale`。每个物理步中，被共享水量限制器削减的供水单元和非零面流量各计一次；没有限制时最小比例为 1。manifest 的 `limiter_activity` 记录本次运行总次数与最小比例。

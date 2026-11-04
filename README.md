@@ -13,11 +13,13 @@ The solver uses Taichi kernels for the main numerical work and stores meshes, de
 - DEM fusion and TIN helper code (`src/nh_flood_2d/dem`, `examples`, `docs/dem_fusion_mask_replacement_usage.md`).
 - Utility scripts for SWMM `.inp` conversion and solver self-checks (`tools`).
 
-Large local inputs and generated outputs live under `resource/` and are ignored by Git. A fresh clone does not include the project-specific DEM, NE/NS mesh, rainfall, tide, gate, observation, SWMM, or checkpoint files needed by your local configurations.
+Large local inputs and generated outputs live under `resource/` and are ignored by Git. Provider-authorized case bathymetry and its derived meshes, model inputs and outputs must remain local and must not be redistributed. A fresh clone does not include the project-specific DEM, NE/NS mesh, rainfall, tide, gate, observation, SWMM, or checkpoint files needed by your local configurations.
+
+[中文说明](README_zh.md) · [Configuration reference](docs/configuration.md) · [Output and restart](docs/solver-output.md)
 
 ## Requirements
 
-- Python `3.10.17`.
+- Python `3.10.17` and pinned `fastdb4py==0.2.4`.
 - `uv` for dependency management.
 - A Taichi-supported compute backend for solver runs.
 - GIS and SWMM dependencies installed through `pyproject.toml`.
@@ -26,36 +28,65 @@ Large local inputs and generated outputs live under `resource/` and are ignored 
 Install dependencies:
 
 ```bash
-uv sync
+uv sync --locked
 ```
 
 On macOS, if loading `swmm-toolkit` terminates the process because of an invalid bundled dylib signature, run:
 
 ```bash
-uv run fix-macos-codesign
+uv run python fix_macos_codesign.py
 ```
 
 ## Verification Commands
 
 ```bash
 uv lock --check
-uv run pytest tests/test_forcing.py tests/test_solver_forcing.py \
+uv run python -m pytest tests/test_forcing.py tests/test_solver_forcing.py \
   tests/test_clock.py tests/test_device_budget.py tests/test_face_flux.py \
   tests/test_open_boundary.py tests/test_hydraulics.py \
   tests/test_positivity.py tests/test_inventory_rounding.py tests/test_restart.py \
   tests/test_coupling.py tests/test_output_io.py \
   tests/test_output_readers.py tests/test_flood_map_frame_validation.py \
   tests/test_flood_map_rainfall.py
-uv run pytest
+uv run python -m pytest
 ```
 
 The focused checks cover forcing, the device clock and budget, face fluxes, boundaries, coupling, checkpoint I/O, depth frames, and post-processing. The full command checks the rest of the repository, including tests that may require local DEM data or GMT.
 
 ## Data And Configuration
 
-The compact solver uses separate domain and forcing JSON files. Paths are relative to the process working directory. Unknown fields are rejected. `start`, `duration`, `warmup_duration`, and `land_parameters` are required; duration and output intervals use positive whole seconds, and warmup accepts zero. `duration + warmup_duration` must be less than `2**24` seconds.
+The compact solver uses separate domain and forcing JSON files. Paths are relative to the process working directory. Domain and force models reject unknown fields; pipe configuration has separate validation rules described below. `start`, `duration`, `warmup_duration`, and `land_parameters` are required; duration and output intervals use positive whole seconds, and warmup accepts zero. `duration + warmup_duration` must be less than `2**24` seconds.
 
 ### Domain Config
+
+All domain, force and nested parameter models reject unknown fields and NaN/Infinity. Numeric types use Pydantic's normal coercion (for example, an integral `300.0` may be accepted for an integer); the ranges below describe validated values. Required means there is no model default.
+
+| Domain field | Unit / default | Validation and meaning |
+| --- | --- | --- |
+| `ne`, `ns` | Paths; required | Existing raw mesh text files; paths relative to working directory |
+| `epsg_code` | Integer; required | Mesh CRS EPSG code; forcing CRS must match at load time |
+| `domain_dir` | Path; required | Created during configuration validation; use a new run directory |
+| `start` | Required ISO 8601 datetime | Must include timezone; formal simulation origin |
+| `duration` | Seconds; required | Positive integer; formal simulation duration |
+| `warmup_duration` | Seconds; required | Nonnegative integer; warmup precedes `start` |
+| `land_parameters` | Required mapping | Nonempty; integer class keys 0–255; must cover all real mesh classes |
+| `afa` | Dimensionless; `0.5` | `0 < afa <= 1`; scales the CFL time-step bound |
+| `sita` | Dimensionless; `1.0` | `0 <= sita <= 1`; θ weights old local discharge against neighbouring discharges |
+| `min_h` | Metres; `0.02` | Positive wet-depth threshold; not an initial water depth |
+| `yield_step` | Seconds; `300` | Positive integer; station, budget and step-statistics interval |
+| `restart_state` | Path; `""` | Empty means cold start; otherwise a complete checkpoint is loaded at runtime |
+| `stations` | Coordinates; `{}` | Name to two finite x/y values in mesh CRS; outside-mesh points fail at runtime |
+| `observation_dir` | Path; `""` | Used by hydrograph comparison; not needed to run the solver |
+
+`duration + warmup_duration < 2**24` seconds is required. Domain validation checks existence of `ne`/`ns`, not their file format; preprocessing validates mesh content. Configuration loading can create `domain_dir` even if another field later fails validation.
+
+| Land-parameter field | Unit / default | Validation |
+| --- | --- | --- |
+| `manning_n` | s/m^(1/3); required | Finite, nonnegative |
+| `infiltration` | Required | Literal `"none"` or a Horton object |
+| `f0_mm_h` | mm/h; required in Horton object | Nonnegative initial capacity |
+| `fc_mm_h` | mm/h; required in Horton object | Nonnegative limiting capacity; `fc_mm_h <= f0_mm_h` |
+| `k_per_h` | 1/h; required in Horton object | Nonnegative decay coefficient |
 
 ```json
 {
@@ -75,7 +106,8 @@ The compact solver uses separate domain and forcing JSON files. Paths are relati
     "6": {"manning_n": 0.035, "infiltration": {"f0_mm_h": 101.6, "fc_mm_h": 7.62, "k_per_h": 2}},
     "7": {"manning_n": 0.03, "infiltration": "none"},
     "8": {"manning_n": 0.03, "infiltration": "none"},
-    "9": {"manning_n": 0.06, "infiltration": {"f0_mm_h": 152.4, "fc_mm_h": 25.4, "k_per_h": 3}}
+    "9": {"manning_n": 0.06, "infiltration": {"f0_mm_h": 152.4, "fc_mm_h": 25.4, "k_per_h": 3}},
+    "11": {"manning_n": 0.03, "infiltration": "none"}
   },
   "afa": 0.5,
   "sita": 1.0,
@@ -89,15 +121,32 @@ The compact solver uses separate domain and forcing JSON files. Paths are relati
 
 `start` must include a timezone. All timestamps are aligned by absolute time, independently of the machine's local timezone. Boundary series and rainfall intervals must cover the formal interval from `start` through `start + duration`; missing coverage is an error. Warmup uses only the value at `start` and does not read earlier data. There is no extrapolation or endpoint padding during the formal simulation. The mesh, boundary lines and rainfall raster must use the same EPSG; coordinates are not reprojected.
 
-`land_parameters` must cover every land class present in the mesh; missing classes are errors. JSON keys are land-class codes. The 1–9 values above come from the paper appendix and are example inputs, not built-in defaults. Add entries for any further mesh classes. Each entry requires nonnegative `manning_n` (zero permits frictionless analytic tests) and either `"infiltration": "none"` or Horton parameters `f0_mm_h`, `fc_mm_h`, and `k_per_h`. Capacities use mm/h, decay uses 1/h, all must be nonnegative, and `f0_mm_h` must be at least `fc_mm_h`. Interior-side n is the arithmetic mean of its two cell values; closed exterior sides use the interior value, since sentinel element 0 is not a land class.
+`land_parameters` must cover every land class present in the mesh; missing classes are errors. JSON keys are land-class codes. The values above are example inputs, not built-in defaults. Add entries for any further mesh classes; class 11 in the example is an illustrative gate entry. Each entry requires nonnegative `manning_n` (zero permits frictionless analytic tests) and either `"infiltration": "none"` or Horton parameters `f0_mm_h`, `fc_mm_h`, and `k_per_h`. Capacities use mm/h, decay uses 1/h, all must be nonnegative, and `f0_mm_h` must be at least `fc_mm_h`. Interior-side n is the arithmetic mean of its two cell values; closed exterior sides use the interior value, since sentinel element 0 is not a land class.
 
-`afa`, `sita`, and `min_h` control CFL, time weighting, and the wet-depth threshold. For θ<1, neighbouring face discharge is the length-weighted mean of all subedges; a single-edge face retains its value exactly. The linear θ-stencil continuation uses only selected exterior edges of prescribed level or discharge cells. Its exterior fractions are weighted by edge length; a fully missing neighbour yields a two-neighbour mean equal to the current edge's old discharge. Physical exterior fluxes stay zero; prescribed levels and cell discharge sources provide boundary exchange. θ=1 bypasses this stencil.
+`afa`, `sita`, and `min_h` control CFL, time weighting, and the wet-depth threshold. The bound for an interior side is `afa * side_length / (sqrt(9.81 * face_depth) + abs(q) / face_depth)`, with CFL face depth at least 0.01 m and q in m²/s. Decreasing `afa` reduces the permitted step. The momentum numerator uses `sita * q_old + (1 - sita) * (q_left + q_right) / 2 + pressure_increment`; friction is applied through its denominator. Thus θ=1 retains only the local old discharge in this weighting. For θ<1, neighbouring face discharge is the length-weighted mean of all subedges; a single-edge face retains its value exactly. The linear θ-stencil continuation uses only selected exterior edges of prescribed level or discharge cells. Its exterior fractions are weighted by edge length; a fully missing neighbour yields a two-neighbour mean equal to the current edge's old discharge. Physical exterior fluxes stay zero; prescribed levels and cell discharge sources provide boundary exchange. θ=1 bypasses this stencil.
 
 At a hanging interface, the pressure gradient uses water levels reconstructed to the subedge midpoint's tangential coordinate, divided by the normal centre distance. Only a cell whose centre is tangentially displaced is extrapolated, and only when both adjoining depths exceed `min_h`. Its tangential gradient uses the two opposing neighbour faces: neighbour water-level differences and centre distances are averaged by subedge length, then centrally differenced. If any neighbour on a face is missing or has depth at or below `min_h`, that face is unavailable; use a one-sided difference from the other face, or zero if neither is available. Taking water-level differences before weighting preserves an exactly common F32 still-water level. Only the pressure difference is reconstructed; face depth and the remaining update retain their existing definitions. Offsets are prepared once, and each required cell gradient is cached once per step. Aligned meshes allocate no reconstruction fields and run the original pressure path.
 
 `stations` maps names to mesh coordinates: every closed cell rectangle containing the point is a candidate, the lowest real cell ID wins, and a point outside the mesh is an error. `observation_dir` supplies comparison data. `yield_step` defaults to 300 s and controls station samples, budget rows, and step statistics; depth frames use a fixed 900 s interval.
 
 ### Force Config
+
+| Force field | Default / unit | Validation and meaning |
+| --- | --- | --- |
+| `boundaries` | Required list | May be empty; names must be unique |
+| `boundaries[].name` | Required string | At least one character |
+| `boundaries[].kind` | Required | `"level"` or `"discharge"` |
+| `boundaries[].line` | Required path | GeoJSON line; geometry, CRS and mesh selection checked at load time |
+| `boundaries[].series` | Required path | CSV `time,value`; m for level, m³/s for discharge |
+| `rainfall` | Required object | Supply explicit zero bands for a dry run |
+| `rainfall.raster` | Required path | Multiband GeoTIFF; band totals in mm |
+| `rainfall.intervals` | Required path | CSV `interval_start,interval_end` with timezone-aware timestamps |
+| `gate` | `null` | Optional one-time gate rule |
+| `gate.threshold` | Required if gate set; m | Finite water elevation in mesh vertical datum |
+| `gate.land_type` | Required if gate set | Integer 0–255; all matching cells are gate targets |
+| `gate.level_boundary` | Required if gate set | Must name a configured `level` boundary |
+
+Force paths are strings in the model; existence, CSV coverage, raster sampling and geometric overlap are checked when preprocessing/solving loads the inputs.
 
 ```json
 {
@@ -154,13 +203,43 @@ interval_start,interval_end
 2023-09-07T17:00:00+08:00,2023-09-07T18:00:00+08:00
 ```
 
-Intervals must have positive duration, be contiguous and nonoverlapping, and match the band count. Record zero-rain intervals explicitly. For this example use two bands, such as 2 and 1 mm. Cell centres are mapped to raster pixels once; centres outside the raster, sampled NoData, nonfinite values and negative rain are errors. Intensity is constant within each interval: band millimetres × 0.001 / interval seconds. A single pixel covering the entire domain is the uniform-rain case. Configured Horton capacity is `fc + (f0 - fc) exp(-k t / 3600)`; at the first rainy instant it is `f0`. Each cell accumulates rainy time `t` only while its own intensity is positive. `none` gives zero infiltration. Actual Horton removal is the minimum of capacity × dt and the water remaining after fluxes and rain.
+Intervals must have positive duration, be contiguous and nonoverlapping, and match the band count. Record zero-rain intervals explicitly. For hourly inputs, each band is the accumulated rain for that hour and intensity is constant throughout that hour. The loader also accepts other positive interval durations. For this example use two bands, such as 2 and 1 mm. Cell centres are mapped to raster pixels once; centres outside the raster, sampled NoData, nonfinite values and negative rain are errors. Intensity is constant within each interval: band millimetres × 0.001 / interval seconds. A single pixel covering the entire domain is the uniform-rain case. Configured Horton capacity is `fc + (f0 - fc) exp(-k t / 3600)`; at rainy time zero it is `f0`. Each rainy step advances rainy time before evaluating the capacity used for that step; dry steps retain the preceding capacity. Each cell accumulates rainy time `t` only while its own intensity is positive. `none` gives zero infiltration. Actual Horton removal is the minimum of capacity × dt and the water remaining after fluxes and rain.
 
 `gate` is optional; use `null` when no gate is modelled. Its named boundary must be `level`. When that boundary exceeds `threshold`, all cells of `land_type` have bed elevation changed to 0 m once while retaining their water depth and volume. Threshold and level use the same datum. Gate threshold crossings split steps; the manifest records the target-cell count and whether opening occurred.
 
 Cold starts with `warmup_duration > 0` initialize connected still water before warmup. Each level boundary seeds its value at `start` (`series.at(0)`); water reaches a neighbouring cell only over an open interior edge whose effective crest, the maximum of both working beds and the momentum edge crest, is strictly below that level. Initial gate openings occur before this search. Isolated low land, enclosed ponds, and closed gates block filling; pond storage follows the input equivalent terrain without an extra land-class fill. Different starting levels reaching the same water body are an input error. Initial q is zero, and filled water belongs to initial storage. Later gate openings evolve dynamically without another fill. Runs without warmup retain dry initial conditions; checkpoints retain their stored physical state.
 
 Warmup holds each boundary at its value at `start`, with constant starting river discharge and no rainfall. Infiltration remains active. The same engine then continues through the formal simulation. Choose warmup duration from measured station and boundary-band oscillations, storage drift and the complete river/sea/infiltration balance. `warmup_solver(domain_cfg, force_cfg)` runs an already preprocessed domain only through warmup and stops at `start`.
+
+## Reproducible small run
+
+The repository includes a synthetic self-check that creates all its own mesh,
+forcing and checkpoint inputs. It does not require case bathymetry:
+
+```bash
+uv run python tools/solver_selfcheck.py --arch cpu --output runs/selfcheck-cpu
+```
+
+Use a new output directory each time. To exercise the CLI with its generated
+high-bed rainfall inputs, point the domain at a fresh run directory:
+
+```bash
+uv run python - <<'PYRUN'
+import json
+from pathlib import Path
+p = Path("runs/selfcheck-cpu/high_bed_rain/domain.json")
+config = json.loads(p.read_text())
+config["domain_dir"] = "runs/cli-rain"
+config["stations"] = {"S1": [5, 5]}
+Path("runs/cli-domain.json").write_text(json.dumps(config, indent=2) + "\n")
+PYRUN
+uv run python main.py --domain runs/cli-domain.json --force runs/selfcheck-cpu/high_bed_rain/force.json
+```
+
+The two isolated 100 m² cells receive 0.01 mm over 60 s; final storage is
+approximately 0.002 m³. The self-check also exercises wet/dry gates, checkpoint
+continuation, inventory rounding and exact budget accumulation. Remaining
+`path/to/...` commands illustrate user-supplied data workflows.
 
 ## Running The 2D Solver
 
@@ -176,9 +255,9 @@ run_simulation(load_domain_config("path/to/domain.json"),
                load_force_config("path/to/force.json"))
 ```
 
-Use a new `domain_dir` for each run; existing manifest, budget, or output data is not overwritten. The command writes a manifest before preprocessing, and failures in preprocessing or input loading are recorded as failed runs. `preprocess(domain_cfg, force_cfg)` plus `solver(domain_cfg, force_cfg)` remains available when preprocessing is run separately.
+Use a new `domain_dir` for each run; existing manifest, budget, or output data is not overwritten. The command writes a manifest before preprocessing, and failures in preprocessing or subsequent input loading are recorded as failed runs. JSON/model validation happens before run-record creation, so those errors do not produce a failed manifest. `preprocess(domain_cfg, force_cfg)` plus `solver(domain_cfg, force_cfg)` remains available when preprocessing is run separately.
 
-Preprocessing writes `ne.fdb`, `ns.fdb`, and `boundary.fdb` under `domain_dir/preprocessed`. The solver writes `domain_dir/output/bed.fdb` once as the starting working bed. `output/frames/depth_<elapsed_s>.fdb` contains only F32 depth, at the initial time, every 900 s, and the final time. `output/stations.csv` contains `depth`, `level`, `u`, and `v` for configured stations. `output/extrema.fdb` holds the stepwise accumulated `max_depth`, its first occurrence as two U32 clock words, and `max_speed`. Extrema cover the formal simulation; a warmup-only run keeps warmup extrema. `output/state_start.fdb` is the checkpoint at the formal start; `output/state_final.fdb` is the complete final checkpoint. During warmup and formal simulation, once 30 minutes of wall time have passed since the last checkpoint (or simulation began), the next depth-frame output also writes `output/state_latest.fdb`. This fixed interval adds no time-step boundaries. Each checkpoint is written to a temporary file in the same directory and atomically replaces its destination; only the latest periodic checkpoint is kept. Checkpoints store working bed, depth, side discharge q, Horton rain time and capacity, clock, extrema, and exact budget accumulator state. Warmup and formal simulation use the same clock and output format. Frames written during warmup have negative elapsed seconds.
+Preprocessing writes `ne.fdb`, `ns.fdb`, and `boundary.fdb` under `domain_dir/preprocessed`. The solver writes `domain_dir/output/bed.fdb` once as the starting working bed. `output/frames/depth_<elapsed_s>.fdb` contains only F32 depth, at the initial/resumed time, every 900 s, and the final time. When stations are configured, `output/stations.csv` contains `depth`, `level`, `u`, and `v` for configured stations. `output/extrema.fdb` holds the stepwise accumulated `max_depth`, its first occurrence as two U32 clock words, and `max_speed`. The words encode ticks of `2**-40` s since `output.extrema_time_origin` in the manifest. Extrema cover the formal simulation; a warmup-only run keeps warmup extrema. `output/state_start.fdb` is the checkpoint at the formal start of a full run; a warmup-only invocation writes its endpoint as `state_final.fdb`; `output/state_final.fdb` is the complete final checkpoint. During warmup and formal simulation, once 30 minutes of wall time have passed since the last checkpoint (or simulation began), the next depth-frame output also writes `output/state_latest.fdb`. This fixed interval adds no time-step boundaries. Each checkpoint is written to a temporary file in the same directory and atomically replaces its destination; only the latest periodic checkpoint is kept. Checkpoints store working bed, depth, side discharge q, Horton rain time and capacity, clock, extrema, and exact budget accumulator state. Warmup and formal simulation use the same clock and output format. Frames written during warmup have negative elapsed seconds.
 
 Mesh loading requires positive square cells, matching the edge-length CFL scale. Spatial WSE MAE is NaN when there are no common wet pixels; it does not indicate zero error.
 
@@ -214,6 +293,17 @@ The coupled driver uses the same depth engine, forcing loader, clock, budget and
 uv run python main.py --domain path/to/domain.json --force path/to/force.json --pipe path/to/pipe.json
 ```
 
+
+| Pipe field | Default / unit | Validation |
+| --- | --- | --- |
+| `inp` | Required path | Must exist |
+| `pipe_dir` | Required path | Created during validation |
+| `coupling_interval` | `600` s | Positive integer |
+| `exchange_timeout` | `600.0` s | Positive float |
+| `weak_dist_thresh` | `50.0` m | Float; no model range constraint |
+
+`PipeConfig` ignores unknown fields and does not inherit the domain/force finite-number restriction. Use finite values and a nonnegative search distance. See [coupling](docs/coupling-exchange-design.md) for the implemented exchange and topology.
+
 Pipe exchange occupies its own field and is added to discharge in `ssq_t`. Shared-cell drainage is allocated among unique junction relationships; outfalls receive stage without draining the surface. One SWMM actor strides each complete exchange window, including warmup, and continues across simulation start without restarting. Coupled start timestamps must have whole-second precision. The INP must declare `FLOW_UNITS CMS` so flow and head use m³/s and metres. Runtime INP/report/output files are written under `pipe_dir`; the source INP is read only. The manifest includes pipe configuration/input hash and actual SWMM clock/window metadata. The exchange retains the existing overflow head cap of 3 m and relaxation of 0.5.
 
 ## Backend Self-Check
@@ -236,9 +326,10 @@ A checkpoint later than the requested end is rejected before result files are wr
 
 ## Post-Processing
 
-Common output functions:
+Common output functions (the domain JSON must refer to an existing completed run; hydrographs also require the station observation CSV):
 
 ```python
+from src.nh_flood_2d.input import load_domain_config
 from src.nh_flood_2d.output.flood_map import (
     generate_flood_map,
     generate_max_inundation_extent_map,
@@ -251,6 +342,7 @@ from src.nh_flood_2d.output.hydrograph import (
     compare_hydrograph_panels,
 )
 
+domain_cfg = load_domain_config("path/to/domain.json")
 generate_flood_map(domain_cfg)
 generate_max_inundation_extent_map(domain_cfg, min_depth=0.05)
 generate_flood_video(domain_cfg, output_path="path/to/flood_video.mp4")
@@ -276,7 +368,7 @@ uv run python src/nh_flood_2d/dem/dem_fusion_mask_replacement.py \
   --nodata -9999.0
 ```
 
-SWMM `.inp` to shapefile conversion:
+SWMM `.inp` to shapefile conversion (section-based output names and options are documented [here](docs/inp-to-shapefile.md)):
 
 ```bash
 uv run python tools/inp2shp.py path/to/network.inp -o path/to/shapefiles --epsg 4547
@@ -311,10 +403,10 @@ src/nh_flood_2d/
   dem/              DEM fusion and TIN utilities
   util/             Taichi initialization and timing helpers
 tools/              Standalone maintenance/conversion scripts
-examples/           DEM fusion runner examples
+examples/           Legacy DEM runners; see the DEM usage document
 docs/               Design notes and usage documents
 ```
 
-Source identity is always recorded as `source_sha256`. For rule `nh-flood-2d/src-py-sha256/v1`, SHA-256 starts with the UTF-8 bytes `nh-flood-2d/src-py-sha256/v1` and one NUL byte. Enumerate all `.py` files under `src/`, sorted by their source-relative POSIX paths. For each file append its UTF-8 relative path and a NUL byte, its byte length as an unsigned 8-byte big-endian integer, then its complete bytes. Thus relocation does not change identity; names and contents do. Git checkouts additionally record `git_commit` and `git_dirty`; both are JSON `null` when the source root has no `.git`. Git is not required to run.
+Source identity is always recorded as `source_sha256`. For rule `nh-flood-2d/src-py-sha256/v1`, SHA-256 starts with the UTF-8 bytes `nh-flood-2d/src-py-sha256/v1` and one NUL byte. Enumerate all `.py` files under `src/`, sorted by their source-relative POSIX paths. For each file append its UTF-8 relative path and a NUL byte, its byte length as an unsigned 8-byte big-endian integer, then its complete bytes. Thus relocation does not change identity; names and contents do. Git checkouts additionally record `git_commit` and `git_dirty`; both are JSON `null` when the source root has no `.git`. Git is not required to run. This source hash covers `src/**/*.py`, excluding `main.py`, `tools/` and dependency metadata. See [output and restart](docs/solver-output.md) for input hash coverage and checkpoint compatibility; forcing-file content equality is the caller's responsibility.
 
 Each step-statistics row also records `limited_cell_steps`, `limited_face_steps`, and `minimum_donor_scale` for its output interval. Counts include each donor cell or nonzero face flux reduced by the shared-water limiter in each physical step; the minimum is 1 when no limiting occurs. The manifest `limiter_activity` reports their run totals and minimum.
