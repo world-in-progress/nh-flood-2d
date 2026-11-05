@@ -11,9 +11,15 @@ class GateLayout:
     cells: list[np.ndarray]
 
     @classmethod
-    def load(cls, config, mesh, land_types, topology, boundaries):
+    def load(cls, config, mesh, land_types, topology, boundaries, bed):
         selected = land_types == config.land_type
         selected[0] = False
+        pond = land_types == config.pond_land_type
+        pond[0] = False
+        if np.any(selected & pond):
+            raise ValueError('Gate and pond cells must not overlap')
+        if not np.any(pond):
+            raise ValueError('pond_land_type selects no pond cells')
         adjacency = [[] for _ in land_types]
         for _, left, right in topology[1:]:
             if selected[left] and selected[right]:
@@ -59,6 +65,26 @@ class GateLayout:
             control = locate(gate.control_point, f'{gate.name}.control_point')
             if selected[control]:
                 raise ValueError(f'{gate.name}: control_point is on a gate cell')
+            # Compare the actual solver elevations: an equal decimal target
+            # must not fail merely because its grid bed was stored as F32.
+            if not np.all(np.float32(config.open_elevation) <= bed[groups[group]].astype(np.float32)):
+                raise ValueError(f'{gate.name}: open_elevation exceeds a closed gate bed')
+            pond_side = river_side = False
+            for _, left, right in topology[1:]:
+                if left == 0 or right == 0:
+                    continue
+                if component[left] == group and component[right] != group:
+                    neighbour = right
+                elif component[right] == group and component[left] != group:
+                    neighbour = left
+                else:
+                    continue
+                if pond[neighbour]:
+                    pond_side = True
+                elif not selected[neighbour]:
+                    river_side = True
+            if not pond_side or not river_side:
+                raise ValueError(f'{gate.name}: gate needs internal edges to pond and non-pond non-gate cells')
             controls.append(control)
             cells.append(groups[group])
             cell_gate[groups[group]] = index

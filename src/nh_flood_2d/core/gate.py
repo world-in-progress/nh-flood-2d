@@ -16,7 +16,7 @@ def append_gate_balance(path, date, seconds, report):
         'pond_net_m3', 'river_in_m3', 'river_out_m3', 'channel_storage_m3',
         'initial_storage_m3', 'storage_m3', 'overtopping_in_m3', 'overtopping_out_m3',
         'rain_m3', 'infiltration_m3', 'positivity_m3', 'pipe_m3', 'boundary_m3',
-        'rounding_m3', 'residual_m3']
+        'rounding_m3', 'residual_m3', 'river_net_m3']
     header = not path.exists()
     with path.open('a', newline='') as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
@@ -24,7 +24,9 @@ def append_gate_balance(path, date, seconds, report):
             writer.writeheader()
         for gate in report['gates']:
             writer.writerow(dict(time=date.isoformat(), elapsed_seconds=seconds,
-                region=gate['name'], **{key: gate[key] for key in fields[3:9]}))
+                region=gate['name'], **{key: gate[key] for key in fields[3:9]},
+                **{key: value for key, value in gate['channel_budget'].items()
+                   if key not in ('pond_net_m3',)}))
         writer.writerow(dict(time=date.isoformat(), elapsed_seconds=seconds,
             region='pond_control_volume', **report['pond_budget']))
 
@@ -43,7 +45,7 @@ class GateController:
         self.targets = copy_to_taichi(np.concatenate(layout.cells), ti.i32, None)
         self.control = copy_to_taichi(layout.controls, ti.i32, None)
         self.closed = copy_to_taichi(bed, ti.f32, None)
-        self.pond = copy_to_taichi((land_types == 10).astype(np.int32), ti.i32, None)
+        self.pond = copy_to_taichi((land_types == config.pond_land_type).astype(np.int32), ti.i32, None)
         self.pond[0] = 0
         self.commanded = ti.field(ti.i32, self.count)
         self.command = ti.field(ti.u32, (self.count, 2))
@@ -53,9 +55,11 @@ class GateController:
         self.opened_at = ti.field(ti.u32, (self.count, 2))
         # Four directed gate exchanges, then overtopping in/out and pond sources.
         self.offset = 4 * self.count
+        self.channel_source_offset = self.offset + 8
         self.budget = DeviceBudget((max(len(bed), side_count) + 255) // 256,
-                                   self.offset + 8, step_bound)
+                                   self.channel_source_offset + 6 * self.count, step_bound)
         self.initial_storage = None
+        self.initial_channel_storage = None
         self.previous = ti.field(ti.f32, len(bed))
         self.inventory_delta = ti.field(ti.f32, len(bed))
         self.sources = ti.field(ti.f32, (len(bed), 4))
@@ -139,15 +143,25 @@ class GateController:
             self.directed(block, self.offset, ti.select(pr == 1, volume, -volume))
 
     @ti.func
+    def source_offset(self, cell):
+        offset = -1
+        if self.pond[cell] == 1:
+            offset = self.offset + 2
+        elif self.cell_gate[cell] >= 0:
+            offset = self.channel_source_offset + 6 * self.cell_gate[cell]
+        return offset
+
+    @ti.func
     def record_cell(self, cell, previous, current, area, rain_depth, removed,
                     floor, pipe_volume, discharge_volume, level_exchange, increment):
-        if self.pond[cell] == 1:
-            block, offset = cell // 256, self.offset
-            self.add(block, offset + 2, rain_depth * area)
-            self.add(block, offset + 3, removed * area)
-            self.add(block, offset + 4, floor * area)
-            self.add(block, offset + 5, pipe_volume)
-            self.add(block, offset + 6, discharge_volume + level_exchange)
+        offset = self.source_offset(cell)
+        if offset >= 0:
+            block = cell // 256
+            self.add(block, offset, rain_depth * area)
+            self.add(block, offset + 1, removed * area)
+            self.add(block, offset + 2, floor * area)
+            self.add(block, offset + 3, pipe_volume)
+            self.add(block, offset + 4, discharge_volume + level_exchange)
             self.previous[cell] = previous
             self.sources[cell, 0], self.sources[cell, 1] = increment, removed
             self.sources[cell, 2], self.sources[cell, 3] = floor, level_exchange
@@ -157,15 +171,18 @@ class GateController:
         # Separate offload: do not let fast-math replace the actually rounded
         # depth with its algebraic source expression and cancel the error.
         for cell in range(1, self.pond.shape[0]):
-            if self.clock.active[None] == 1 and self.pond[cell] == 1:
-                self.inventory_delta[cell] = self.depth[cell] - self.previous[cell]
+            if self.clock.active[None] == 1:
+                if self.source_offset(cell) >= 0:
+                    self.inventory_delta[cell] = self.depth[cell] - self.previous[cell]
 
     @ti.func
     def collect(self):
         for cell in range(1, self.pond.shape[0]):
-            if self.clock.active[None] == 1 and self.pond[cell] == 1:
-                rounding = self.inventory_delta[cell] - self.sources[cell, 0] + self.sources[cell, 1] - self.sources[cell, 2]
-                self.add(cell // 256, self.offset + 7, rounding * self.area[cell] - self.sources[cell, 3])
+            if self.clock.active[None] == 1:
+                offset = self.source_offset(cell)
+                if offset >= 0:
+                    rounding = self.inventory_delta[cell] - self.sources[cell, 0] + self.sources[cell, 1] - self.sources[cell, 2]
+                    self.add(cell // 256, offset + 5, rounding * self.area[cell] - self.sources[cell, 3])
         for block, term in self.budget.step:
             if self.clock.active[None] == 1:
                 self.budget.accumulate(block, term)
@@ -178,6 +195,7 @@ class GateController:
                     opened=self.opened.to_numpy().tolist(),
                     opened_ticks=self.opened_at.to_numpy().tolist(),
                     initial_storage_m3=self.initial_storage,
+                    initial_channel_storage_m3=self.initial_channel_storage.tolist(),
                     budget_units=self.budget.total_units)
 
     def restore(self, saved):
@@ -188,7 +206,14 @@ class GateController:
         self.opened.from_numpy(np.array(saved['opened'], dtype=np.int32))
         self.opened_at.from_numpy(np.array(saved['opened_ticks'], dtype=np.uint32))
         self.initial_storage = saved['initial_storage_m3']
+        self.initial_channel_storage = np.array(saved['initial_channel_storage_m3'], dtype=float)
         self.budget.total_units = list(saved['budget_units'])
+
+    def initialize_inventory(self, depth, area):
+        pond = self.pond.to_numpy().astype(bool)
+        self.initial_storage = float(np.sum(depth[pond].astype(float)*area[pond]))
+        self.initial_channel_storage = np.array([
+            np.sum(depth[cells].astype(float)*area[cells]) for cells in self.layout.cells])
 
     def report(self, depth, area, clock_seconds):
         totals = self.budget.flush()
@@ -203,6 +228,17 @@ class GateController:
             command = seconds(ticks[i]) if commanded[i] else None
             end = command + self.config.opening_seconds if command is not None else None
             cells = self.layout.cells[i]
+            channel_storage = float(np.sum(depth[cells].astype(float)*area[cells]))
+            sources = totals[self.channel_source_offset + 6*i:self.channel_source_offset + 6*i + 6]
+            river_net = float(totals[4*i+2]-totals[4*i+3])
+            pond_net = float(totals[4*i]-totals[4*i+1])
+            channel_net = river_net - pond_net + sources[0]-sources[1]+sources[2]+sources[3]+sources[4]+sources[5]
+            channel_budget = dict(initial_storage_m3=float(self.initial_channel_storage[i]),
+                storage_m3=channel_storage, river_net_m3=river_net, pond_net_m3=pond_net,
+                rain_m3=float(sources[0]), infiltration_m3=float(sources[1]),
+                positivity_m3=float(sources[2]), pipe_m3=float(sources[3]),
+                boundary_m3=float(sources[4]), rounding_m3=float(sources[5]),
+                residual_m3=float(channel_storage-self.initial_channel_storage[i]-channel_net))
             gates.append(dict(name=gate.name, cell_ids=cells.tolist(),
                 closed_elevation=closed_bed[cells].tolist(),
                 command_clock_ticks=ticks[i].tolist() if commanded[i] else None,
@@ -214,12 +250,13 @@ class GateController:
                 pond_in_m3=float(totals[4*i]), pond_out_m3=float(totals[4*i+1]),
                 pond_net_m3=float(totals[4*i]-totals[4*i+1]),
                 river_in_m3=float(totals[4*i+2]), river_out_m3=float(totals[4*i+3]),
-                channel_storage_m3=float(np.sum(depth[cells].astype(float)*area[cells]))))
-        t = totals[self.offset:]
+                channel_storage_m3=channel_storage, channel_budget=channel_budget))
+        t = totals[self.offset:self.offset+8]
         pond = self.pond.to_numpy().astype(bool)
         storage = float(np.sum(depth[pond].astype(float)*area[pond]))
         net = sum(g['pond_net_m3'] for g in gates) + t[0]-t[1]+t[2]-t[3]+t[4]+t[5]+t[6]+t[7]
         return dict(enabled=True, trigger_level=self.config.trigger_level,
+            pond_land_type=self.config.pond_land_type,
             opening_seconds=self.config.opening_seconds, open_elevation=self.config.open_elevation,
             clock_origin_before_start_s=self.formal_tick / 2**40,
             clock_quantum_s=2.**-40, first_effective_flow_definition=

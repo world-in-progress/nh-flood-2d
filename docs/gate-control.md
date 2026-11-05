@@ -9,6 +9,7 @@ inferred separately on each mesh.
 ```json
 {
   "land_type": 11,
+  "pond_land_type": 10,
   "enabled": true,
   "trigger_level": 3.07,
   "opening_seconds": 1800,
@@ -36,7 +37,11 @@ subedges. Point contact alone does not join components. Each component must
 contain exactly one configured inside point; each gate cell belongs to exactly
 one gate. Gate names are unique. Both points must be inside the mesh. Control
 points must lie outside every gate cell. Gate cells must not overlap a prescribed
-level-boundary cell. These checks also apply when controls are disabled.
+level-boundary cell. `pond_land_type` must differ from `land_type` and select at
+least one real mesh cell. Every named gate needs at least one internal shared
+subedge to a pond cell and at least one to a real non-pond, non-gate cell.
+`open_elevation` must be no higher than the input closed bed of every selected
+gate cell. These checks also apply when controls are disabled.
 
 Points on closed rectangle boundaries select the smallest real cell ID, matching
 station sampling. Prefer points strictly inside cells and check their physical
@@ -123,13 +128,14 @@ use rows strictly after that instant when concatenating process files.
 
 ## Exchange and pond inventory
 
-The pond control volume is the complete set of mesh cells with land class 10;
+The pond control volume is the complete set of mesh cells with
+`pond_land_type` (10 in this experiment);
 it is not a clipped polygon area. Gate-channel storage is reported separately.
 Each actual subedge is counted once at its physical width, including coarse/fine
 interfaces. Cumulative volumes are in m³:
 
 * `pond_in_m3`, `pond_out_m3`, `pond_net_m3`: gate-to-pond, pond-to-gate and their
-  difference, evaluated on gate–class-10 subedges.
+  difference, evaluated on gate–pond subedges.
 * `river_in_m3`, `river_out_m3`: the other side of each gate channel, positive into
   or out of the channel, on gate–non-gate/non-pond subedges. These may differ from
   pond exchange while the channel fills or drains.
@@ -145,6 +151,20 @@ also be computed by subtracting the time-zero row. It adds no physics endpoints.
 The manifest's `pond_budget.residual_m3` is
 
 `storage - initial_storage - (sum(gate pond_net) + overtopping_in - overtopping_out + rain - infiltration + positivity + pipe + boundary + rounding)`.
+
+Each `gate_control.gates[].channel_budget` independently checks the gate-channel
+control volume:
+
+`storage - initial_storage = river_net - pond_net + rain - infiltration + positivity + pipe + boundary + rounding + residual`.
+
+Here `river_net = river_in - river_out` is into the channel, and positive
+`pond_net = pond_in - pond_out` leaves the channel. Gate rain and infiltration
+are measured on gate cells, not inferred from the difference of river and pond
+exchange. The channel source terms and initial inventory are accumulated and
+checkpointed independently of the pond ledger. The gate rows in `gate_balance.csv`
+contain these same source terms, `river_net_m3`, initial/final channel storage and
+the channel residual. Pond rows contain the pond-control-volume terms. Both
+inventories begin after initial prescribed levels and include any warmup.
 
 `boundary` includes actual discharge and prescribed-level reservoir compensation;
 `pipe` is net surface input from coupling. `positivity` is the actually applied

@@ -200,7 +200,7 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
             for direction in ('l', 'r', 'b', 't')])
     forcing = Forcing.load(domain_cfg, force_cfg, mesh)
     gate = force_cfg.gate
-    gate_layout = GateLayout.load(gate, mesh, land_types, side_topology, forcing.boundaries) if gate else None
+    gate_layout = GateLayout.load(gate, mesh, land_types, side_topology, forcing.boundaries, bed) if gate else None
     e_num, s_num = len(ex), len(side_lengths)
     b_num = len(forcing.boundaries)
     side_n, cell_f0, cell_fc, cell_k = map_land_parameters(
@@ -881,7 +881,7 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
     clock.active[None] = 1
     if gate_enabled:
         if controller.initial_storage is None:
-            controller.initial_storage = float(np.sum(depth_t.to_numpy()[land_types == 10].astype(float) * mesh.area[land_types == 10]))
+            controller.initialize_inventory(depth_t.to_numpy(), mesh.area)
         check_gates()
     compute_cfl()
     initial_diagnostics()

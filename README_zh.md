@@ -107,6 +107,7 @@ compact 求解器使用独立的计算域与强迫 JSON 文件。路径相对于
     "7": {"manning_n": 0.03, "infiltration": "none"},
     "8": {"manning_n": 0.03, "infiltration": "none"},
     "9": {"manning_n": 0.06, "infiltration": {"f0_mm_h": 152.4, "fc_mm_h": 25.4, "k_per_h": 3}},
+    "10": {"manning_n": 0.03, "infiltration": "none"},
     "11": {"manning_n": 0.03, "infiltration": "none"}
   },
   "afa": 0.5,
@@ -121,7 +122,7 @@ compact 求解器使用独立的计算域与强迫 JSON 文件。路径相对于
 
 `start` 必须带时区。所有时间戳按绝对时间对齐，不依赖计算机本地时区。边界序列和降雨时段必须覆盖正式时窗 `start` 到 `start + duration`，覆盖不足即报错，正式模拟不外推或用首末值补齐。预热只使用 `start` 时刻的值，不读取 start 之前的数据。网格、边界线和降雨栅格必须使用同一 EPSG，不执行坐标变换。
 
-`land_parameters` 必须覆盖网格中实际出现的每个地类，缺失即报错；JSON 键为地类编码。上方数值仅作为输入示例，程序没有内置默认表。网格如有其他地类，需添加相应配置；示例中的地类 11 是演示闸口条目。每类必填非负 `manning_n`（0 用于无摩阻解析试验），下渗可设为 `"none"`，或填写 Horton 参数 `f0_mm_h`、`fc_mm_h`、`k_per_h`。下渗率单位为 mm/h，衰减系数单位为 1/h；三者均须非负，且 `f0_mm_h` 不小于 `fc_mm_h`。内边的 n 取两侧单元 n 的算术平均；闭外边沿用内侧值，域外 0 号单元不算地类。
+`land_parameters` 必须覆盖网格中实际出现的每个地类，缺失即报错；JSON 键为地类编码。上方数值仅作为输入示例，程序没有内置默认表。网格如有其他地类，需添加相应配置；示例中的地类 10 和 11 分别演示塘区与闸口条目。每类必填非负 `manning_n`（0 用于无摩阻解析试验），下渗可设为 `"none"`，或填写 Horton 参数 `f0_mm_h`、`fc_mm_h`、`k_per_h`。下渗率单位为 mm/h，衰减系数单位为 1/h；三者均须非负，且 `f0_mm_h` 不小于 `fc_mm_h`。内边的 n 取两侧单元 n 的算术平均；闭外边沿用内侧值，域外 0 号单元不算地类。
 
 `afa`、`sita`、`min_h` 分别控制 CFL、时间权重和有效水深阈值。θ<1 时，相邻面单宽流量取该面所有子边按边长加权的平均；单边面保持原值。θ 模板只在被边界线选中的 level 或 discharge 外露边上进行线性延拓。外露比例按边长加权；一侧邻面完全缺失时，两邻面的平均等于本边旧流量。真实外边通量为 0，边界交换由指定水位和单元流量源项完成。θ=1 跳过邻面模板。
 
@@ -141,10 +142,14 @@ compact 求解器使用独立的计算域与强迫 JSON 文件。路径相对于
 | `rainfall` | 对象；必填 | 无雨运行也须提供显式零雨量波段 |
 | `rainfall.raster` | 路径；必填 | 多波段 GeoTIFF；波段累计雨量单位为 mm |
 | `rainfall.intervals` | 路径；必填 | `interval_start,interval_end` CSV，时间必须含时区 |
-| `gate` | `null` | 可选的一次开闸规则 |
-| `gate.threshold` | 设置闸口时必填；米 | 有限水面高程，采用网格垂直基准 |
-| `gate.land_type` | 设置闸口时必填 | 整数 0–255；全部匹配单元均为闸口目标 |
-| `gate.level_boundary` | 设置闸口时必填 | 必须指向已配置的 `level` 边界 |
+| `gate` | `null` | 可选的独立移动床面闸门控制 |
+| `gate.land_type` | 设置闸口时必填 | 整数 0–255；闸单元按共享子边组成连通块 |
+| `gate.pond_land_type` | 设置闸口时必填 | 整数 0–255，须与 `land_type` 不同；塘区地类（本实验为 10） |
+| `gate.enabled` | 布尔值；必填 | `false` 停用床面移动和记账，但仍校验配置 |
+| `gate.trigger_level` | 米；必填 | 控制单元水深达到 `min_h` 时，水位须严格超过此值 |
+| `gate.opening_seconds` | 秒；必填 | 有限正数，控制开启时长 |
+| `gate.open_elevation` | 米；必填 | 最终闸底高程，不得高于任一选中闸单元的关闭床面 |
+| `gate.gates` | 非空列表；必填 | 每个连通块对应一个具名闸，含 `inside_point` 和 `control_point` 网格坐标 |
 
 强迫模型中路径是字符串；文件存在性、CSV 覆盖范围、雨场采样和几何重叠在预处理或求解载入时校验。
 
@@ -168,7 +173,18 @@ compact 求解器使用独立的计算域与强迫 JSON 文件。路径相对于
     "raster": "path/to/rainfall.tif",
     "intervals": "path/to/rainfall_intervals.csv"
   },
-  "gate": {"threshold": 1.5, "land_type": 11, "level_boundary": "sea"}
+  "gate": {
+    "land_type": 11,
+    "pond_land_type": 10,
+    "enabled": true,
+    "trigger_level": 3.07,
+    "opening_seconds": 1800,
+    "open_elevation": 1.3,
+    "gates": [
+      {"name": "gate_A", "inside_point": [824100.0, 841400.0],
+       "control_point": [824080.0, 841400.0]}
+    ]
+  }
 }
 ```
 
@@ -205,9 +221,9 @@ interval_start,interval_end
 
 时段长度必须为正，连续、不重叠，记录数与波段数一致。无雨时段显式写 0。本例可使用 2、1 mm 两个波段。载入时按单元中心映射像元；中心落在栅格外，或所采像元为 NoData、非有限值、负雨量时均报错。时段内雨强恒定，等于波段 mm × 0.001 / 时段秒数。一个覆盖全域的像元就是均匀降雨特例。配置的 Horton 下渗能力为 `fc + (f0 - fc) exp(-k t / 3600)`，累计雨时为零时能力为 `f0`。各单元仅在本格雨强为正时累计降雨时间 `t`；`none` 对应零下渗。实际 Horton 移除量为容量 × dt 与通量和降雨更新后剩余水量的较小值。
 
-`gate` 可省略或设为 `null`。所参照的边界必须为 `level`；该边界超过 `threshold` 后，将 `land_type` 的全部单元床面高程一次性改为 0 m，同时保持水深和水量不变。阈值与 level 使用同一基准。时间步会在闸门阈值跨越时刻截断，manifest 记录目标单元数和是否已开闸。
+`gate` 可省略或设为 `null`。每个闸门从正式时刻零开始独立读取水深达到 `min_h` 的 `control_point` 单元水位；首次采样到 `bed + depth > trigger_level` 后下令。选中的闸单元在 `opening_seconds` 内从输入关闭床面降至 `open_elevation`，保持水深与水量，且命令不会回退或新增事件截步。上方坐标仅演示格式，每套网格须换成实际坐标。映射时要求塘类非空、每个闸连通块恰对应一个具名闸、每闸至少有一条通塘内部边和一条通非塘非闸单元内部边；闸单元不得与指定水位边界重叠。`enabled: false` 时仍执行这些校验。详见[闸门控制说明](docs/gate-control.md)。
 
-`warmup_duration > 0` 的冷启动先建立连通静水。各 level 边界以 `start` 时刻的值（`series.at(0)`）作为填充水位；只有未关闭的内边、且有效过水高程严格低于该水位时，才可连通相邻单元。有效高程取两侧工作床面与动量所用边堤顶的最大值。预热起点应开启的闸门先开，再搜索。隔离低地、围闭鱼塘与关闸会阻断填充；鱼塘沿用输入等效地形，不按地类额外补水。不同起点水位到达同一水体时直接报错。初始 q 为 0，填入的水计入初始库存。后续开闸由动力过程输水，不再瞬时填充。没有预热时沿用干床初值；检查点沿用保存的物理状态。
+`warmup_duration > 0` 的冷启动先建立连通静水。各 level 边界以 `start` 时刻的值（`series.at(0)`）作为填充水位；只有未关闭的内边、且有效过水高程严格低于该水位时，才可连通相邻单元。有效高程取两侧工作床面与动量所用边堤顶的最大值。预热期间闸门控制未启用，关闭闸口会阻断初始填充；隔离低地与围闭鱼塘也会阻断填充。鱼塘沿用输入等效地形，不按地类额外补水。不同起点水位到达同一水体时直接报错。初始 q 为 0，填入的水计入初始库存。正式期的开闸由动力过程输水，不再瞬时填充。没有预热时沿用干床初值；检查点沿用保存的物理状态。
 
 预热期间各边界保持 `start` 时刻的值，河流从起点即按该恒定流量入流，无降雨，下渗照常扣水；之后同一引擎连续完成正式模拟。预热时长应依据站点和边界邻带余振、库存漂移以及完整的河流／海界／下渗平衡实测确定。`warmup_solver(domain_cfg, force_cfg)` 对已预处理的计算域只执行预热，到 `start` 停止。
 
@@ -262,9 +278,11 @@ run_simulation(load_domain_config("path/to/domain.json"),
 
 网格载入要求正的正方形单元，以满足基于边长的 CFL 尺度。空间水位 MAE 在没有共同湿像元时为 NaN，表示无定义。
 
-闸门打开时床面可能改变。`manifest.json` 的每条 `bed_events` 记录时刻、全部受影响单元 ID 和对应的新床面值。以 `bed.fdb` 为起点回放事件即可恢复任一帧的工作床面；水面高程等于工作床面加水深。
+闸门开启过程中床面持续变化。`manifest.gate_control` 记录各闸单元、关闭床面、下令时钟与开启进程。`BedTimeline`/`read_bed_at` 据此恢复任一帧的工作床面；新闸门运行的 `bed_events` 为空。水面高程等于工作床面加水深。
 
 `domain_dir/mass_balance.csv` 每行记录累计名义雨量、实际下渗、各 discharge 边界实际施加的有符号体积、各 level 边界有符号水量变化、`requested_discharge:<name>_m3`、`bed_clamp_nonlevel_m3` 与 `bed_clamp_level_m3`、有符号 `pipe_exchange_m3`（管网流入地表为正）、蓄水量和残差。requested 列积分指定的 Q；`discharge:<name>_m3` 使用 donor 限制后实际施加的体积。非 level 单元截断为净补水，参与收支；level 单元截断是随后被指定水深覆盖的中间诊断量，不计净源项。level 低于床面时水深为 0。开闸保持水深和水量，`gate_bed_m3` 为 0。残差等于当前蓄水减去初始蓄水和已计有符号源项。`relative_residual` 的分母取初始蓄水、累计雨量加正的累计净输入、累计非雨收支项绝对量三者最大值；分母为 0 时留空。
+
+启用闸门控制时，`gate_balance.csv` 和 `manifest.gate_control.pond_budget` 记录完整 `pond_land_type` 塘区控制体的收支。`pond_in/out/net` 统计闸塘接口，`river_in/out` 统计闸与非塘非闸单元接口，`overtopping_in/out` 统计其余塘区边界。后两组名称是接口分类，实际河道和塘埂归属仍需对照网格位置核查。塘区储水变化与闸塘净交换、其余边界交换、降雨、下渗、正性修正、管网、边界源项及 F32 舍入核对。累计量含预热；正式期收支须减去正式零时刻行。各闸另有独立的 `channel_budget`：闸区增储等于河侧净入减去塘侧净出，加闸区降雨、减下渗、加正性/管网/边界/舍入修正，并报告残差。详见[闸门控制说明](docs/gate-control.md#exchange-and-pond-inventory)。
 
 正性限制对每个单元只计算一个 donor 因子：可用水量为步初水深对应存水加正显式源项，统一约束所有外流边和负显式源项。共享边只按供水单元因子缩放一次，两侧单元读取同一通量；同一步流入边的水不能用于支付流出。指定 level 的单元拥有无限 reservoir，在步末设为指定水位。CFL 沿用原有面水深下限 `max(h, 0.01)`，在单元更新后读取当前水深与更新后的 q，真实外边不参与。真实 CFL 小于 `1e-4` s 时明确失败，报告控制边、两格水深、面水深与面流速，不反向放大步长。
 
@@ -272,7 +290,7 @@ run_simulation(load_domain_config("path/to/domain.json"),
 
 通量与雨深增量先汇总到独立的 F32 设备字段，再更新库存；全局阶段屏障固定批推进前后的加法顺序，不添加补偿水量。
 
-闸门按输入序列的首次上穿阈值事件开启，与强迫共用定点时钟。零时间床面事件及相应水位边界纠正先于输出和下一物理步处理，随后重算 CFL；不执行 dt=0 的物理 tick。从独立预热检查点进入正式模拟时，在经过秒数 0 重置极值。
+闸门在每个正式模拟步起点检查水深达到 `min_h` 的控制单元水位，首次严格超阈时下令，并按同一定点时钟连续降低床面。床面在步首与步末求值；开启完成不额外截步。从独立预热检查点进入正式模拟时，在经过秒数 0 重置极值。
 
 `domain_dir/step_statistics.csv` 每个输出时刻一行，包含标准步的 `standard_dt_min_s`、`standard_dt_max_s`、`standard_dt_mean_s` 和 `standard_steps`，事件短步的步数、最小值和累计时长，以及最严格 CFL 边和对应两格水深、面水深、面流速。在两个 `yield_step` 时刻之间遇到帧时，也会写入收支、站点和步长统计行。`manifest.json` 包含 git 提交与 dirty 状态、完整配置、输入哈希、模拟和墙钟时间戳、步数与 dt 摘要、预处理/预热/正式模拟耗时、收支回传次数、后端和设备、末步收支及峰值显存（无法测量时为 `unavailable`）。
 
@@ -351,7 +369,7 @@ draw_hydrograph(domain_cfg, "S4", quantity="level")
 
 所有水文过程线函数都必须指定 `quantity="level"` 或 `quantity="depth"`。观测文件必须恰好有一列匹配的 Water Level 或 Water Depth；另一种物理量会被拒绝。图例、坐标轴和模拟采样使用同一物理量。
 
-这些函数读取求解器生成的预处理网格、水深帧或极值；水面高程对比根据 manifest 回放床面事件。
+这些函数读取求解器生成的预处理网格、水深帧或极值；水面高程对比根据 `manifest.gate_control` 回放闸门床面变化。
 
 ## DEM 与 GIS 工具
 

@@ -37,6 +37,7 @@ class GatePointConfig(InputModel):
 
 class GateConfig(InputModel):
     land_type: int = Field(ge=0, le=255)
+    pond_land_type: int = Field(ge=0, le=255)
     enabled: bool
     trigger_level: float
     opening_seconds: float = Field(gt=0)
@@ -45,6 +46,8 @@ class GateConfig(InputModel):
 
     @model_validator(mode='after')
     def unique_gates(self):
+        if self.pond_land_type == self.land_type:
+            raise ValueError('pond_land_type must differ from gate land_type')
         names = [gate.name for gate in self.gates]
         if len(names) != len(set(names)):
             raise ValueError('Gate names must be unique')

@@ -30,7 +30,7 @@ def setup(path, *, cells=None, types=None, bed=None, depth=None, gate=None, rain
     lines = (path/'ne.txt').read_text().splitlines()
     (path/'ne.txt').write_text('\n'.join(line.rsplit(',', 1)[0]+f',{kind}'
         for line, kind in zip(lines, types))+'\n')
-    config = dict(land_type=11, enabled=True, trigger_level=1,
+    config = dict(land_type=11, pond_land_type=10, enabled=True, trigger_level=1,
         opening_seconds=1, open_elevation=-.1, gates=[dict(name='A',
             inside_point=xy[2].tolist(), control_point=xy[1].tolist())])
     if gate is not None:
@@ -78,16 +78,14 @@ def run(domain, force, seconds, *, output=None, restart=None):
 
 
 def test_local_bed_motion_preserves_water_and_drives_expected_exchange(tmp_path):
-    domain, force, topo, depth, bed = setup(tmp_path,
-        cells=[(0,10,0,10), (10,20,0,10)], types=[1,11],
-        gate=dict(opening_seconds=.1))
+    domain, force, topo, depth, bed = setup(tmp_path, gate=dict(opening_seconds=.1))
     # First step moves the bed after the hydraulic substep; the next uses it.
     run(domain, force, .1)
     state, manifest = run(domain, force, .2, output=tmp_path/'next',
                          restart=tmp_path/'out/output/state_final.fdb')
     internal = np.flatnonzero((topo[:,1]>0) & (topo[:,2]>0))
     assert state.q[internal[0]]*10 == pytest.approx(.1962, rel=2e-5)
-    assert np.sum(state.depth)*100 == pytest.approx(400, abs=3e-5)
+    assert np.sum(state.depth)*100 == pytest.approx(600, abs=3e-5)
     assert state.depth[2] > state.depth[1]
     assert manifest['gate_control']['gates'][0]['command_seconds'] == 0
     assert manifest['bed_events'] == []
@@ -173,12 +171,13 @@ def test_warmup_disables_control_until_formal_zero(tmp_path):
 @pytest.mark.parametrize('moving', [False, True])
 def test_fixed_still_water_and_uniform_motion_have_zero_flux(tmp_path, moving):
     domain, force, _, depth, bed = setup(tmp_path,
-        cells=[(100,110,0,10), (0,10,0,10), (10,20,0,10)], types=[1,11,11],
+        cells=[(100,110,0,10), (10,20,0,10), (20,30,0,10), (30,40,0,10), (0,10,0,10)],
+        types=[1,11,11,10,1], bed=[0,0,0,10,10], depth=[2,2,2,0,0],
         gate=dict(trigger_level=1 if moving else 3))
     state, _ = run(domain, force, 2)
     np.testing.assert_array_equal(state.depth, depth)
     assert np.all(state.q == 0)
-    np.testing.assert_array_equal(state.bed[2:], np.full(2, -.1 if moving else 0, dtype='float32'))
+    np.testing.assert_array_equal(state.bed[2:4], np.full(2, -.1 if moving else 0, dtype='float32'))
 
 
 @pytest.mark.parametrize('split_at', [1,3,5])
@@ -231,9 +230,9 @@ def test_hanging_subedges_have_one_shared_flux_and_new_bed_pressure(tmp_path, po
         ti.atomic_min(observed_bed[None], reconstruction.bed[3])
         original(reconstruction, slot)
     monkeypatch.setattr(PressureReconstruction, 'update_cell', capture)
-    cells=[(100,110,0,10),(0,10,0,10),(10,15,0,5),(10,15,5,10)]
-    domain, force, topo, depth, bed = setup(tmp_path, cells=cells, types=[1,10,11,11],
-        depth=[2,pond_depth,2,2], gate=dict(gates=[dict(name='A', inside_point=(12,2), control_point=(105,5))]))
+    cells=[(100,110,0,10),(0,10,0,10),(10,15,0,5),(10,15,5,10),(15,25,0,10)]
+    domain, force, topo, depth, bed = setup(tmp_path, cells=cells, types=[1,10,11,11,1],
+        depth=[2,pond_depth,2,2,2], gate=dict(gates=[dict(name='A', inside_point=(12,2), control_point=(105,5))]))
     state, manifest = run(domain, force, 2)
     shared=(topo[:,1]==2)&np.isin(topo[:,2],[3,4])
     assert np.count_nonzero(shared)==2
@@ -362,3 +361,33 @@ def test_cold_warmup_initialization_preserves_closed_gate_barrier(tmp_path):
     assert manifest['gate_control']['gates'][0]['command_seconds'] is None
     assert state.bed[2] == 10
     assert state.depth[1] == 2 and np.all(state.depth[2:] == 0)
+
+
+@pytest.mark.parametrize('pond_type', [10,7])
+def test_configurable_pond_and_channel_source_budgets_close(tmp_path, pond_type):
+    boundaries=level_boundary(tmp_path,[(0,.01),(3600,.01)])
+    line=Path(boundaries[0]['line'])
+    geometry=json.loads(line.read_text())
+    geometry['coordinates']=[[10,10],[20,10]]
+    line.write_text(json.dumps(geometry))
+    boundaries[0].update(name='gate_supply',kind='discharge')
+    domain,force,*_=setup(tmp_path,boundaries=boundaries,types=[1,11,pond_type],
+        depth=[2,2,1],rain=100,gate=dict(pond_land_type=pond_type,open_elevation=0))
+    data=domain.model_dump()
+    data['land_parameters'][11]['infiltration']=dict(f0_mm_h=36,fc_mm_h=18,k_per_h=2)
+    domain=DomainConfig.model_validate(data)
+    state,manifest=run(domain,force,4)
+    control=manifest['gate_control']
+    channel=control['gates'][0]['channel_budget']
+    assert control['pond_land_type'] == pond_type
+    assert channel['rain_m3'] > 0 and channel['infiltration_m3'] > 0
+    assert channel['boundary_m3'] == pytest.approx(.04,abs=3e-8)
+    assert channel['initial_storage_m3'] == 200
+    assert channel['storage_m3'] == float(state.depth[2])*100
+    assert abs(channel['residual_m3']) < 3e-5
+    assert abs(control['pond_budget']['residual_m3']) < 3e-5
+    import csv
+    rows=list(csv.DictReader((tmp_path/'out/gate_balance.csv').open()))
+    final=next(row for row in reversed(rows) if row['region']=='A')
+    assert float(final['residual_m3']) == channel['residual_m3']
+    assert float(final['river_net_m3']) == channel['river_net_m3']

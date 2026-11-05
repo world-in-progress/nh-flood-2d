@@ -1,0 +1,2073 @@
+{
+  "current_source_sha256": "c908816673c549fee696529f7349d04b51fe6720372837b2c841e019f96f2081",
+  "test_batches": [
+    {
+      "result": "66 passed, 1 skipped",
+      "files": [
+        "test_gate_solver.py",
+        "test_gate_config.py",
+        "test_gate_extended.py",
+        "test_gate_compatibility.py"
+      ]
+    },
+    {
+      "result": "28 passed",
+      "files": [
+        "test_gate_config.py"
+      ],
+      "note": "Includes two additional loader/F32 equality guards after the combined run"
+    }
+  ],
+  "distinct_relevant_cpu_checks_passed": 68,
+  "dry_channel_refinement": [
+    {
+      "step_s": 0.125,
+      "first_water_s": 2.75,
+      "pond_in_m3": 45.294399802951375,
+      "pond_out_m3": 37.47146010026336,
+      "oscillation_m3": 111.68557189404964
+    },
+    {
+      "step_s": 0.0625,
+      "first_water_s": 2.6875,
+      "pond_in_m3": 45.54529547326456,
+      "pond_out_m3": 36.27612840291113,
+      "oscillation_m3": 106.33648541197181
+    },
+    {
+      "step_s": 0.03125,
+      "first_water_s": 2.625,
+      "pond_in_m3": 45.31155565899098,
+      "pond_out_m3": 35.5121088293381,
+      "oscillation_m3": 102.91232267580926
+    }
+  ],
+  "cases": [
+    {
+      "case": "test_warmup_disables_control_u0/formal/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 0.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_warmup_disables_control_u0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": null,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 0.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_restart_before_during_aft2/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 5.8747828006744385e-06,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 1.4293567277491093,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": -2.60770320892334e-08
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 2.0,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 114.28651809692383,
+            "river_net_m3": 115.71586894989014,
+            "pond_net_m3": 1.4293567538261414,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 4.470348358154297e-06,
+            "residual_m3": 1.430511474609375e-06
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_restart_before_during_aft2/part/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": -1.3113021850585938e-06,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 2.0,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 46.554818749427795,
+            "river_net_m3": 46.55482006072998,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": -1.3113021850585938e-06
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_restart_before_during_aft2/resumed/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 5.8747828006744385e-06,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 1.4293567277491093,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": -2.60770320892334e-08
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 2.0,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 114.28651809692383,
+            "river_net_m3": 115.71586894989014,
+            "pond_net_m3": 1.4293567538261414,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 4.470348358154297e-06,
+            "residual_m3": 1.430511474609375e-06
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_limiter_records_actual_sh0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 2.561137080192566e-07,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 1.0499999858438969,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 3.3527612686157227e-08
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 2.0999999716877937,
+            "storage_m3": 0.009652390144765377,
+            "river_net_m3": -1.0403475621715188,
+            "pond_net_m3": 1.0499999523162842,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": -6.705522537231445e-08
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_cold_warmup_initializatio0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": null,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 0.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_strict_threshold_and_dry_3/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": null,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 0.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_fixed_still_water_and_uni0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 2,
+          "command_seconds": null,
+          "channel_budget": {
+            "initial_storage_m3": 400.0,
+            "storage_m3": 400.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_strict_threshold_and_dry_4/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": null,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 0.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_dry_near_dry_small_and_re0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 93.66828203201294,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 7.450580596923828e-07,
+        "residual_m3": -2.682209014892578e-07
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 200.0,
+            "storage_m3": 113.00538778305054,
+            "river_net_m3": 6.673673510551453,
+            "pond_net_m3": 93.66828155517578,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": -2.9802322387695312e-06,
+            "residual_m3": -1.1920928955078125e-06
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_end_bed_and_pond_exchange0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 2.384185791015625e-05,
+      "pond_budget": {
+        "initial_storage_m3": 100.0,
+        "storage_m3": 175.09945631027222,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 1.4621764421463013e-05,
+        "residual_m3": 1.1138617992401123e-06
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 200.0,
+            "storage_m3": 144.28095817565918,
+            "river_net_m3": 19.38039979338646,
+            "pond_net_m3": 75.099440574646,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 1.4901161193847656e-06,
+            "residual_m3": -2.5331974029541016e-06
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_dry_near_dry_small_and_re1/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": -1.080334186553955e-05,
+      "pond_budget": {
+        "initial_storage_m3": 200.0,
+        "storage_m3": 107.25319385528564,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": -7.450580596923828e-06,
+        "residual_m3": -1.1324882507324219e-06
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 2.0999999716877937,
+            "storage_m3": 93.32689642906189,
+            "river_net_m3": -1.5198991298675537,
+            "pond_net_m3": -92.74679756164551,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": -1.4901161193847656e-06,
+            "residual_m3": -4.842877388000488e-07
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_fixed_still_water_and_uni1/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 2,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 400.0,
+            "storage_m3": 400.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_seven_large_components_op0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0001251697540283203,
+      "pond_budget": {
+        "initial_storage_m3": 840.0000333786011,
+        "storage_m3": 909.5752239227295,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 4.041939973831177e-05,
+        "residual_m3": -7.040798664093018e-06
+      },
+      "gates": [
+        {
+          "name": "G0",
+          "cell_count": 500,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 1600.000023841858,
+            "storage_m3": 1636.107224225998,
+            "river_net_m3": 46.04650163650513,
+            "pond_net_m3": 9.939308166503906,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 6.524896889459342e-06,
+            "residual_m3": 3.8924190448597074e-07
+          }
+        },
+        {
+          "name": "G1",
+          "cell_count": 500,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 1600.000023841858,
+            "storage_m3": 1636.107224225998,
+            "river_net_m3": 46.04650163650513,
+            "pond_net_m3": 9.939308166503906,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 6.524896889459342e-06,
+            "residual_m3": 3.8924190448597074e-07
+          }
+        },
+        {
+          "name": "G2",
+          "cell_count": 500,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 1600.000023841858,
+            "storage_m3": 1636.107224225998,
+            "river_net_m3": 46.04650163650513,
+            "pond_net_m3": 9.939308166503906,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 6.524896889459342e-06,
+            "residual_m3": 3.8924190448597074e-07
+          }
+        },
+        {
+          "name": "G3",
+          "cell_count": 500,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 1600.000023841858,
+            "storage_m3": 1636.107224225998,
+            "river_net_m3": 46.04650163650513,
+            "pond_net_m3": 9.939308166503906,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 6.524896889459342e-06,
+            "residual_m3": 3.8924190448597074e-07
+          }
+        },
+        {
+          "name": "G4",
+          "cell_count": 500,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 1600.000023841858,
+            "storage_m3": 1636.107224225998,
+            "river_net_m3": 46.04650163650513,
+            "pond_net_m3": 9.939308166503906,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 6.524896889459342e-06,
+            "residual_m3": 3.8924190448597074e-07
+          }
+        },
+        {
+          "name": "G5",
+          "cell_count": 500,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 1600.000023841858,
+            "storage_m3": 1636.107224225998,
+            "river_net_m3": 46.04650163650513,
+            "pond_net_m3": 9.939308166503906,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 6.524896889459342e-06,
+            "residual_m3": 3.8924190448597074e-07
+          }
+        },
+        {
+          "name": "G6",
+          "cell_count": 500,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 1600.000023841858,
+            "storage_m3": 1636.107224225998,
+            "river_net_m3": 46.04650163650513,
+            "pond_net_m3": 9.939308166503906,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 6.524896889459342e-06,
+            "residual_m3": 3.8924190448597074e-07
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_strict_threshold_and_dry_2/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": null,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 0.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_uniform_and_hanging_secti1/hanging/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 3.357534296810627e-06,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.001532812719233334,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 3.200000047683716,
+            "storage_m3": 3.737250804901123,
+            "river_net_m3": 0.538783609867096,
+            "pond_net_m3": 0.001532812719233334,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": -5.960464477539063e-08,
+            "residual_m3": 1.9674189388751984e-08
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_uniform_and_hanging_secti1/uniform/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 3.5314587876200676e-06,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.001149609568528831,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 3.200000047683716,
+            "storage_m3": 3.7376341819763184,
+            "river_net_m3": 0.538783609867096,
+            "pond_net_m3": 0.001149609568528831,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 1.1920928955078125e-07,
+            "residual_m3": 1.4784745872020721e-08
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_short_pulse_latches_each_0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.125,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 0.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_configurable_pond_and_cha1/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 1.9940583539823642e-05,
+      "pond_budget": {
+        "initial_storage_m3": 100.0,
+        "storage_m3": 202.30817794799805,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.011111111263744533,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": -1.6763806343078613e-06,
+        "residual_m3": -3.2118987292051315e-07
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 200.0,
+            "storage_m3": 132.81224966049194,
+            "river_net_m3": 35.062206238508224,
+            "pond_net_m3": 102.29706883430481,
+            "rain_m3": 0.011111111263744533,
+            "infiltration_m3": 0.003997307430836372,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.039999998174607754,
+            "rounding_m3": 7.443304639309645e-07,
+            "residual_m3": -2.29004945140332e-06
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_local_bed_motion_preserve0/next/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 200.0,
+        "storage_m3": 199.98037815093994,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": -1.8437276594340801e-06,
+        "residual_m3": -2.9103830456733704e-10
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 200.0,
+            "storage_m3": 200.03924369812012,
+            "river_net_m3": 0.019620005041360855,
+            "pond_net_m3": -0.019620005041360855,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 3.6874553188681602e-06,
+            "residual_m3": 5.820766091346741e-10
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_local_bed_motion_preserve0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 200.0,
+        "storage_m3": 200.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 200.0,
+            "storage_m3": 200.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_uniform_and_hanging_secti0/hanging/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 64.0,
+        "storage_m3": 64.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 57.599998474121094,
+            "storage_m3": 57.600013732910156,
+            "river_net_m3": 1.3799134649161715e-05,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 1.459654413338285e-06,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_uniform_and_hanging_secti0/uniform/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 64.0,
+        "storage_m3": 64.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 57.599998474121094,
+            "storage_m3": 57.600013732910156,
+            "river_net_m3": 1.3799136468151119e-05,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 1.4596525943488814e-06,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_configurable_pond_and_cha0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 1.9940583539823642e-05,
+      "pond_budget": {
+        "initial_storage_m3": 100.0,
+        "storage_m3": 202.30817794799805,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.011111111263744533,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": -1.6763806343078613e-06,
+        "residual_m3": -3.2118987292051315e-07
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 200.0,
+            "storage_m3": 132.81224966049194,
+            "river_net_m3": 35.062206238508224,
+            "pond_net_m3": 102.29706883430481,
+            "rain_m3": 0.011111111263744533,
+            "infiltration_m3": 0.003997307430836372,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.039999998174607754,
+            "rounding_m3": 7.443304639309645e-07,
+            "residual_m3": -2.29004945140332e-06
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_short_pulse_latches_each_1/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.125,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 0.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_restart_before_during_aft1/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 5.8747828006744385e-06,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 1.4293567277491093,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": -2.60770320892334e-08
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 2.0,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 114.28651809692383,
+            "river_net_m3": 115.71586894989014,
+            "pond_net_m3": 1.4293567538261414,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 4.470348358154297e-06,
+            "residual_m3": 1.430511474609375e-06
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_restart_before_during_aft1/part/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 2.0,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 0.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_restart_before_during_aft1/resumed/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 5.8747828006744385e-06,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 1.4293567277491093,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": -2.60770320892334e-08
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 2.0,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 114.28651809692383,
+            "river_net_m3": 115.71586894989014,
+            "pond_net_m3": 1.4293567538261414,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 4.470348358154297e-06,
+            "residual_m3": 1.430511474609375e-06
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_pond_rain_infiltration_ov0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 2.4423799267321578e-05,
+      "pond_budget": {
+        "initial_storage_m3": 100.0,
+        "storage_m3": 150.38241147994995,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 64.0314153432846,
+        "rain_m3": 0.011111111307400279,
+        "infiltration_m3": 0.003997314441221533,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 1.0244548320770264e-05,
+        "residual_m3": -3.3268952392973006e-07
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 200.0,
+            "storage_m3": 121.38539552688599,
+            "river_net_m3": 35.780977576971054,
+            "pond_net_m3": 114.40670311450958,
+            "rain_m3": 0.011111111307400279,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 1.0989606380462646e-05,
+            "residual_m3": -1.0364892659708858e-06
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_restart_before_during_aft0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 5.8747828006744385e-06,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 1.4293567277491093,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": -2.60770320892334e-08
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 2.0,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 114.28651809692383,
+            "river_net_m3": 115.71586894989014,
+            "pond_net_m3": 1.4293567538261414,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 4.470348358154297e-06,
+            "residual_m3": 1.430511474609375e-06
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_restart_before_during_aft0/part/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": null,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 0.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_restart_before_during_aft0/resumed/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 5.8747828006744385e-06,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 1.4293567277491093,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": -2.60770320892334e-08
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 2.0,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 114.28651809692383,
+            "river_net_m3": 115.71586894989014,
+            "pond_net_m3": 1.4293567538261414,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 4.470348358154297e-06,
+            "residual_m3": 1.430511474609375e-06
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_strict_threshold_and_dry_0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 0.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_dry_near_dry_small_and_re3/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 200.0,
+        "storage_m3": 150.60293674468994,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 5.587935447692871e-07,
+        "residual_m3": -1.1548399925231934e-06
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 100.0,
+            "storage_m3": 147.2034215927124,
+            "river_net_m3": -2.193644031882286,
+            "pond_net_m3": -49.39706265926361,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 2.514570951461792e-06,
+            "residual_m3": 4.507601261138916e-07
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_pond_level_reservoir_acco0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 4.76837158203125e-06,
+      "pond_budget": {
+        "initial_storage_m3": 0.9999999776482582,
+        "storage_m3": 0.9999999776482582,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 124.46100234985352,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 200.0,
+            "storage_m3": 324.432635307312,
+            "river_net_m3": -0.02836821973323822,
+            "pond_net_m3": -124.46100234985352,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 1.1771917343139648e-06
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_dry_near_dry_small_and_re2/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 100.0,
+        "storage_m3": 100.00027418136597,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": -1.8099058252118994e-06,
+        "residual_m3": -3.183231456205249e-12
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 100.00100135803223,
+            "storage_m3": 100.00073909759521,
+            "river_net_m3": 9.355639122077264e-06,
+            "pond_net_m3": 0.00027599127497524023,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 4.375192474981304e-06,
+            "residual_m3": 6.366462912410498e-12
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_strict_threshold_and_dry_1/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": null,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 0.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_gates_trigger_independent0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 0.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        },
+        {
+          "name": "B",
+          "cell_count": 1,
+          "command_seconds": null,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 0.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_dry_multicell_transient_r0/0.03125/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 2.1666288375854492e-05,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 9.799444198608398,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": -2.6310444809496403e-06,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 4,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 48.30514693260193,
+            "river_net_m3": 58.10456934652757,
+            "pond_net_m3": 9.79944682965288,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 2.9802322387695312e-08,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 2.5096066565311048e-05,
+            "residual_m3": -7.101416485966183e-07
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_dry_multicell_transient_r0/0.0625/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": -7.3909759521484375e-06,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 9.269169807434082,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 2.737142494879663e-06,
+        "residual_m3": -6.184563972055912e-11
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 4,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 51.250272274017334,
+            "river_net_m3": 60.51943441061303,
+            "pond_net_m3": 9.269167070353433,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 4.878274921793491e-06,
+            "residual_m3": 5.5482814786955714e-08
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_dry_multicell_transient_r0/0.125/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": -2.7179718017578125e-05,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 7.822939395904541,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": -3.2223761081695557e-07,
+        "residual_m3": 1.5454133972525597e-08
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 4,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 54.41248893737793,
+            "river_net_m3": 62.23544613830745,
+            "pond_net_m3": 7.822939702688018,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 1.1920928955078125e-07,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": -1.643318682909012e-05,
+            "residual_m3": -1.1842639651149511e-06
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_fractional_opening_replay0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 0.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_hanging_subedges_have_one0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 84.26823616027832,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 4.7031790018081665e-06,
+        "residual_m3": -5.904585123062134e-07
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 2,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 100.0,
+            "storage_m3": 36.515164375305176,
+            "river_net_m3": 20.78339795395732,
+            "pond_net_m3": 84.26823204755783,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 1.862645149230957e-07,
+            "residual_m3": -1.7173588275909424e-06
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_hanging_subedges_have_one1/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 200.0,
+        "storage_m3": 197.65340089797974,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 6.28642737865448e-07,
+        "residual_m3": -2.7939677238464355e-09
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 2,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 100.0,
+            "storage_m3": 104.69319820404053,
+            "river_net_m3": 2.346599727869034,
+            "pond_net_m3": -2.346599727869034,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": -1.257285475730896e-06,
+            "residual_m3": 5.587935447692871e-09
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_short_pulse_latches_each_2/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 0.0,
+        "residual_m3": 0.0
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.125,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 0.0,
+            "river_net_m3": 0.0,
+            "pond_net_m3": 0.0,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 0.0,
+            "residual_m3": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_multicell_dry_channel_wet0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": -0.00012505287304520607,
+      "pond_budget": {
+        "initial_storage_m3": 0.0,
+        "storage_m3": 2.873227745294571,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": 2.3381790015264414e-05,
+        "residual_m3": -1.3003713320358656e-05
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 3,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 0.0,
+            "storage_m3": 7.651971653103828,
+            "river_net_m3": 10.52531914645806,
+            "pond_net_m3": 2.873217367217876,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 1.4901161193847656e-06,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": -9.73652731772745e-05,
+            "residual_m3": -3.4250979297212325e-05
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_local_movement_response_c0/2/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 200.0,
+        "storage_m3": 199.44663047790527,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": -7.91915226727724e-06,
+        "residual_m3": -9.633367881178856e-09
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 200.0,
+            "storage_m3": 201.10673904418945,
+            "river_net_m3": 0.5533615933090914,
+            "pond_net_m3": -0.5533615933090914,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 1.583830453455448e-05,
+            "residual_m3": 1.9266735762357712e-08
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_local_movement_response_c0/1/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 200.0,
+        "storage_m3": 199.44733381271362,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": -2.577326085884124e-05,
+        "residual_m3": -3.92901711165905e-10
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 200.0,
+            "storage_m3": 201.10533237457275,
+            "river_net_m3": 0.5526404136326164,
+            "pond_net_m3": -0.5526404136326164,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 5.154652171768248e-05,
+            "residual_m3": 7.8580342233181e-10
+          }
+        }
+      ]
+    },
+    {
+      "case": "test_local_movement_response_c0/0/out/manifest.json",
+      "source_sha256": "217230f4dd2e455be28049101b2881948b5f9809404fc5f1350e6b2e9f321686",
+      "global_residual_m3": 0.0,
+      "pond_budget": {
+        "initial_storage_m3": 200.0,
+        "storage_m3": 199.45024251937866,
+        "overtopping_in_m3": 0.0,
+        "overtopping_out_m3": 0.0,
+        "rain_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "positivity_m3": 0.0,
+        "pipe_m3": 0.0,
+        "boundary_m3": 0.0,
+        "rounding_m3": -4.918547347187996e-07,
+        "residual_m3": -8.265487849712372e-09
+      },
+      "gates": [
+        {
+          "name": "A",
+          "cell_count": 1,
+          "command_seconds": 0.0,
+          "channel_budget": {
+            "initial_storage_m3": 200.0,
+            "storage_m3": 201.09951496124268,
+            "river_net_m3": 0.5497569805011153,
+            "pond_net_m3": -0.5497569805011153,
+            "rain_m3": 0.0,
+            "infiltration_m3": 0.0,
+            "positivity_m3": 0.0,
+            "pipe_m3": 0.0,
+            "boundary_m3": 0.0,
+            "rounding_m3": 9.837094694375992e-07,
+            "residual_m3": 1.6530975699424744e-08
+          }
+        }
+      ]
+    }
+  ]
+}
