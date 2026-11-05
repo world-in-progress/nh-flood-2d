@@ -1,0 +1,728 @@
+{
+  "case_cells": 3850,
+  "gate_cells": 3500,
+  "gate_count": 7,
+  "simulated_seconds": 120,
+  "results": {
+    "performance-disabled": {
+      "case": "medium",
+      "backend": "metal",
+      "device": "Apple M1 Max",
+      "simulated_end_seconds": 120.0,
+      "configuration_duration_seconds": 3600,
+      "enabled": false,
+      "source_sha256": "c908816673c549fee696529f7349d04b51fe6720372837b2c841e019f96f2081",
+      "input_sha256": {
+        "tests/.gate-work/metal-v2-scheduled/performance-disabled/ne.txt": "9a34837721d069d1f300aba9d85785d6788f1a04a04f467003ddc731cc498c1f",
+        "tests/.gate-work/metal-v2-scheduled/performance-disabled/ns.txt": "dca055538b8c5ce407ba92aaca036dde18b93a39c0f5f4e442b49aba162caf08",
+        "tests/.gate-work/metal-v2-scheduled/performance-disabled/rivers.geojson": "b54cf771734ef30c531b6d70708716fe68d2c37e4a75f541af560f1e363729e4",
+        "tests/.gate-work/metal-v2-scheduled/performance-disabled/rivers.csv": "1cb1c8b6631c87852f6825dc15e137e9d3fa45fc4febc96b8710e255f0fb596a",
+        "tests/.gate-work/metal-v2-scheduled/performance-disabled/rain.tif": "c181cea416e9a19adee98f7d47f653e83d612c5a14cecaf514c863ac4d086cd9",
+        "tests/.gate-work/metal-v2-scheduled/performance-disabled/intervals.csv": "95b93bdc3e35355606b481f5f31d2699bc11804a7f277bcc2be96487b009608e",
+        "tests/.gate-work/metal-v2-scheduled/performance-disabled/seed.fdb": "cbe4fa6df4bfe43516eb9d27db2bc36c9bd062a8065eca7ddbf73fb5ea2c9a00"
+      },
+      "platform": "macOS-27.0.1-arm64-arm-64bit",
+      "harness_sha256": {
+        "gate_backend_validation.py": "64719eccfbc22a606bda53061232bff56a1a90d5a60e608e54e3031f987a0d69",
+        "gate_gpu_tools.py": "eb5f7d65b456c605d1066ebf260ac965ec3a5eda6b4fafaf37ebbf074cabe5bb",
+        "test_gate_solver.py": "0fff457e7dfc0943d8732a45646e97e5adc8a3bbf888a46972ccc0726d37d575"
+      },
+      "dependencies": {
+        "taichi": "1.7.4",
+        "fastdb4py": "0.2.4",
+        "numpy": "2.2.6",
+        "pydantic": "2.14.2",
+        "rasterio": "1.4.4"
+      },
+      "python": "3.10.17",
+      "gpu_window": {
+        "time": "2026-11-05T19:39:36.575909+08:00",
+        "solver_pids": [],
+        "allowed": true,
+        "policy": "No python main.py solver PID, or local time at/after 20:30"
+      },
+      "steps": 266,
+      "profile": {
+        "graph_batches": [
+          {
+            "seconds": 0.4076552909100428,
+            "steps": 2
+          },
+          {
+            "seconds": 0.003943082992918789,
+            "steps": 2
+          },
+          {
+            "seconds": 0.006402250030077994,
+            "steps": 32
+          },
+          {
+            "seconds": 0.006416958989575505,
+            "steps": 32
+          },
+          {
+            "seconds": 0.0067402919521555305,
+            "steps": 32
+          },
+          {
+            "seconds": 0.006788666942156851,
+            "steps": 32
+          },
+          {
+            "seconds": 0.006385332904756069,
+            "steps": 32
+          },
+          {
+            "seconds": 0.006378292106091976,
+            "steps": 32
+          },
+          {
+            "seconds": 0.00638758298009634,
+            "steps": 32
+          },
+          {
+            "seconds": 0.006357791949994862,
+            "steps": 32
+          },
+          {
+            "seconds": 0.0038296669954434037,
+            "steps": 6
+          }
+        ],
+        "steady_steps": 262,
+        "steady_graph_seconds": 0.05568683485034853,
+        "steady_graph_seconds_per_step": 0.00021254517118453637,
+        "timing_definition": "Synchronized device graph wall time, excluding first two batches; includes graph guards for unused batch slots; excludes preprocessing, compilation and host output work"
+      },
+      "memory": {
+        "metal_sampled_peak_allocated_bytes": 36110336,
+        "metal_allocation_samples": 12,
+        "process_peak_rss_bytes": 200916992,
+        "memory_definition": "MTLDevice.currentAllocatedSize: sampled device-resource allocation bytes; process RSS is unified-memory high water, not separate VRAM residency",
+        "gate_controller_logical_fields": {
+          "owned_logical_field_bytes": 0,
+          "diagnostic_accumulator_bytes": 0
+        }
+      },
+      "hashes": {
+        "depth": "ab024cd4bc19010697070173948c2e775f2e1b74494f8a29aaf019c41762b91b",
+        "q": "d5965d172bc0a9a30584e2e770b10d03410ff72cb5fbe33ed459a736558a24c4",
+        "bed": "c7bb863fcc649f32ed95b421155ae33803df3a40065d4ae365c454a026816466"
+      },
+      "global_budget": {
+        "time": "2023-09-07T08:02:00+00:00",
+        "elapsed_seconds": 120.0,
+        "phase": "simulation",
+        "rainfall_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "bed_clamp_nonlevel_m3": 0.0,
+        "bed_clamp_level_m3": 0.0,
+        "gate_bed_m3": 0.0,
+        "pipe_exchange_m3": 0.0,
+        "initial_storage_m3": 2240.000033378601,
+        "storage_m3": 6440.000033378601,
+        "residual_m3": 0.00069427490234375,
+        "relative_residual": 1.653035755023509e-07,
+        "level:rivers_m3": 4199.999305725098
+      },
+      "gate_control": null,
+      "restart": [],
+      "raw_manifest_sha256": "20543b4689626c5deae742cd9978635bd35530f86673bfc75188d70937fa50d9",
+      "manifest_timing_seconds": {
+        "preprocess_and_setup": 1.27569024998229,
+        "warmup": 0.0,
+        "simulation": 0.6150566249853,
+        "warmup_per_step": null,
+        "simulation_per_step": 0.0023122429510725566
+      }
+    },
+    "performance-enabled": {
+      "case": "medium",
+      "backend": "metal",
+      "device": "Apple M1 Max",
+      "simulated_end_seconds": 120.0,
+      "configuration_duration_seconds": 3600,
+      "enabled": true,
+      "source_sha256": "c908816673c549fee696529f7349d04b51fe6720372837b2c841e019f96f2081",
+      "input_sha256": {
+        "tests/.gate-work/metal-v2-scheduled/performance-enabled/ne.txt": "9a34837721d069d1f300aba9d85785d6788f1a04a04f467003ddc731cc498c1f",
+        "tests/.gate-work/metal-v2-scheduled/performance-enabled/ns.txt": "dca055538b8c5ce407ba92aaca036dde18b93a39c0f5f4e442b49aba162caf08",
+        "tests/.gate-work/metal-v2-scheduled/performance-enabled/rivers.geojson": "b54cf771734ef30c531b6d70708716fe68d2c37e4a75f541af560f1e363729e4",
+        "tests/.gate-work/metal-v2-scheduled/performance-enabled/rivers.csv": "1cb1c8b6631c87852f6825dc15e137e9d3fa45fc4febc96b8710e255f0fb596a",
+        "tests/.gate-work/metal-v2-scheduled/performance-enabled/rain.tif": "c181cea416e9a19adee98f7d47f653e83d612c5a14cecaf514c863ac4d086cd9",
+        "tests/.gate-work/metal-v2-scheduled/performance-enabled/intervals.csv": "95b93bdc3e35355606b481f5f31d2699bc11804a7f277bcc2be96487b009608e",
+        "tests/.gate-work/metal-v2-scheduled/performance-enabled/seed.fdb": "7115a8dfaae9bd5bd10a31b98c8c589d03e7c00afa3880e61ba9986804fc390e"
+      },
+      "platform": "macOS-27.0.1-arm64-arm-64bit",
+      "harness_sha256": {
+        "gate_backend_validation.py": "64719eccfbc22a606bda53061232bff56a1a90d5a60e608e54e3031f987a0d69",
+        "gate_gpu_tools.py": "eb5f7d65b456c605d1066ebf260ac965ec3a5eda6b4fafaf37ebbf074cabe5bb",
+        "test_gate_solver.py": "0fff457e7dfc0943d8732a45646e97e5adc8a3bbf888a46972ccc0726d37d575"
+      },
+      "dependencies": {
+        "taichi": "1.7.4",
+        "fastdb4py": "0.2.4",
+        "numpy": "2.2.6",
+        "pydantic": "2.14.2",
+        "rasterio": "1.4.4"
+      },
+      "python": "3.10.17",
+      "gpu_window": {
+        "time": "2026-11-05T19:39:40.329116+08:00",
+        "solver_pids": [],
+        "allowed": true,
+        "policy": "No python main.py solver PID, or local time at/after 20:30"
+      },
+      "steps": 544,
+      "profile": {
+        "graph_batches": [
+          {
+            "seconds": 0.47648629103787243,
+            "steps": 2
+          },
+          {
+            "seconds": 0.005855624913237989,
+            "steps": 2
+          },
+          {
+            "seconds": 0.01383874996099621,
+            "steps": 32
+          },
+          {
+            "seconds": 0.015997958020307124,
+            "steps": 32
+          },
+          {
+            "seconds": 0.014311249949969351,
+            "steps": 32
+          },
+          {
+            "seconds": 0.01387258293107152,
+            "steps": 32
+          },
+          {
+            "seconds": 0.011046624975278974,
+            "steps": 32
+          },
+          {
+            "seconds": 0.012126332963816822,
+            "steps": 32
+          },
+          {
+            "seconds": 0.010573874926194549,
+            "steps": 32
+          },
+          {
+            "seconds": 0.010529416962526739,
+            "steps": 32
+          },
+          {
+            "seconds": 0.01039512490388006,
+            "steps": 32
+          },
+          {
+            "seconds": 0.01003408303949982,
+            "steps": 32
+          },
+          {
+            "seconds": 0.01303395803552121,
+            "steps": 32
+          },
+          {
+            "seconds": 0.009940624935552478,
+            "steps": 32
+          },
+          {
+            "seconds": 0.010109666036441922,
+            "steps": 32
+          },
+          {
+            "seconds": 0.010062208981253207,
+            "steps": 32
+          },
+          {
+            "seconds": 0.010093749966472387,
+            "steps": 32
+          },
+          {
+            "seconds": 0.010297166998498142,
+            "steps": 32
+          },
+          {
+            "seconds": 0.00928175006993115,
+            "steps": 28
+          }
+        ],
+        "steady_steps": 540,
+        "steady_graph_seconds": 0.19554512365721166,
+        "steady_graph_seconds_per_step": 0.0003621205993652068,
+        "timing_definition": "Synchronized device graph wall time, excluding first two batches; includes graph guards for unused batch slots; excludes preprocessing, compilation and host output work"
+      },
+      "memory": {
+        "metal_sampled_peak_allocated_bytes": 36864000,
+        "metal_allocation_samples": 20,
+        "process_peak_rss_bytes": 210190336,
+        "memory_definition": "MTLDevice.currentAllocatedSize: sampled device-resource allocation bytes; process RSS is unified-memory high water, not separate VRAM residency",
+        "gate_controller_logical_fields": {
+          "owned_logical_field_bytes": 542296,
+          "diagnostic_accumulator_bytes": 389380,
+          "diagnostic_terms": 78,
+          "accumulator_word_count": 19
+        }
+      },
+      "hashes": {
+        "depth": "3b42c451f4e3ea5487ee25aeaf2cb4043caf985cf90c0c5f1de15f1a8875e302",
+        "q": "0c79c7f8d35ee863e6d9eb1a8865591b33298ec26b44f818d667c6992a5d2631",
+        "bed": "2416187c088b94a537709692f406db51c8ea46cfabe99e254826a7a04f1052e0"
+      },
+      "global_budget": {
+        "time": "2023-09-07T08:02:00+00:00",
+        "elapsed_seconds": 120.0,
+        "phase": "simulation",
+        "rainfall_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "bed_clamp_nonlevel_m3": 0.0001711305305462929,
+        "bed_clamp_level_m3": 0.0,
+        "gate_bed_m3": 0.0,
+        "pipe_exchange_m3": 0.0,
+        "initial_storage_m3": 2240.000033378601,
+        "storage_m3": 158422.820520401,
+        "residual_m3": -0.009738272055983543,
+        "relative_residual": -6.235174533548945e-08,
+        "level:rivers_m3": 156182.83005416393
+      },
+      "gate_control": {
+        "enabled": true,
+        "trigger_level": 1.5,
+        "pond_land_type": 10,
+        "opening_seconds": 2.875,
+        "open_elevation": 0.13,
+        "clock_origin_before_start_s": 0.0,
+        "clock_quantum_s": 9.094947017729282e-13,
+        "first_effective_flow_definition": "End of first completed step with nonzero post-limiter gate-to-pond subedge volume in either direction",
+        "gates": [
+          {
+            "name": "G0",
+            "command_clock_ticks": [
+              487,
+              773521408
+            ],
+            "control_cell": 1,
+            "command_seconds": 1.903047263622284,
+            "first_effective_flow_seconds": 5.058983027935028,
+            "fully_open_seconds": 4.778047263622284,
+            "first_fully_open_sample_seconds": 5.058983027935028,
+            "scheduled_fully_open_seconds": 4.778047263622284,
+            "pond_in_m3": 10144.107986788265,
+            "pond_out_m3": 8937.391523256898,
+            "pond_net_m3": 1206.7164635313675,
+            "river_in_m3": 48980.872772574425,
+            "river_out_m3": 27269.039808511734,
+            "channel_storage_m3": 20505.11498451233,
+            "channel_budget": {
+              "initial_storage_m3": 0.0,
+              "storage_m3": 20505.11498451233,
+              "river_net_m3": 21711.83296406269,
+              "pond_net_m3": 1206.7164635313675,
+              "rain_m3": 0.0,
+              "infiltration_m3": 0.0,
+              "positivity_m3": 1.252628969439229e-05,
+              "pipe_m3": 0.0,
+              "boundary_m3": 0.0,
+              "rounding_m3": -0.0010623693015077151,
+              "residual_m3": -0.000466175981273409
+            },
+            "cell_count": 500,
+            "membership_sha256": "cafda76e2e85d71d19e52d3901ed3aa69199aa9931ae8c89769723dd8fb01d33",
+            "closed_bed_sha256": "764e35fa6cd6b8b81c8b4c09db1d133439f65c43b9b967544818021f0db2b1b4",
+            "closed_bed_min_m": 3.125,
+            "closed_bed_max_m": 3.125
+          },
+          {
+            "name": "G1",
+            "command_clock_ticks": [
+              487,
+              773521408
+            ],
+            "control_cell": 551,
+            "command_seconds": 1.903047263622284,
+            "first_effective_flow_seconds": 5.058983027935028,
+            "fully_open_seconds": 4.778047263622284,
+            "first_fully_open_sample_seconds": 5.058983027935028,
+            "scheduled_fully_open_seconds": 4.778047263622284,
+            "pond_in_m3": 10144.107986788265,
+            "pond_out_m3": 8937.391523256898,
+            "pond_net_m3": 1206.7164635313675,
+            "river_in_m3": 48980.872772574425,
+            "river_out_m3": 27269.039808511734,
+            "channel_storage_m3": 20505.11498451233,
+            "channel_budget": {
+              "initial_storage_m3": 0.0,
+              "storage_m3": 20505.11498451233,
+              "river_net_m3": 21711.83296406269,
+              "pond_net_m3": 1206.7164635313675,
+              "rain_m3": 0.0,
+              "infiltration_m3": 0.0,
+              "positivity_m3": 1.252628969439229e-05,
+              "pipe_m3": 0.0,
+              "boundary_m3": 0.0,
+              "rounding_m3": -0.0010623693015077151,
+              "residual_m3": -0.000466175981273409
+            },
+            "cell_count": 500,
+            "membership_sha256": "d2d912c8daa885b052b8ca6e7c8463b5a83a141fca72d74a8a5772f17268ffb3",
+            "closed_bed_sha256": "764e35fa6cd6b8b81c8b4c09db1d133439f65c43b9b967544818021f0db2b1b4",
+            "closed_bed_min_m": 3.125,
+            "closed_bed_max_m": 3.125
+          },
+          {
+            "name": "G2",
+            "command_clock_ticks": [
+              487,
+              773521408
+            ],
+            "control_cell": 1101,
+            "command_seconds": 1.903047263622284,
+            "first_effective_flow_seconds": 5.058983027935028,
+            "fully_open_seconds": 4.778047263622284,
+            "first_fully_open_sample_seconds": 5.058983027935028,
+            "scheduled_fully_open_seconds": 4.778047263622284,
+            "pond_in_m3": 10144.107986788265,
+            "pond_out_m3": 8937.391523256898,
+            "pond_net_m3": 1206.7164635313675,
+            "river_in_m3": 48980.872772574425,
+            "river_out_m3": 27269.039808511734,
+            "channel_storage_m3": 20505.11498451233,
+            "channel_budget": {
+              "initial_storage_m3": 0.0,
+              "storage_m3": 20505.11498451233,
+              "river_net_m3": 21711.83296406269,
+              "pond_net_m3": 1206.7164635313675,
+              "rain_m3": 0.0,
+              "infiltration_m3": 0.0,
+              "positivity_m3": 1.252628969439229e-05,
+              "pipe_m3": 0.0,
+              "boundary_m3": 0.0,
+              "rounding_m3": -0.0010623693015077151,
+              "residual_m3": -0.000466175981273409
+            },
+            "cell_count": 500,
+            "membership_sha256": "c6db9497801f2d66825327b484a04d58c3b243ac2c6b3306d81702d5a3ff5a15",
+            "closed_bed_sha256": "764e35fa6cd6b8b81c8b4c09db1d133439f65c43b9b967544818021f0db2b1b4",
+            "closed_bed_min_m": 3.125,
+            "closed_bed_max_m": 3.125
+          },
+          {
+            "name": "G3",
+            "command_clock_ticks": [
+              487,
+              773521408
+            ],
+            "control_cell": 1651,
+            "command_seconds": 1.903047263622284,
+            "first_effective_flow_seconds": 5.058983027935028,
+            "fully_open_seconds": 4.778047263622284,
+            "first_fully_open_sample_seconds": 5.058983027935028,
+            "scheduled_fully_open_seconds": 4.778047263622284,
+            "pond_in_m3": 10144.107986788265,
+            "pond_out_m3": 8937.391523256898,
+            "pond_net_m3": 1206.7164635313675,
+            "river_in_m3": 48980.872772574425,
+            "river_out_m3": 27269.039808511734,
+            "channel_storage_m3": 20505.11498451233,
+            "channel_budget": {
+              "initial_storage_m3": 0.0,
+              "storage_m3": 20505.11498451233,
+              "river_net_m3": 21711.83296406269,
+              "pond_net_m3": 1206.7164635313675,
+              "rain_m3": 0.0,
+              "infiltration_m3": 0.0,
+              "positivity_m3": 1.252628969439229e-05,
+              "pipe_m3": 0.0,
+              "boundary_m3": 0.0,
+              "rounding_m3": -0.0010623693015077151,
+              "residual_m3": -0.000466175981273409
+            },
+            "cell_count": 500,
+            "membership_sha256": "f6c131abe6beafa98c5393b17958b7872261cdd41e84d545dd527b54952916fb",
+            "closed_bed_sha256": "764e35fa6cd6b8b81c8b4c09db1d133439f65c43b9b967544818021f0db2b1b4",
+            "closed_bed_min_m": 3.125,
+            "closed_bed_max_m": 3.125
+          },
+          {
+            "name": "G4",
+            "command_clock_ticks": [
+              487,
+              773521408
+            ],
+            "control_cell": 2201,
+            "command_seconds": 1.903047263622284,
+            "first_effective_flow_seconds": 5.058983027935028,
+            "fully_open_seconds": 4.778047263622284,
+            "first_fully_open_sample_seconds": 5.058983027935028,
+            "scheduled_fully_open_seconds": 4.778047263622284,
+            "pond_in_m3": 10144.107986788265,
+            "pond_out_m3": 8937.391523256898,
+            "pond_net_m3": 1206.7164635313675,
+            "river_in_m3": 48980.872772574425,
+            "river_out_m3": 27269.039808511734,
+            "channel_storage_m3": 20505.11498451233,
+            "channel_budget": {
+              "initial_storage_m3": 0.0,
+              "storage_m3": 20505.11498451233,
+              "river_net_m3": 21711.83296406269,
+              "pond_net_m3": 1206.7164635313675,
+              "rain_m3": 0.0,
+              "infiltration_m3": 0.0,
+              "positivity_m3": 1.252628969439229e-05,
+              "pipe_m3": 0.0,
+              "boundary_m3": 0.0,
+              "rounding_m3": -0.0010623693015077151,
+              "residual_m3": -0.000466175981273409
+            },
+            "cell_count": 500,
+            "membership_sha256": "19f5293f1d3b011050b0c8ab96bf1073531d4aace0e8c4f901a8afd6aea3c23d",
+            "closed_bed_sha256": "764e35fa6cd6b8b81c8b4c09db1d133439f65c43b9b967544818021f0db2b1b4",
+            "closed_bed_min_m": 3.125,
+            "closed_bed_max_m": 3.125
+          },
+          {
+            "name": "G5",
+            "command_clock_ticks": [
+              487,
+              773521408
+            ],
+            "control_cell": 2751,
+            "command_seconds": 1.903047263622284,
+            "first_effective_flow_seconds": 5.058983027935028,
+            "fully_open_seconds": 4.778047263622284,
+            "first_fully_open_sample_seconds": 5.058983027935028,
+            "scheduled_fully_open_seconds": 4.778047263622284,
+            "pond_in_m3": 10144.107986788265,
+            "pond_out_m3": 8937.391523256898,
+            "pond_net_m3": 1206.7164635313675,
+            "river_in_m3": 48980.872772574425,
+            "river_out_m3": 27269.039808511734,
+            "channel_storage_m3": 20505.11498451233,
+            "channel_budget": {
+              "initial_storage_m3": 0.0,
+              "storage_m3": 20505.11498451233,
+              "river_net_m3": 21711.83296406269,
+              "pond_net_m3": 1206.7164635313675,
+              "rain_m3": 0.0,
+              "infiltration_m3": 0.0,
+              "positivity_m3": 1.252628969439229e-05,
+              "pipe_m3": 0.0,
+              "boundary_m3": 0.0,
+              "rounding_m3": -0.0010623693015077151,
+              "residual_m3": -0.000466175981273409
+            },
+            "cell_count": 500,
+            "membership_sha256": "4aef1be19ba1a5c133400f8c3b6e869aeee398d0e4e3362dda820f6ca79435e1",
+            "closed_bed_sha256": "764e35fa6cd6b8b81c8b4c09db1d133439f65c43b9b967544818021f0db2b1b4",
+            "closed_bed_min_m": 3.125,
+            "closed_bed_max_m": 3.125
+          },
+          {
+            "name": "G6",
+            "command_clock_ticks": [
+              487,
+              773521408
+            ],
+            "control_cell": 3301,
+            "command_seconds": 1.903047263622284,
+            "first_effective_flow_seconds": 5.058983027935028,
+            "fully_open_seconds": 4.778047263622284,
+            "first_fully_open_sample_seconds": 5.058983027935028,
+            "scheduled_fully_open_seconds": 4.778047263622284,
+            "pond_in_m3": 10144.107986788265,
+            "pond_out_m3": 8937.391523256898,
+            "pond_net_m3": 1206.7164635313675,
+            "river_in_m3": 48980.872772574425,
+            "river_out_m3": 27269.039808511734,
+            "channel_storage_m3": 20505.11498451233,
+            "channel_budget": {
+              "initial_storage_m3": 0.0,
+              "storage_m3": 20505.11498451233,
+              "river_net_m3": 21711.83296406269,
+              "pond_net_m3": 1206.7164635313675,
+              "rain_m3": 0.0,
+              "infiltration_m3": 0.0,
+              "positivity_m3": 1.252628969439229e-05,
+              "pipe_m3": 0.0,
+              "boundary_m3": 0.0,
+              "rounding_m3": -0.0010623693015077151,
+              "residual_m3": -0.000466175981273409
+            },
+            "cell_count": 500,
+            "membership_sha256": "8e29725a3337f71d56ed6fe3984f5060ad994b81da102362b38e35f20a86e88f",
+            "closed_bed_sha256": "764e35fa6cd6b8b81c8b4c09db1d133439f65c43b9b967544818021f0db2b1b4",
+            "closed_bed_min_m": 3.125,
+            "closed_bed_max_m": 3.125
+          }
+        ],
+        "pond_budget": {
+          "initial_storage_m3": 840.0000333786011,
+          "storage_m3": 9287.015628814697,
+          "overtopping_in_m3": 0.0,
+          "overtopping_out_m3": 0.0,
+          "rain_m3": 0.0,
+          "infiltration_m3": 0.0,
+          "positivity_m3": 8.344650268554688e-05,
+          "pipe_m3": 0.0,
+          "boundary_m3": 0.0,
+          "rounding_m3": 0.00040383238228969276,
+          "residual_m3": -0.00013656236114911735
+        }
+      },
+      "restart": [],
+      "raw_manifest_sha256": "e01d9f1afe2e1a7a3e870fc340bb88d0f88545b7cdb9b57cec24051445188a9b",
+      "manifest_timing_seconds": {
+        "preprocess_and_setup": 1.2261590840062127,
+        "warmup": 0.0,
+        "simulation": 0.8741089159157127,
+        "warmup_per_step": null,
+        "simulation_per_step": 0.0016068178601391777
+      }
+    },
+    "performance-disabled-repeat": {
+      "case": "medium",
+      "backend": "metal",
+      "device": "Apple M1 Max",
+      "simulated_end_seconds": 120.0,
+      "configuration_duration_seconds": 3600,
+      "enabled": false,
+      "source_sha256": "c908816673c549fee696529f7349d04b51fe6720372837b2c841e019f96f2081",
+      "input_sha256": {
+        "tests/.gate-work/metal-v2-scheduled/performance-disabled-repeat/ne.txt": "9a34837721d069d1f300aba9d85785d6788f1a04a04f467003ddc731cc498c1f",
+        "tests/.gate-work/metal-v2-scheduled/performance-disabled-repeat/ns.txt": "dca055538b8c5ce407ba92aaca036dde18b93a39c0f5f4e442b49aba162caf08",
+        "tests/.gate-work/metal-v2-scheduled/performance-disabled-repeat/rivers.geojson": "b54cf771734ef30c531b6d70708716fe68d2c37e4a75f541af560f1e363729e4",
+        "tests/.gate-work/metal-v2-scheduled/performance-disabled-repeat/rivers.csv": "1cb1c8b6631c87852f6825dc15e137e9d3fa45fc4febc96b8710e255f0fb596a",
+        "tests/.gate-work/metal-v2-scheduled/performance-disabled-repeat/rain.tif": "c181cea416e9a19adee98f7d47f653e83d612c5a14cecaf514c863ac4d086cd9",
+        "tests/.gate-work/metal-v2-scheduled/performance-disabled-repeat/intervals.csv": "95b93bdc3e35355606b481f5f31d2699bc11804a7f277bcc2be96487b009608e",
+        "tests/.gate-work/metal-v2-scheduled/performance-disabled-repeat/seed.fdb": "cbe4fa6df4bfe43516eb9d27db2bc36c9bd062a8065eca7ddbf73fb5ea2c9a00"
+      },
+      "platform": "macOS-27.0.1-arm64-arm-64bit",
+      "harness_sha256": {
+        "gate_backend_validation.py": "64719eccfbc22a606bda53061232bff56a1a90d5a60e608e54e3031f987a0d69",
+        "gate_gpu_tools.py": "eb5f7d65b456c605d1066ebf260ac965ec3a5eda6b4fafaf37ebbf074cabe5bb",
+        "test_gate_solver.py": "0fff457e7dfc0943d8732a45646e97e5adc8a3bbf888a46972ccc0726d37d575"
+      },
+      "dependencies": {
+        "taichi": "1.7.4",
+        "fastdb4py": "0.2.4",
+        "numpy": "2.2.6",
+        "pydantic": "2.14.2",
+        "rasterio": "1.4.4"
+      },
+      "python": "3.10.17",
+      "gpu_window": {
+        "time": "2026-11-05T19:39:44.012928+08:00",
+        "solver_pids": [],
+        "allowed": true,
+        "policy": "No python main.py solver PID, or local time at/after 20:30"
+      },
+      "steps": 266,
+      "profile": {
+        "graph_batches": [
+          {
+            "seconds": 0.2617988749407232,
+            "steps": 2
+          },
+          {
+            "seconds": 0.0036251250421628356,
+            "steps": 2
+          },
+          {
+            "seconds": 0.0064671250293031335,
+            "steps": 32
+          },
+          {
+            "seconds": 0.006402374943718314,
+            "steps": 32
+          },
+          {
+            "seconds": 0.007035624934360385,
+            "steps": 32
+          },
+          {
+            "seconds": 0.006459624972194433,
+            "steps": 32
+          },
+          {
+            "seconds": 0.0064577090088278055,
+            "steps": 32
+          },
+          {
+            "seconds": 0.006426749983802438,
+            "steps": 32
+          },
+          {
+            "seconds": 0.006449250038713217,
+            "steps": 32
+          },
+          {
+            "seconds": 0.00641562498640269,
+            "steps": 32
+          },
+          {
+            "seconds": 0.0039276250172406435,
+            "steps": 6
+          }
+        ],
+        "steady_steps": 262,
+        "steady_graph_seconds": 0.05604170891456306,
+        "steady_graph_seconds_per_step": 0.00021389965234566054,
+        "timing_definition": "Synchronized device graph wall time, excluding first two batches; includes graph guards for unused batch slots; excludes preprocessing, compilation and host output work"
+      },
+      "memory": {
+        "metal_sampled_peak_allocated_bytes": 36110336,
+        "metal_allocation_samples": 12,
+        "process_peak_rss_bytes": 208420864,
+        "memory_definition": "MTLDevice.currentAllocatedSize: sampled device-resource allocation bytes; process RSS is unified-memory high water, not separate VRAM residency",
+        "gate_controller_logical_fields": {
+          "owned_logical_field_bytes": 0,
+          "diagnostic_accumulator_bytes": 0
+        }
+      },
+      "hashes": {
+        "depth": "ab024cd4bc19010697070173948c2e775f2e1b74494f8a29aaf019c41762b91b",
+        "q": "d5965d172bc0a9a30584e2e770b10d03410ff72cb5fbe33ed459a736558a24c4",
+        "bed": "c7bb863fcc649f32ed95b421155ae33803df3a40065d4ae365c454a026816466"
+      },
+      "global_budget": {
+        "time": "2023-09-07T08:02:00+00:00",
+        "elapsed_seconds": 120.0,
+        "phase": "simulation",
+        "rainfall_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "bed_clamp_nonlevel_m3": 0.0,
+        "bed_clamp_level_m3": 0.0,
+        "gate_bed_m3": 0.0,
+        "pipe_exchange_m3": 0.0,
+        "initial_storage_m3": 2240.000033378601,
+        "storage_m3": 6440.000033378601,
+        "residual_m3": 0.00069427490234375,
+        "relative_residual": 1.653035755023509e-07,
+        "level:rivers_m3": 4199.999305725098
+      },
+      "gate_control": null,
+      "restart": [],
+      "raw_manifest_sha256": "ccb868e63b15cd0b401b78fad21d0250ed8430ff9b42d832f878eb3006ce77df",
+      "manifest_timing_seconds": {
+        "preprocess_and_setup": 1.004887624992989,
+        "warmup": 0.0,
+        "simulation": 0.43358700000680983,
+        "warmup_per_step": null,
+        "simulation_per_step": 0.0016300263158150745
+      }
+    }
+  },
+  "disabled_seconds_per_step_range": [
+    0.00021254517118453637,
+    0.00021389965234566054
+  ],
+  "enabled_seconds_per_step": 0.0003621205993652068,
+  "per_step_ratio_to_disabled_mean": 1.6983233440026255,
+  "note": "Enabled flow changes the CFL step count. Per-step timings are measurements of these states, not an isolated instrumentation-overhead or full-event-runtime forecast."
+}

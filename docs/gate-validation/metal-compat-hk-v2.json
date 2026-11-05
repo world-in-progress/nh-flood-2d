@@ -1,0 +1,575 @@
+{
+  "case": "hk",
+  "backend": "metal",
+  "cpu_threads": 1,
+  "bitwise_equal": false,
+  "physics_bitwise_equal": true,
+  "results": {
+    "7648185": {
+      "hashes": {
+        "depth": "092c2483d9de9db75834f6d115966f1360c4689eb02a758499962ce4311ef39a",
+        "q": "49f88ba73295df7200e2ebc860d717ac5f4bf0a90c522bdb443f15dc75e0f2f0",
+        "bed": "90c3bb7c71daba58ef4f6bb9c96b6e31bb4918b906d3fbe7ba2ed973fdded090",
+        "dt_sequence": "58fcfc8fec4daf45b4138c366986c9459d0f7d8c54058ee407d5c0d6cc8343e8",
+        "trace": "1badb630d86ba722041d10bdc162e7bf893ce40fbbca30b57c9261e95a28082f",
+        "budget": "cf11c3607d85f30b65d80568bcd6e114477db5b8d9a917f02f0154ff24205b4f",
+        "mass_balance_csv": "cfbce2d4c47d7b15fe0ea4edac5b9cacf92e19873356c8510d46a167793aad77",
+        "step_statistics_csv": "f5a22ec80b17a7682cd4b703626acba3c0ac76cb704aee156509875be5da4e0b"
+      },
+      "steps": 9053,
+      "backend": "metal",
+      "device": "Apple M1 Max",
+      "duration": 3600,
+      "warmup_duration": 0,
+      "clock": [
+        921600,
+        0
+      ],
+      "nonzero_discharge_edges": 31479,
+      "source_sha256": "111d156cdfc1dc84e994200c450f1f6cc8abfacfdf58eba2dfca393c7a8f3c86",
+      "input_sha256": {
+        "<case-dir>/runs_final/Bnone-I/ne.txt": "28482e3575fb26fd6592bc1756701568e64562511441f09604bd08df8995c593",
+        "<case-dir>/runs_final/Bnone-I/ns.txt": "5af606e2547baf4b0fe2bf0747a0498f01fef77936276246c50babebf3cdcea6",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/tsim_bei_tsui.geojson": "2b8a312547ddfc655f08462eb323a3c0cb88e974216d434709308f167a8b1e4d",
+        "<case-dir>/domain_final/series/sea_level.csv": "f035c4a2f49cfaf1ae7b905a08bebb6d944efe2e68be2d1b4a7536f4f94bbde6",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/shenzhen_river.geojson": "8789cc7cd9d72a68a1e8e20c8c1b4052ebea20b0c5494ef36a16e96718b8a717",
+        "<case-dir>/domain_final/series/shenzhen_river.csv": "a9171ef0f4dc3cf283876f5e9ebcd275c7da200aa0cc5b79069a74b241313450",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/futian.geojson": "c13d709802d540bf541087891d3e15b3d0774cea493a185debc1178938928aac",
+        "<case-dir>/domain_final/series/futian.csv": "9571821211e18ceb67add18b99e0c4ba219e579be94d0945be2adc6032268043",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/huanggang.geojson": "b42c1bd832f941531731ad733ae9813e12d2d379ac180074670c23e202e872e9",
+        "<case-dir>/domain_final/series/huanggang.csv": "62ab32ca1986e19d54cd50bbcccf3ac5bc423078873c07174c023d0228918ccd",
+        "<case-dir>/data/rainfall_hourly/field/rain_idw_500m.tif": "aeef68422d005d61119d16293653b902cd157e123a173b68999ee1d100c0950b",
+        "<case-dir>/data/rainfall_hourly/field/rain_intervals.csv": "ba0d7c91cf90e0e9f784e18d80e4e098e4a0686b9f5250dfd2e3fbac971e4da7"
+      },
+      "platform": "macOS-27.0.1-arm64-arm-64bit",
+      "harness_sha256": "ae6e0933ce7d70e675b8e3393ae2784bc04021d116fcb582e4486e08f2499c38",
+      "python": "3.10.17",
+      "dependencies": {
+        "taichi": "1.7.4",
+        "fastdb4py": "0.2.4",
+        "numpy": "2.2.6",
+        "pydantic": "2.14.2",
+        "rasterio": "1.4.4"
+      },
+      "memory": {
+        "metal_sampled_peak_allocated_bytes": 201277440,
+        "metal_allocation_samples": 290,
+        "process_peak_rss_bytes": 977338368,
+        "memory_definition": "MTLDevice.currentAllocatedSize: sampled device-resource allocation bytes; process RSS is unified-memory high water, not separate VRAM residency"
+      }
+    },
+    "7648185-repeat2": {
+      "hashes": {
+        "depth": "092c2483d9de9db75834f6d115966f1360c4689eb02a758499962ce4311ef39a",
+        "q": "49f88ba73295df7200e2ebc860d717ac5f4bf0a90c522bdb443f15dc75e0f2f0",
+        "bed": "90c3bb7c71daba58ef4f6bb9c96b6e31bb4918b906d3fbe7ba2ed973fdded090",
+        "dt_sequence": "58fcfc8fec4daf45b4138c366986c9459d0f7d8c54058ee407d5c0d6cc8343e8",
+        "trace": "1badb630d86ba722041d10bdc162e7bf893ce40fbbca30b57c9261e95a28082f",
+        "budget": "327d18d4c98131cae7bdbf8a3024bff4468559c44d4c0b7223b6962313576c00",
+        "mass_balance_csv": "f669c964e34bc54acd43522daf9bb113fc8a6ca841a038fd670dba803120e53e",
+        "step_statistics_csv": "f5a22ec80b17a7682cd4b703626acba3c0ac76cb704aee156509875be5da4e0b"
+      },
+      "steps": 9053,
+      "backend": "metal",
+      "device": "Apple M1 Max",
+      "duration": 3600,
+      "warmup_duration": 0,
+      "clock": [
+        921600,
+        0
+      ],
+      "nonzero_discharge_edges": 31479,
+      "source_sha256": "111d156cdfc1dc84e994200c450f1f6cc8abfacfdf58eba2dfca393c7a8f3c86",
+      "input_sha256": {
+        "<case-dir>/runs_final/Bnone-I/ne.txt": "28482e3575fb26fd6592bc1756701568e64562511441f09604bd08df8995c593",
+        "<case-dir>/runs_final/Bnone-I/ns.txt": "5af606e2547baf4b0fe2bf0747a0498f01fef77936276246c50babebf3cdcea6",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/tsim_bei_tsui.geojson": "2b8a312547ddfc655f08462eb323a3c0cb88e974216d434709308f167a8b1e4d",
+        "<case-dir>/domain_final/series/sea_level.csv": "f035c4a2f49cfaf1ae7b905a08bebb6d944efe2e68be2d1b4a7536f4f94bbde6",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/shenzhen_river.geojson": "8789cc7cd9d72a68a1e8e20c8c1b4052ebea20b0c5494ef36a16e96718b8a717",
+        "<case-dir>/domain_final/series/shenzhen_river.csv": "a9171ef0f4dc3cf283876f5e9ebcd275c7da200aa0cc5b79069a74b241313450",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/futian.geojson": "c13d709802d540bf541087891d3e15b3d0774cea493a185debc1178938928aac",
+        "<case-dir>/domain_final/series/futian.csv": "9571821211e18ceb67add18b99e0c4ba219e579be94d0945be2adc6032268043",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/huanggang.geojson": "b42c1bd832f941531731ad733ae9813e12d2d379ac180074670c23e202e872e9",
+        "<case-dir>/domain_final/series/huanggang.csv": "62ab32ca1986e19d54cd50bbcccf3ac5bc423078873c07174c023d0228918ccd",
+        "<case-dir>/data/rainfall_hourly/field/rain_idw_500m.tif": "aeef68422d005d61119d16293653b902cd157e123a173b68999ee1d100c0950b",
+        "<case-dir>/data/rainfall_hourly/field/rain_intervals.csv": "ba0d7c91cf90e0e9f784e18d80e4e098e4a0686b9f5250dfd2e3fbac971e4da7"
+      },
+      "platform": "macOS-27.0.1-arm64-arm-64bit",
+      "harness_sha256": "ae6e0933ce7d70e675b8e3393ae2784bc04021d116fcb582e4486e08f2499c38",
+      "python": "3.10.17",
+      "dependencies": {
+        "taichi": "1.7.4",
+        "fastdb4py": "0.2.4",
+        "numpy": "2.2.6",
+        "pydantic": "2.14.2",
+        "rasterio": "1.4.4"
+      },
+      "memory": {
+        "metal_sampled_peak_allocated_bytes": 201277440,
+        "metal_allocation_samples": 290,
+        "process_peak_rss_bytes": 978173952,
+        "memory_definition": "MTLDevice.currentAllocatedSize: sampled device-resource allocation bytes; process RSS is unified-memory high water, not separate VRAM residency"
+      }
+    },
+    "candidate-no-gate": {
+      "hashes": {
+        "depth": "092c2483d9de9db75834f6d115966f1360c4689eb02a758499962ce4311ef39a",
+        "q": "49f88ba73295df7200e2ebc860d717ac5f4bf0a90c522bdb443f15dc75e0f2f0",
+        "bed": "90c3bb7c71daba58ef4f6bb9c96b6e31bb4918b906d3fbe7ba2ed973fdded090",
+        "dt_sequence": "58fcfc8fec4daf45b4138c366986c9459d0f7d8c54058ee407d5c0d6cc8343e8",
+        "trace": "1badb630d86ba722041d10bdc162e7bf893ce40fbbca30b57c9261e95a28082f",
+        "budget": "92eed45f74a8cfcba5d3a41ece2ddcb05b47990e002502c2c5d1f9a994ddfeef",
+        "mass_balance_csv": "f187c67d614ada52cd9214e70e118dfaffa869e9bdaecd235b9e187fc34c0834",
+        "step_statistics_csv": "f5a22ec80b17a7682cd4b703626acba3c0ac76cb704aee156509875be5da4e0b"
+      },
+      "steps": 9053,
+      "backend": "metal",
+      "device": "Apple M1 Max",
+      "duration": 3600,
+      "warmup_duration": 0,
+      "clock": [
+        921600,
+        0
+      ],
+      "nonzero_discharge_edges": 31479,
+      "source_sha256": "c908816673c549fee696529f7349d04b51fe6720372837b2c841e019f96f2081",
+      "input_sha256": {
+        "<case-dir>/runs_final/Bnone-I/ne.txt": "28482e3575fb26fd6592bc1756701568e64562511441f09604bd08df8995c593",
+        "<case-dir>/runs_final/Bnone-I/ns.txt": "5af606e2547baf4b0fe2bf0747a0498f01fef77936276246c50babebf3cdcea6",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/tsim_bei_tsui.geojson": "2b8a312547ddfc655f08462eb323a3c0cb88e974216d434709308f167a8b1e4d",
+        "<case-dir>/domain_final/series/sea_level.csv": "f035c4a2f49cfaf1ae7b905a08bebb6d944efe2e68be2d1b4a7536f4f94bbde6",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/shenzhen_river.geojson": "8789cc7cd9d72a68a1e8e20c8c1b4052ebea20b0c5494ef36a16e96718b8a717",
+        "<case-dir>/domain_final/series/shenzhen_river.csv": "a9171ef0f4dc3cf283876f5e9ebcd275c7da200aa0cc5b79069a74b241313450",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/futian.geojson": "c13d709802d540bf541087891d3e15b3d0774cea493a185debc1178938928aac",
+        "<case-dir>/domain_final/series/futian.csv": "9571821211e18ceb67add18b99e0c4ba219e579be94d0945be2adc6032268043",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/huanggang.geojson": "b42c1bd832f941531731ad733ae9813e12d2d379ac180074670c23e202e872e9",
+        "<case-dir>/domain_final/series/huanggang.csv": "62ab32ca1986e19d54cd50bbcccf3ac5bc423078873c07174c023d0228918ccd",
+        "<case-dir>/data/rainfall_hourly/field/rain_idw_500m.tif": "aeef68422d005d61119d16293653b902cd157e123a173b68999ee1d100c0950b",
+        "<case-dir>/data/rainfall_hourly/field/rain_intervals.csv": "ba0d7c91cf90e0e9f784e18d80e4e098e4a0686b9f5250dfd2e3fbac971e4da7"
+      },
+      "platform": "macOS-27.0.1-arm64-arm-64bit",
+      "harness_sha256": "ae6e0933ce7d70e675b8e3393ae2784bc04021d116fcb582e4486e08f2499c38",
+      "python": "3.10.17",
+      "dependencies": {
+        "taichi": "1.7.4",
+        "fastdb4py": "0.2.4",
+        "numpy": "2.2.6",
+        "pydantic": "2.14.2",
+        "rasterio": "1.4.4"
+      },
+      "memory": {
+        "metal_sampled_peak_allocated_bytes": 201277440,
+        "metal_allocation_samples": 290,
+        "process_peak_rss_bytes": 979255296,
+        "memory_definition": "MTLDevice.currentAllocatedSize: sampled device-resource allocation bytes; process RSS is unified-memory high water, not separate VRAM residency"
+      }
+    },
+    "candidate-disabled": {
+      "hashes": {
+        "depth": "092c2483d9de9db75834f6d115966f1360c4689eb02a758499962ce4311ef39a",
+        "q": "49f88ba73295df7200e2ebc860d717ac5f4bf0a90c522bdb443f15dc75e0f2f0",
+        "bed": "90c3bb7c71daba58ef4f6bb9c96b6e31bb4918b906d3fbe7ba2ed973fdded090",
+        "dt_sequence": "58fcfc8fec4daf45b4138c366986c9459d0f7d8c54058ee407d5c0d6cc8343e8",
+        "trace": "1badb630d86ba722041d10bdc162e7bf893ce40fbbca30b57c9261e95a28082f",
+        "budget": "683a69d524e9bc3fc88627a236ecf5b32eee9de5bf02339bca6fe02a99299267",
+        "mass_balance_csv": "590e2b9a0169da0fef5b716eb9cd92dc1c2afdce98999a2424cfc059da0f6034",
+        "step_statistics_csv": "f5a22ec80b17a7682cd4b703626acba3c0ac76cb704aee156509875be5da4e0b"
+      },
+      "steps": 9053,
+      "backend": "metal",
+      "device": "Apple M1 Max",
+      "duration": 3600,
+      "warmup_duration": 0,
+      "clock": [
+        921600,
+        0
+      ],
+      "nonzero_discharge_edges": 31479,
+      "source_sha256": "c908816673c549fee696529f7349d04b51fe6720372837b2c841e019f96f2081",
+      "input_sha256": {
+        "<case-dir>/runs_final/Bnone-I/ne.txt": "28482e3575fb26fd6592bc1756701568e64562511441f09604bd08df8995c593",
+        "<case-dir>/runs_final/Bnone-I/ns.txt": "5af606e2547baf4b0fe2bf0747a0498f01fef77936276246c50babebf3cdcea6",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/tsim_bei_tsui.geojson": "2b8a312547ddfc655f08462eb323a3c0cb88e974216d434709308f167a8b1e4d",
+        "<case-dir>/domain_final/series/sea_level.csv": "f035c4a2f49cfaf1ae7b905a08bebb6d944efe2e68be2d1b4a7536f4f94bbde6",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/shenzhen_river.geojson": "8789cc7cd9d72a68a1e8e20c8c1b4052ebea20b0c5494ef36a16e96718b8a717",
+        "<case-dir>/domain_final/series/shenzhen_river.csv": "a9171ef0f4dc3cf283876f5e9ebcd275c7da200aa0cc5b79069a74b241313450",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/futian.geojson": "c13d709802d540bf541087891d3e15b3d0774cea493a185debc1178938928aac",
+        "<case-dir>/domain_final/series/futian.csv": "9571821211e18ceb67add18b99e0c4ba219e579be94d0945be2adc6032268043",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/huanggang.geojson": "b42c1bd832f941531731ad733ae9813e12d2d379ac180074670c23e202e872e9",
+        "<case-dir>/domain_final/series/huanggang.csv": "62ab32ca1986e19d54cd50bbcccf3ac5bc423078873c07174c023d0228918ccd",
+        "<case-dir>/data/rainfall_hourly/field/rain_idw_500m.tif": "aeef68422d005d61119d16293653b902cd157e123a173b68999ee1d100c0950b",
+        "<case-dir>/data/rainfall_hourly/field/rain_intervals.csv": "ba0d7c91cf90e0e9f784e18d80e4e098e4a0686b9f5250dfd2e3fbac971e4da7"
+      },
+      "platform": "macOS-27.0.1-arm64-arm-64bit",
+      "harness_sha256": "ae6e0933ce7d70e675b8e3393ae2784bc04021d116fcb582e4486e08f2499c38",
+      "python": "3.10.17",
+      "dependencies": {
+        "taichi": "1.7.4",
+        "fastdb4py": "0.2.4",
+        "numpy": "2.2.6",
+        "pydantic": "2.14.2",
+        "rasterio": "1.4.4"
+      },
+      "memory": {
+        "metal_sampled_peak_allocated_bytes": 201277440,
+        "metal_allocation_samples": 290,
+        "process_peak_rss_bytes": 976945152,
+        "memory_definition": "MTLDevice.currentAllocatedSize: sampled device-resource allocation bytes; process RSS is unified-memory high water, not separate VRAM residency"
+      }
+    },
+    "7648185-repeat3": {
+      "hashes": {
+        "depth": "092c2483d9de9db75834f6d115966f1360c4689eb02a758499962ce4311ef39a",
+        "q": "49f88ba73295df7200e2ebc860d717ac5f4bf0a90c522bdb443f15dc75e0f2f0",
+        "bed": "90c3bb7c71daba58ef4f6bb9c96b6e31bb4918b906d3fbe7ba2ed973fdded090",
+        "dt_sequence": "58fcfc8fec4daf45b4138c366986c9459d0f7d8c54058ee407d5c0d6cc8343e8",
+        "trace": "1badb630d86ba722041d10bdc162e7bf893ce40fbbca30b57c9261e95a28082f",
+        "budget": "b30fa4a5f09480027c9773da27ba1a6d0da8456b06d06573e8d931a88abf5de0",
+        "mass_balance_csv": "6ad6d9d2b66d74cdb0eb12995c072f3fa0a084a792ccc3692ece16aed4ff1954",
+        "step_statistics_csv": "f5a22ec80b17a7682cd4b703626acba3c0ac76cb704aee156509875be5da4e0b"
+      },
+      "steps": 9053,
+      "backend": "metal",
+      "device": "Apple M1 Max",
+      "duration": 3600,
+      "warmup_duration": 0,
+      "clock": [
+        921600,
+        0
+      ],
+      "nonzero_discharge_edges": 31479,
+      "source_sha256": "111d156cdfc1dc84e994200c450f1f6cc8abfacfdf58eba2dfca393c7a8f3c86",
+      "input_sha256": {
+        "<case-dir>/runs_final/Bnone-I/ne.txt": "28482e3575fb26fd6592bc1756701568e64562511441f09604bd08df8995c593",
+        "<case-dir>/runs_final/Bnone-I/ns.txt": "5af606e2547baf4b0fe2bf0747a0498f01fef77936276246c50babebf3cdcea6",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/tsim_bei_tsui.geojson": "2b8a312547ddfc655f08462eb323a3c0cb88e974216d434709308f167a8b1e4d",
+        "<case-dir>/domain_final/series/sea_level.csv": "f035c4a2f49cfaf1ae7b905a08bebb6d944efe2e68be2d1b4a7536f4f94bbde6",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/shenzhen_river.geojson": "8789cc7cd9d72a68a1e8e20c8c1b4052ebea20b0c5494ef36a16e96718b8a717",
+        "<case-dir>/domain_final/series/shenzhen_river.csv": "a9171ef0f4dc3cf283876f5e9ebcd275c7da200aa0cc5b79069a74b241313450",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/futian.geojson": "c13d709802d540bf541087891d3e15b3d0774cea493a185debc1178938928aac",
+        "<case-dir>/domain_final/series/futian.csv": "9571821211e18ceb67add18b99e0c4ba219e579be94d0945be2adc6032268043",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/huanggang.geojson": "b42c1bd832f941531731ad733ae9813e12d2d379ac180074670c23e202e872e9",
+        "<case-dir>/domain_final/series/huanggang.csv": "62ab32ca1986e19d54cd50bbcccf3ac5bc423078873c07174c023d0228918ccd",
+        "<case-dir>/data/rainfall_hourly/field/rain_idw_500m.tif": "aeef68422d005d61119d16293653b902cd157e123a173b68999ee1d100c0950b",
+        "<case-dir>/data/rainfall_hourly/field/rain_intervals.csv": "ba0d7c91cf90e0e9f784e18d80e4e098e4a0686b9f5250dfd2e3fbac971e4da7"
+      },
+      "platform": "macOS-27.0.1-arm64-arm-64bit",
+      "harness_sha256": "ae6e0933ce7d70e675b8e3393ae2784bc04021d116fcb582e4486e08f2499c38",
+      "python": "3.10.17",
+      "dependencies": {
+        "taichi": "1.7.4",
+        "fastdb4py": "0.2.4",
+        "numpy": "2.2.6",
+        "pydantic": "2.14.2",
+        "rasterio": "1.4.4"
+      },
+      "memory": {
+        "metal_sampled_peak_allocated_bytes": 201277440,
+        "metal_allocation_samples": 290,
+        "process_peak_rss_bytes": 979075072,
+        "memory_definition": "MTLDevice.currentAllocatedSize: sampled device-resource allocation bytes; process RSS is unified-memory high water, not separate VRAM residency"
+      }
+    },
+    "7648185-repeat4": {
+      "hashes": {
+        "depth": "092c2483d9de9db75834f6d115966f1360c4689eb02a758499962ce4311ef39a",
+        "q": "49f88ba73295df7200e2ebc860d717ac5f4bf0a90c522bdb443f15dc75e0f2f0",
+        "bed": "90c3bb7c71daba58ef4f6bb9c96b6e31bb4918b906d3fbe7ba2ed973fdded090",
+        "dt_sequence": "58fcfc8fec4daf45b4138c366986c9459d0f7d8c54058ee407d5c0d6cc8343e8",
+        "trace": "1badb630d86ba722041d10bdc162e7bf893ce40fbbca30b57c9261e95a28082f",
+        "budget": "a03dd071e0644749caa81f6ab18bea22e44e3e83ad3c7a5bec9675c6e475477f",
+        "mass_balance_csv": "4b33f867b9dad29b7cfa29b7d88ec6cecd5db5b9b8865ac8fa1b74b466130903",
+        "step_statistics_csv": "f5a22ec80b17a7682cd4b703626acba3c0ac76cb704aee156509875be5da4e0b"
+      },
+      "steps": 9053,
+      "backend": "metal",
+      "device": "Apple M1 Max",
+      "duration": 3600,
+      "warmup_duration": 0,
+      "clock": [
+        921600,
+        0
+      ],
+      "nonzero_discharge_edges": 31479,
+      "source_sha256": "111d156cdfc1dc84e994200c450f1f6cc8abfacfdf58eba2dfca393c7a8f3c86",
+      "input_sha256": {
+        "<case-dir>/runs_final/Bnone-I/ne.txt": "28482e3575fb26fd6592bc1756701568e64562511441f09604bd08df8995c593",
+        "<case-dir>/runs_final/Bnone-I/ns.txt": "5af606e2547baf4b0fe2bf0747a0498f01fef77936276246c50babebf3cdcea6",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/tsim_bei_tsui.geojson": "2b8a312547ddfc655f08462eb323a3c0cb88e974216d434709308f167a8b1e4d",
+        "<case-dir>/domain_final/series/sea_level.csv": "f035c4a2f49cfaf1ae7b905a08bebb6d944efe2e68be2d1b4a7536f4f94bbde6",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/shenzhen_river.geojson": "8789cc7cd9d72a68a1e8e20c8c1b4052ebea20b0c5494ef36a16e96718b8a717",
+        "<case-dir>/domain_final/series/shenzhen_river.csv": "a9171ef0f4dc3cf283876f5e9ebcd275c7da200aa0cc5b79069a74b241313450",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/futian.geojson": "c13d709802d540bf541087891d3e15b3d0774cea493a185debc1178938928aac",
+        "<case-dir>/domain_final/series/futian.csv": "9571821211e18ceb67add18b99e0c4ba219e579be94d0945be2adc6032268043",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/huanggang.geojson": "b42c1bd832f941531731ad733ae9813e12d2d379ac180074670c23e202e872e9",
+        "<case-dir>/domain_final/series/huanggang.csv": "62ab32ca1986e19d54cd50bbcccf3ac5bc423078873c07174c023d0228918ccd",
+        "<case-dir>/data/rainfall_hourly/field/rain_idw_500m.tif": "aeef68422d005d61119d16293653b902cd157e123a173b68999ee1d100c0950b",
+        "<case-dir>/data/rainfall_hourly/field/rain_intervals.csv": "ba0d7c91cf90e0e9f784e18d80e4e098e4a0686b9f5250dfd2e3fbac971e4da7"
+      },
+      "platform": "macOS-27.0.1-arm64-arm-64bit",
+      "harness_sha256": "ae6e0933ce7d70e675b8e3393ae2784bc04021d116fcb582e4486e08f2499c38",
+      "python": "3.10.17",
+      "dependencies": {
+        "taichi": "1.7.4",
+        "fastdb4py": "0.2.4",
+        "numpy": "2.2.6",
+        "pydantic": "2.14.2",
+        "rasterio": "1.4.4"
+      },
+      "memory": {
+        "metal_sampled_peak_allocated_bytes": 201277440,
+        "metal_allocation_samples": 290,
+        "process_peak_rss_bytes": 977420288,
+        "memory_definition": "MTLDevice.currentAllocatedSize: sampled device-resource allocation bytes; process RSS is unified-memory high water, not separate VRAM residency"
+      }
+    },
+    "7648185-repeat5": {
+      "hashes": {
+        "depth": "092c2483d9de9db75834f6d115966f1360c4689eb02a758499962ce4311ef39a",
+        "q": "49f88ba73295df7200e2ebc860d717ac5f4bf0a90c522bdb443f15dc75e0f2f0",
+        "bed": "90c3bb7c71daba58ef4f6bb9c96b6e31bb4918b906d3fbe7ba2ed973fdded090",
+        "dt_sequence": "58fcfc8fec4daf45b4138c366986c9459d0f7d8c54058ee407d5c0d6cc8343e8",
+        "trace": "1badb630d86ba722041d10bdc162e7bf893ce40fbbca30b57c9261e95a28082f",
+        "budget": "d5e92da963080280b76808b8df79d12b1206cccb904dfec80fc3b327a50392c0",
+        "mass_balance_csv": "7aa312c4a2308a55731386c4fe143bdea89291f4a69a2afdba1bd7b9bd6be051",
+        "step_statistics_csv": "f5a22ec80b17a7682cd4b703626acba3c0ac76cb704aee156509875be5da4e0b"
+      },
+      "steps": 9053,
+      "backend": "metal",
+      "device": "Apple M1 Max",
+      "duration": 3600,
+      "warmup_duration": 0,
+      "clock": [
+        921600,
+        0
+      ],
+      "nonzero_discharge_edges": 31479,
+      "source_sha256": "111d156cdfc1dc84e994200c450f1f6cc8abfacfdf58eba2dfca393c7a8f3c86",
+      "input_sha256": {
+        "<case-dir>/runs_final/Bnone-I/ne.txt": "28482e3575fb26fd6592bc1756701568e64562511441f09604bd08df8995c593",
+        "<case-dir>/runs_final/Bnone-I/ns.txt": "5af606e2547baf4b0fe2bf0747a0498f01fef77936276246c50babebf3cdcea6",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/tsim_bei_tsui.geojson": "2b8a312547ddfc655f08462eb323a3c0cb88e974216d434709308f167a8b1e4d",
+        "<case-dir>/domain_final/series/sea_level.csv": "f035c4a2f49cfaf1ae7b905a08bebb6d944efe2e68be2d1b4a7536f4f94bbde6",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/shenzhen_river.geojson": "8789cc7cd9d72a68a1e8e20c8c1b4052ebea20b0c5494ef36a16e96718b8a717",
+        "<case-dir>/domain_final/series/shenzhen_river.csv": "a9171ef0f4dc3cf283876f5e9ebcd275c7da200aa0cc5b79069a74b241313450",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/futian.geojson": "c13d709802d540bf541087891d3e15b3d0774cea493a185debc1178938928aac",
+        "<case-dir>/domain_final/series/futian.csv": "9571821211e18ceb67add18b99e0c4ba219e579be94d0945be2adc6032268043",
+        "<case-dir>/runs_formal/Bnone-I/config/boundaries/huanggang.geojson": "b42c1bd832f941531731ad733ae9813e12d2d379ac180074670c23e202e872e9",
+        "<case-dir>/domain_final/series/huanggang.csv": "62ab32ca1986e19d54cd50bbcccf3ac5bc423078873c07174c023d0228918ccd",
+        "<case-dir>/data/rainfall_hourly/field/rain_idw_500m.tif": "aeef68422d005d61119d16293653b902cd157e123a173b68999ee1d100c0950b",
+        "<case-dir>/data/rainfall_hourly/field/rain_intervals.csv": "ba0d7c91cf90e0e9f784e18d80e4e098e4a0686b9f5250dfd2e3fbac971e4da7"
+      },
+      "platform": "macOS-27.0.1-arm64-arm-64bit",
+      "harness_sha256": "ae6e0933ce7d70e675b8e3393ae2784bc04021d116fcb582e4486e08f2499c38",
+      "python": "3.10.17",
+      "dependencies": {
+        "taichi": "1.7.4",
+        "fastdb4py": "0.2.4",
+        "numpy": "2.2.6",
+        "pydantic": "2.14.2",
+        "rasterio": "1.4.4"
+      },
+      "memory": {
+        "metal_sampled_peak_allocated_bytes": 201277440,
+        "metal_allocation_samples": 290,
+        "process_peak_rss_bytes": 976650240,
+        "memory_definition": "MTLDevice.currentAllocatedSize: sampled device-resource allocation bytes; process RSS is unified-memory high water, not separate VRAM residency"
+      }
+    }
+  },
+  "gpu_window": {
+    "time": "2026-11-05T19:35:11.702333+08:00",
+    "solver_pids": [],
+    "allowed": true,
+    "policy": "No python main.py solver PID, or local time at/after 20:30"
+  },
+  "budget_variability": {
+    "reference_repeat_max_abs_by_field": {
+      "elapsed_seconds": 0.0,
+      "rainfall_m3": 0.0,
+      "infiltration_m3": 0.0001490070717409253,
+      "level:sea_m3": 0.0,
+      "discharge:shenzhen_river_m3": 2.3245811462402344e-05,
+      "discharge:futian_m3": 0.0,
+      "discharge:huanggang_m3": 0.0,
+      "requested_discharge:shenzhen_river_m3": 0.0,
+      "requested_discharge:futian_m3": 0.0,
+      "requested_discharge:huanggang_m3": 0.0,
+      "bed_clamp_nonlevel_m3": 0.0,
+      "bed_clamp_level_m3": 0.0,
+      "gate_bed_m3": 0.0,
+      "pipe_exchange_m3": 0.0,
+      "initial_storage_m3": 0.0,
+      "storage_m3": 0.0,
+      "residual_m3": 0.00014352798461914062,
+      "relative_residual": 1.1268396017501315e-12
+    },
+    "max_abs_difference_by_field": {
+      "7648185-repeat2": {
+        "elapsed_seconds": 0.0,
+        "rainfall_m3": 0.0,
+        "infiltration_m3": 0.0001490070717409253,
+        "level:sea_m3": 0.0,
+        "discharge:shenzhen_river_m3": 1.7881393432617188e-05,
+        "discharge:futian_m3": 0.0,
+        "discharge:huanggang_m3": 0.0,
+        "requested_discharge:shenzhen_river_m3": 0.0,
+        "requested_discharge:futian_m3": 0.0,
+        "requested_discharge:huanggang_m3": 0.0,
+        "bed_clamp_nonlevel_m3": 0.0,
+        "bed_clamp_level_m3": 0.0,
+        "gate_bed_m3": 0.0,
+        "pipe_exchange_m3": 0.0,
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "residual_m3": 0.00014352798461914062,
+        "relative_residual": 9.436712554031341e-13
+      },
+      "7648185-repeat3": {
+        "elapsed_seconds": 0.0,
+        "rainfall_m3": 0.0,
+        "infiltration_m3": 6.723872502334416e-05,
+        "level:sea_m3": 0.0,
+        "discharge:shenzhen_river_m3": 1.2278556823730469e-05,
+        "discharge:futian_m3": 0.0,
+        "discharge:huanggang_m3": 0.0,
+        "requested_discharge:shenzhen_river_m3": 0.0,
+        "requested_discharge:futian_m3": 0.0,
+        "requested_discharge:huanggang_m3": 0.0,
+        "bed_clamp_nonlevel_m3": 0.0,
+        "bed_clamp_level_m3": 0.0,
+        "gate_bed_m3": 0.0,
+        "pipe_exchange_m3": 0.0,
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "residual_m3": 7.18832015991211e-05,
+        "relative_residual": 9.041220031419481e-13
+      },
+      "7648185-repeat4": {
+        "elapsed_seconds": 0.0,
+        "rainfall_m3": 0.0,
+        "infiltration_m3": 8.95291450433433e-05,
+        "level:sea_m3": 0.0,
+        "discharge:shenzhen_river_m3": 2.3245811462402344e-05,
+        "discharge:futian_m3": 0.0,
+        "discharge:huanggang_m3": 0.0,
+        "requested_discharge:shenzhen_river_m3": 0.0,
+        "requested_discharge:futian_m3": 0.0,
+        "requested_discharge:huanggang_m3": 0.0,
+        "bed_clamp_nonlevel_m3": 0.0,
+        "bed_clamp_level_m3": 0.0,
+        "gate_bed_m3": 0.0,
+        "pipe_exchange_m3": 0.0,
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "residual_m3": 0.00010704994201660156,
+        "relative_residual": 1.0197678195416397e-12
+      },
+      "7648185-repeat5": {
+        "elapsed_seconds": 0.0,
+        "rainfall_m3": 0.0,
+        "infiltration_m3": 0.00011403748067095876,
+        "level:sea_m3": 0.0,
+        "discharge:shenzhen_river_m3": 2.0265579223632812e-05,
+        "discharge:futian_m3": 0.0,
+        "discharge:huanggang_m3": 0.0,
+        "requested_discharge:shenzhen_river_m3": 0.0,
+        "requested_discharge:futian_m3": 0.0,
+        "requested_discharge:huanggang_m3": 0.0,
+        "bed_clamp_nonlevel_m3": 0.0,
+        "bed_clamp_level_m3": 0.0,
+        "gate_bed_m3": 0.0,
+        "pipe_exchange_m3": 0.0,
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "residual_m3": 9.375810623168945e-05,
+        "relative_residual": 1.1268396017501315e-12
+      },
+      "candidate-no-gate": {
+        "elapsed_seconds": 0.0,
+        "rainfall_m3": 0.0,
+        "infiltration_m3": 0.00014772143913432956,
+        "level:sea_m3": 0.0,
+        "discharge:shenzhen_river_m3": 1.430511474609375e-05,
+        "discharge:futian_m3": 0.0,
+        "discharge:huanggang_m3": 0.0,
+        "requested_discharge:shenzhen_river_m3": 0.0,
+        "requested_discharge:futian_m3": 0.0,
+        "requested_discharge:huanggang_m3": 0.0,
+        "bed_clamp_nonlevel_m3": 0.0,
+        "bed_clamp_level_m3": 0.0,
+        "gate_bed_m3": 0.0,
+        "pipe_exchange_m3": 0.0,
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "residual_m3": 0.00015822052955627441,
+        "relative_residual": 1.040272155022622e-12
+      },
+      "candidate-disabled": {
+        "elapsed_seconds": 0.0,
+        "rainfall_m3": 0.0,
+        "infiltration_m3": 4.3223932152614e-05,
+        "level:sea_m3": 0.0,
+        "discharge:shenzhen_river_m3": 3.409385681152344e-05,
+        "discharge:futian_m3": 0.0,
+        "discharge:huanggang_m3": 0.0,
+        "requested_discharge:shenzhen_river_m3": 0.0,
+        "requested_discharge:futian_m3": 0.0,
+        "requested_discharge:huanggang_m3": 0.0,
+        "bed_clamp_nonlevel_m3": 0.0,
+        "bed_clamp_level_m3": 0.0,
+        "gate_bed_m3": 0.0,
+        "pipe_exchange_m3": 0.0,
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "residual_m3": 7.256865501403809e-05,
+        "relative_residual": 7.086605860342176e-13
+      }
+    },
+    "fields_outside_measured_reference_spread": {
+      "candidate-no-gate": [
+        "residual_m3"
+      ],
+      "candidate-disabled": [
+        "discharge:shenzhen_river_m3"
+      ]
+    },
+    "note": "Measured finite-sample spread, not a bound on all GPU reduction schedules. Any fields outside the observed spread are listed explicitly.",
+    "reference_five_run_peak_to_peak_m3": {
+      "elapsed_seconds": 0.0,
+      "rainfall_m3": 0.0,
+      "infiltration_m3": 0.00022774026729166508,
+      "level:sea_m3": 0.0,
+      "discharge:shenzhen_river_m3": 2.5391578674316406e-05,
+      "discharge:futian_m3": 0.0,
+      "discharge:huanggang_m3": 0.0,
+      "requested_discharge:shenzhen_river_m3": 0.0,
+      "requested_discharge:futian_m3": 0.0,
+      "requested_discharge:huanggang_m3": 0.0,
+      "bed_clamp_nonlevel_m3": 0.0,
+      "bed_clamp_level_m3": 0.0,
+      "gate_bed_m3": 0.0,
+      "pipe_exchange_m3": 0.0,
+      "initial_storage_m3": 0.0,
+      "storage_m3": 0.0,
+      "residual_m3": 0.0002283155918121338,
+      "relative_residual": 1.752184063054622e-12
+    },
+    "candidate_rows_outside_pointwise_five_run_band": {
+      "candidate-no-gate": {
+        "infiltration_m3": 5,
+        "discharge:shenzhen_river_m3": 4,
+        "residual_m3": 6,
+        "relative_residual": 6
+      },
+      "candidate-disabled": {
+        "discharge:shenzhen_river_m3": 11,
+        "residual_m3": 1,
+        "relative_residual": 1
+      }
+    }
+  },
+  "reference_repeat_count": 5,
+  "additional_repeat_note": "Three fixed additional original runs after the initial four-way comparison; all results retained.",
+  "interpretation": "Physics and traces are bitwise equal; GPU F32 diagnostics are not. Fieldwise finite-sample outliers are retained, not declared bitwise compatible."
+}

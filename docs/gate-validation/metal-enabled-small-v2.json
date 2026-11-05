@@ -1,0 +1,325 @@
+{
+  "case": "small",
+  "backend": "metal",
+  "device": "Apple M1 Max",
+  "simulated_end_seconds": 7.0,
+  "configuration_duration_seconds": 3600,
+  "enabled": true,
+  "source_sha256": "c908816673c549fee696529f7349d04b51fe6720372837b2c841e019f96f2081",
+  "input_sha256": {
+    "tests/.gate-work/metal-v2-scheduled/enabled-small/ne.txt": "71b569972a87b050e5c9fd9c4b604fe5b6318a31638cb08edf8a4d4b6f75c594",
+    "tests/.gate-work/metal-v2-scheduled/enabled-small/ns.txt": "82fc1d1bee62bb41099f8c6a710df3ed34819077b6ca16dcd0825510f759a93e",
+    "tests/.gate-work/metal-v2-scheduled/enabled-small/level.geojson": "b0c084c330e990c44da51d56f1d0cb1cfd501ce11f9cd046205bd3eeaa149fd6",
+    "tests/.gate-work/metal-v2-scheduled/enabled-small/level.csv": "1cb1c8b6631c87852f6825dc15e137e9d3fa45fc4febc96b8710e255f0fb596a",
+    "tests/.gate-work/metal-v2-scheduled/enabled-small/rain.tif": "d71fe553f620edfaa773d486df1b722defd620d95f5ff688ef267005f82b8b8f",
+    "tests/.gate-work/metal-v2-scheduled/enabled-small/intervals.csv": "95b93bdc3e35355606b481f5f31d2699bc11804a7f277bcc2be96487b009608e",
+    "tests/.gate-work/metal-v2-scheduled/enabled-small/seed.fdb": "650989d78e74626d4468f1089301ac48cd7513c2ec1957f63e8803775d5da767"
+  },
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "harness_sha256": {
+    "gate_backend_validation.py": "64719eccfbc22a606bda53061232bff56a1a90d5a60e608e54e3031f987a0d69",
+    "gate_gpu_tools.py": "eb5f7d65b456c605d1066ebf260ac965ec3a5eda6b4fafaf37ebbf074cabe5bb",
+    "test_gate_solver.py": "0fff457e7dfc0943d8732a45646e97e5adc8a3bbf888a46972ccc0726d37d575"
+  },
+  "dependencies": {
+    "taichi": "1.7.4",
+    "fastdb4py": "0.2.4",
+    "numpy": "2.2.6",
+    "pydantic": "2.14.2",
+    "rasterio": "1.4.4"
+  },
+  "python": "3.10.17",
+  "gpu_window": {
+    "time": "2026-11-05T19:34:15.584838+08:00",
+    "solver_pids": [],
+    "allowed": true,
+    "policy": "No python main.py solver PID, or local time at/after 20:30"
+  },
+  "steps": 8,
+  "profile": {
+    "graph_batches": [
+      {
+        "seconds": 0.4435147090116516,
+        "steps": 1
+      },
+      {
+        "seconds": 0.004245416959747672,
+        "steps": 1
+      },
+      {
+        "seconds": 0.0032688750652596354,
+        "steps": 1
+      },
+      {
+        "seconds": 0.0034733329666778445,
+        "steps": 1
+      },
+      {
+        "seconds": 0.0033121249871328473,
+        "steps": 1
+      },
+      {
+        "seconds": 0.003399500041268766,
+        "steps": 1
+      },
+      {
+        "seconds": 0.003296000068075955,
+        "steps": 2
+      }
+    ],
+    "steady_steps": 6,
+    "steady_graph_seconds": 0.016749833128415048,
+    "steady_graph_seconds_per_step": 0.0027916388547358415,
+    "timing_definition": "Synchronized device graph wall time, excluding first two batches; includes graph guards for unused batch slots; excludes preprocessing, compilation and host output work"
+  },
+  "memory": {
+    "metal_sampled_peak_allocated_bytes": 35258368,
+    "metal_allocation_samples": 8,
+    "process_peak_rss_bytes": 205701120,
+    "memory_definition": "MTLDevice.currentAllocatedSize: sampled device-resource allocation bytes; process RSS is unified-memory high water, not separate VRAM residency",
+    "gate_controller_logical_fields": {
+      "owned_logical_field_bytes": 3000,
+      "diagnostic_accumulator_bytes": 2812,
+      "diagnostic_terms": 18,
+      "accumulator_word_count": 19
+    }
+  },
+  "hashes": {
+    "depth": "fa7e8e3f1c249d62052eec1af1c5232c1e9492b658804b3b3c56e39a709991ea",
+    "q": "f6016c30a85d0e6a9914994ea9f09abd2f0f4a81a89c4858fd013185a4982cec",
+    "bed": "e6504e0633f6d8e09e15dd159e7f97188a8734aced51a9df36c28310f47f8b98"
+  },
+  "global_budget": {
+    "time": "2023-09-07T08:00:07+00:00",
+    "elapsed_seconds": 7.0,
+    "phase": "simulation",
+    "rainfall_m3": 0.0,
+    "infiltration_m3": 0.0,
+    "bed_clamp_nonlevel_m3": 0.0,
+    "bed_clamp_level_m3": 0.0,
+    "gate_bed_m3": 0.0,
+    "pipe_exchange_m3": 0.0,
+    "initial_storage_m3": 80.0000011920929,
+    "storage_m3": 342.417848110199,
+    "residual_m3": 7.867813110351562e-06,
+    "relative_residual": 2.9982005563439145e-08,
+    "level:river_m3": 262.41783905029297
+  },
+  "gate_control": {
+    "enabled": true,
+    "trigger_level": 1.5,
+    "pond_land_type": 10,
+    "opening_seconds": 2.875,
+    "open_elevation": 0.13,
+    "clock_origin_before_start_s": 0.0,
+    "clock_quantum_s": 9.094947017729282e-13,
+    "first_effective_flow_definition": "End of first completed step with nonzero post-limiter gate-to-pond subedge volume in either direction",
+    "gates": [
+      {
+        "name": "A",
+        "command_clock_ticks": [
+          512,
+          0
+        ],
+        "control_cell": 1,
+        "command_seconds": 2.0,
+        "first_effective_flow_seconds": 6.0,
+        "fully_open_seconds": 4.875,
+        "first_fully_open_sample_seconds": 5.0,
+        "scheduled_fully_open_seconds": 4.875,
+        "pond_in_m3": 1.5687357187271118,
+        "pond_out_m3": 0.1332116574048996,
+        "pond_net_m3": 1.4355240613222122,
+        "river_in_m3": 112.41783905029297,
+        "river_out_m3": 0.0,
+        "channel_storage_m3": 110.9823226928711,
+        "channel_budget": {
+          "initial_storage_m3": 0.0,
+          "storage_m3": 110.9823226928711,
+          "river_net_m3": 112.41783905029297,
+          "pond_net_m3": 1.4355240613222122,
+          "rain_m3": 0.0,
+          "infiltration_m3": 0.0,
+          "positivity_m3": 0.0,
+          "pipe_m3": 0.0,
+          "boundary_m3": 0.0,
+          "rounding_m3": 7.450580596923828e-06,
+          "residual_m3": 2.5331974029541016e-07
+        },
+        "cell_count": 1,
+        "membership_sha256": "26b25d457597a7b0463f9620f666dd10aa2c4373a505967c7c8d70922a2d6ece",
+        "closed_bed_sha256": "adc6bd4662754f47b88b5564159334cc4077e337f512fa8ce6e6511c259d0b25",
+        "closed_bed_min_m": 3.125,
+        "closed_bed_max_m": 3.125
+      }
+    ],
+    "pond_budget": {
+      "initial_storage_m3": 30.000001192092896,
+      "storage_m3": 31.43552541732788,
+      "overtopping_in_m3": 0.0,
+      "overtopping_out_m3": 0.0,
+      "rain_m3": 0.0,
+      "infiltration_m3": 0.0,
+      "positivity_m3": 0.0,
+      "pipe_m3": 0.0,
+      "boundary_m3": 0.0,
+      "rounding_m3": 2.0954757928848267e-07,
+      "residual_m3": -4.563480615615845e-08
+    }
+  },
+  "restart": [
+    {
+      "phase": "before",
+      "split_seconds": 1.0,
+      "physical_state_bitwise_equal": {
+        "depth": true,
+        "q": true,
+        "bed": true,
+        "rain_time": true,
+        "infiltration": true,
+        "max_depth": true,
+        "max_speed": true,
+        "first_time_hi": true,
+        "first_time_lo": true
+      },
+      "control_state_equal_without_budget": true,
+      "initial_restored_budget_units_exact": true,
+      "cumulative_budget_units_equal": true,
+      "max_budget_term_difference_m3": 0.0,
+      "budget_term_differences_m3": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "resumed_pond_residual_m3": -4.563480615615845e-08,
+      "resumed_channel_residuals_m3": {
+        "A": 2.5331974029541016e-07
+      },
+      "replay_bitwise_equal": true,
+      "replay_max_abs_error_m": 0.0,
+      "replay_absolute_bound_m": 1.4901161193847656e-06
+    },
+    {
+      "phase": "during",
+      "split_seconds": 3.0,
+      "physical_state_bitwise_equal": {
+        "depth": true,
+        "q": true,
+        "bed": true,
+        "rain_time": true,
+        "infiltration": true,
+        "max_depth": true,
+        "max_speed": true,
+        "first_time_hi": true,
+        "first_time_lo": true
+      },
+      "control_state_equal_without_budget": true,
+      "initial_restored_budget_units_exact": true,
+      "cumulative_budget_units_equal": true,
+      "max_budget_term_difference_m3": 0.0,
+      "budget_term_differences_m3": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "resumed_pond_residual_m3": -4.563480615615845e-08,
+      "resumed_channel_residuals_m3": {
+        "A": 2.5331974029541016e-07
+      },
+      "replay_bitwise_equal": false,
+      "replay_max_abs_error_m": 2.384185791015625e-07,
+      "replay_absolute_bound_m": 9.933761475622305e-07
+    },
+    {
+      "phase": "after",
+      "split_seconds": 6.0,
+      "physical_state_bitwise_equal": {
+        "depth": true,
+        "q": true,
+        "bed": true,
+        "rain_time": true,
+        "infiltration": true,
+        "max_depth": true,
+        "max_speed": true,
+        "first_time_hi": true,
+        "first_time_lo": true
+      },
+      "control_state_equal_without_budget": true,
+      "initial_restored_budget_units_exact": true,
+      "cumulative_budget_units_equal": true,
+      "max_budget_term_difference_m3": 0.0,
+      "budget_term_differences_m3": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "resumed_pond_residual_m3": -4.563480615615845e-08,
+      "resumed_channel_residuals_m3": {
+        "A": 2.5331974029541016e-07
+      },
+      "replay_bitwise_equal": true,
+      "replay_max_abs_error_m": 0.0,
+      "replay_absolute_bound_m": 4.76837158203125e-07
+    }
+  ],
+  "closure_tolerances_m3": {
+    "global_volume": 0.0006848356962203979,
+    "pond_volume": 6.287105083465575e-05,
+    "channels": {
+      "A": 0.00022770672622323036
+    }
+  },
+  "raw_manifest_sha256": "d0ef010d66bd09ae67ce5bf4bb559e7c1cffecebf314c6ec1ac63d2f643a090b",
+  "manifest_timing_seconds": {
+    "preprocess_and_setup": 1.0564613750902936,
+    "warmup": 0.0,
+    "simulation": 0.6569358749547973,
+    "warmup_per_step": null,
+    "simulation_per_step": 0.08211698436934967
+  }
+}

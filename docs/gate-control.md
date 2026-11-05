@@ -109,8 +109,9 @@ cell IDs, closed bed elevations, control cell, exact command clock words,
 cumulative exchange. `scheduled_fully_open_seconds` is `command + duration`;
 `fully_open_seconds` remains null until the run has reached that time.
 `first_fully_open_sample_seconds` separately records the first solver clock
-at which the bed was actually evaluated as fully open; this can be later if
-the continuous completion time lies inside a step.
+at which the bed was actually evaluated as fully open. It can be later when
+completion lies inside a step; F32 age/proportion rounding can also make a
+near-end sample meet the full-opening condition slightly before that endpoint.
 
 First effective flow means the **end of the first completed step with any nonzero
 post-limiter volume across a gate–pond subedge, in either direction**. It does not

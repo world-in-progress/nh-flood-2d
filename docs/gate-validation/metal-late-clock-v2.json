@@ -1,0 +1,123 @@
+{
+  "tests_passed": 2,
+  "results": [
+    {
+      "backend": "metal",
+      "command_seconds": 30000.0,
+      "duration_seconds": 1800,
+      "sample_count": 1803,
+      "max_replay_error_m": 9.5367431640625e-07,
+      "absolute_bound_m": 4.76837158203125e-06,
+      "bitwise_equal": false,
+      "gate": {
+        "name": "A",
+        "cell_ids": [
+          1
+        ],
+        "closed_elevation": [
+          10.0
+        ],
+        "command_clock_ticks": [
+          7680000,
+          0
+        ],
+        "control_cell": 2,
+        "command_seconds": 30000.0,
+        "first_effective_flow_seconds": null,
+        "fully_open_seconds": 31800.0,
+        "first_fully_open_sample_seconds": 31800.0,
+        "scheduled_fully_open_seconds": 31800.0,
+        "pond_in_m3": 0.0,
+        "pond_out_m3": 0.0,
+        "pond_net_m3": 0.0,
+        "river_in_m3": 0.0,
+        "river_out_m3": 0.0,
+        "channel_storage_m3": 0.0,
+        "channel_budget": {
+          "initial_storage_m3": 0.0,
+          "storage_m3": 0.0,
+          "river_net_m3": 0.0,
+          "pond_net_m3": 0.0,
+          "rain_m3": 0.0,
+          "infiltration_m3": 0.0,
+          "positivity_m3": 0.0,
+          "pipe_m3": 0.0,
+          "boundary_m3": 0.0,
+          "rounding_m3": 0.0,
+          "residual_m3": 0.0
+        }
+      },
+      "gpu_window": {
+        "time": "2026-11-05T19:34:59.203895+08:00",
+        "solver_pids": [],
+        "allowed": true,
+        "policy": "No python main.py solver PID, or local time at/after 20:30"
+      },
+      "source_sha256": "c908816673c549fee696529f7349d04b51fe6720372837b2c841e019f96f2081",
+      "dependencies": {
+        "taichi": "1.7.4",
+        "fastdb4py": "0.2.4",
+        "numpy": "2.2.6"
+      }
+    },
+    {
+      "backend": "metal",
+      "command_seconds": 30000.0,
+      "duration_seconds": 3600,
+      "sample_count": 3603,
+      "max_replay_error_m": 9.5367431640625e-07,
+      "absolute_bound_m": 4.76837158203125e-06,
+      "bitwise_equal": false,
+      "gate": {
+        "name": "A",
+        "cell_ids": [
+          1
+        ],
+        "closed_elevation": [
+          10.0
+        ],
+        "command_clock_ticks": [
+          7680000,
+          0
+        ],
+        "control_cell": 2,
+        "command_seconds": 30000.0,
+        "first_effective_flow_seconds": null,
+        "fully_open_seconds": 33600.0,
+        "first_fully_open_sample_seconds": 33600.0,
+        "scheduled_fully_open_seconds": 33600.0,
+        "pond_in_m3": 0.0,
+        "pond_out_m3": 0.0,
+        "pond_net_m3": 0.0,
+        "river_in_m3": 0.0,
+        "river_out_m3": 0.0,
+        "channel_storage_m3": 0.0,
+        "channel_budget": {
+          "initial_storage_m3": 0.0,
+          "storage_m3": 0.0,
+          "river_net_m3": 0.0,
+          "pond_net_m3": 0.0,
+          "rain_m3": 0.0,
+          "infiltration_m3": 0.0,
+          "positivity_m3": 0.0,
+          "pipe_m3": 0.0,
+          "boundary_m3": 0.0,
+          "rounding_m3": 0.0,
+          "residual_m3": 0.0
+        }
+      },
+      "gpu_window": {
+        "time": "2026-11-05T19:34:59.851781+08:00",
+        "solver_pids": [],
+        "allowed": true,
+        "policy": "No python main.py solver PID, or local time at/after 20:30"
+      },
+      "source_sha256": "c908816673c549fee696529f7349d04b51fe6720372837b2c841e019f96f2081",
+      "dependencies": {
+        "taichi": "1.7.4",
+        "fastdb4py": "0.2.4",
+        "numpy": "2.2.6"
+      }
+    }
+  ]
+}

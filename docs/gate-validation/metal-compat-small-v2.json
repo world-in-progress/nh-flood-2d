@@ -1,0 +1,272 @@
+{
+  "case": "small",
+  "backend": "metal",
+  "cpu_threads": 1,
+  "bitwise_equal": true,
+  "physics_bitwise_equal": true,
+  "results": {
+    "7648185": {
+      "hashes": {
+        "depth": "b06bae44fd4a83c7872a5887e4571daa150b3ffc80513df9bd4ef29b351bd1ff",
+        "q": "105624ac2b0e9a82a55b5684999557ec7523077f9b5233ed7f33321737e18c64",
+        "bed": "6e348267555d2db02a8246ff879d7c42d6fa722b597e9c41894f1269b9afdab5",
+        "dt_sequence": "6f91366959059ff671babcb62b4cf8b3dfd3c02bb5057674dd18ab30b9452d47",
+        "trace": "3d9e59d3a5398f0a41e03674a4682f6cd951bb7ac9fcd4873f854bab9d9af77c",
+        "budget": "4b2df0265917db2d78881edc2f1019ae9f99cc58829c9acab650916eeaff200f",
+        "mass_balance_csv": "279e7a1c7ff52ab736be8f31012b4910362a515a3794164eb3be2e33b2b51f23",
+        "step_statistics_csv": "82e290f1b29980f174edb9ab55ee58bba5dafa074d9a68345c4549e67528465b"
+      },
+      "steps": 14,
+      "backend": "metal",
+      "device": "Apple M1 Max",
+      "duration": 12,
+      "warmup_duration": 2,
+      "clock": [
+        3584,
+        0
+      ],
+      "nonzero_discharge_edges": 2,
+      "source_sha256": "111d156cdfc1dc84e994200c450f1f6cc8abfacfdf58eba2dfca393c7a8f3c86",
+      "input_sha256": {
+        "tests/.gate-work/metal-v2-scheduled/compat-small/ne.txt": "7b5bf24601227ba3a186a6c88261f8f481d45ddb5800b6d011aa11cca52446bb",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/ns.txt": "ff0def73eece05d1fcfb429a7fe55d5c407264b1c7999a5e56baa251f081438d",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/river.geojson": "b0c084c330e990c44da51d56f1d0cb1cfd501ce11f9cd046205bd3eeaa149fd6",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/river.csv": "c7251c2b99421204ac25aa592e03d4358e0b925502834a659a9913e0af96b8f8",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/rain.tif": "af01efc8eb61cdca9553a42ea8c1b3d38d145ffbe675ebd678255b673bae81c5",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/intervals.csv": "95b93bdc3e35355606b481f5f31d2699bc11804a7f277bcc2be96487b009608e"
+      },
+      "platform": "macOS-27.0.1-arm64-arm-64bit",
+      "harness_sha256": "ae6e0933ce7d70e675b8e3393ae2784bc04021d116fcb582e4486e08f2499c38",
+      "python": "3.10.17",
+      "dependencies": {
+        "taichi": "1.7.4",
+        "fastdb4py": "0.2.4",
+        "numpy": "2.2.6",
+        "pydantic": "2.14.2",
+        "rasterio": "1.4.4"
+      },
+      "memory": {
+        "metal_sampled_peak_allocated_bytes": 34996224,
+        "metal_allocation_samples": 6,
+        "process_peak_rss_bytes": 192331776,
+        "memory_definition": "MTLDevice.currentAllocatedSize: sampled device-resource allocation bytes; process RSS is unified-memory high water, not separate VRAM residency"
+      }
+    },
+    "7648185-repeat2": {
+      "hashes": {
+        "depth": "b06bae44fd4a83c7872a5887e4571daa150b3ffc80513df9bd4ef29b351bd1ff",
+        "q": "105624ac2b0e9a82a55b5684999557ec7523077f9b5233ed7f33321737e18c64",
+        "bed": "6e348267555d2db02a8246ff879d7c42d6fa722b597e9c41894f1269b9afdab5",
+        "dt_sequence": "6f91366959059ff671babcb62b4cf8b3dfd3c02bb5057674dd18ab30b9452d47",
+        "trace": "3d9e59d3a5398f0a41e03674a4682f6cd951bb7ac9fcd4873f854bab9d9af77c",
+        "budget": "4b2df0265917db2d78881edc2f1019ae9f99cc58829c9acab650916eeaff200f",
+        "mass_balance_csv": "279e7a1c7ff52ab736be8f31012b4910362a515a3794164eb3be2e33b2b51f23",
+        "step_statistics_csv": "82e290f1b29980f174edb9ab55ee58bba5dafa074d9a68345c4549e67528465b"
+      },
+      "steps": 14,
+      "backend": "metal",
+      "device": "Apple M1 Max",
+      "duration": 12,
+      "warmup_duration": 2,
+      "clock": [
+        3584,
+        0
+      ],
+      "nonzero_discharge_edges": 2,
+      "source_sha256": "111d156cdfc1dc84e994200c450f1f6cc8abfacfdf58eba2dfca393c7a8f3c86",
+      "input_sha256": {
+        "tests/.gate-work/metal-v2-scheduled/compat-small/ne.txt": "7b5bf24601227ba3a186a6c88261f8f481d45ddb5800b6d011aa11cca52446bb",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/ns.txt": "ff0def73eece05d1fcfb429a7fe55d5c407264b1c7999a5e56baa251f081438d",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/river.geojson": "b0c084c330e990c44da51d56f1d0cb1cfd501ce11f9cd046205bd3eeaa149fd6",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/river.csv": "c7251c2b99421204ac25aa592e03d4358e0b925502834a659a9913e0af96b8f8",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/rain.tif": "af01efc8eb61cdca9553a42ea8c1b3d38d145ffbe675ebd678255b673bae81c5",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/intervals.csv": "95b93bdc3e35355606b481f5f31d2699bc11804a7f277bcc2be96487b009608e"
+      },
+      "platform": "macOS-27.0.1-arm64-arm-64bit",
+      "harness_sha256": "ae6e0933ce7d70e675b8e3393ae2784bc04021d116fcb582e4486e08f2499c38",
+      "python": "3.10.17",
+      "dependencies": {
+        "taichi": "1.7.4",
+        "fastdb4py": "0.2.4",
+        "numpy": "2.2.6",
+        "pydantic": "2.14.2",
+        "rasterio": "1.4.4"
+      },
+      "memory": {
+        "metal_sampled_peak_allocated_bytes": 34996224,
+        "metal_allocation_samples": 6,
+        "process_peak_rss_bytes": 192937984,
+        "memory_definition": "MTLDevice.currentAllocatedSize: sampled device-resource allocation bytes; process RSS is unified-memory high water, not separate VRAM residency"
+      }
+    },
+    "candidate-no-gate": {
+      "hashes": {
+        "depth": "b06bae44fd4a83c7872a5887e4571daa150b3ffc80513df9bd4ef29b351bd1ff",
+        "q": "105624ac2b0e9a82a55b5684999557ec7523077f9b5233ed7f33321737e18c64",
+        "bed": "6e348267555d2db02a8246ff879d7c42d6fa722b597e9c41894f1269b9afdab5",
+        "dt_sequence": "6f91366959059ff671babcb62b4cf8b3dfd3c02bb5057674dd18ab30b9452d47",
+        "trace": "3d9e59d3a5398f0a41e03674a4682f6cd951bb7ac9fcd4873f854bab9d9af77c",
+        "budget": "4b2df0265917db2d78881edc2f1019ae9f99cc58829c9acab650916eeaff200f",
+        "mass_balance_csv": "279e7a1c7ff52ab736be8f31012b4910362a515a3794164eb3be2e33b2b51f23",
+        "step_statistics_csv": "82e290f1b29980f174edb9ab55ee58bba5dafa074d9a68345c4549e67528465b"
+      },
+      "steps": 14,
+      "backend": "metal",
+      "device": "Apple M1 Max",
+      "duration": 12,
+      "warmup_duration": 2,
+      "clock": [
+        3584,
+        0
+      ],
+      "nonzero_discharge_edges": 2,
+      "source_sha256": "c908816673c549fee696529f7349d04b51fe6720372837b2c841e019f96f2081",
+      "input_sha256": {
+        "tests/.gate-work/metal-v2-scheduled/compat-small/ne.txt": "7b5bf24601227ba3a186a6c88261f8f481d45ddb5800b6d011aa11cca52446bb",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/ns.txt": "ff0def73eece05d1fcfb429a7fe55d5c407264b1c7999a5e56baa251f081438d",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/river.geojson": "b0c084c330e990c44da51d56f1d0cb1cfd501ce11f9cd046205bd3eeaa149fd6",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/river.csv": "c7251c2b99421204ac25aa592e03d4358e0b925502834a659a9913e0af96b8f8",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/rain.tif": "af01efc8eb61cdca9553a42ea8c1b3d38d145ffbe675ebd678255b673bae81c5",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/intervals.csv": "95b93bdc3e35355606b481f5f31d2699bc11804a7f277bcc2be96487b009608e"
+      },
+      "platform": "macOS-27.0.1-arm64-arm-64bit",
+      "harness_sha256": "ae6e0933ce7d70e675b8e3393ae2784bc04021d116fcb582e4486e08f2499c38",
+      "python": "3.10.17",
+      "dependencies": {
+        "taichi": "1.7.4",
+        "fastdb4py": "0.2.4",
+        "numpy": "2.2.6",
+        "pydantic": "2.14.2",
+        "rasterio": "1.4.4"
+      },
+      "memory": {
+        "metal_sampled_peak_allocated_bytes": 34996224,
+        "metal_allocation_samples": 6,
+        "process_peak_rss_bytes": 194936832,
+        "memory_definition": "MTLDevice.currentAllocatedSize: sampled device-resource allocation bytes; process RSS is unified-memory high water, not separate VRAM residency"
+      }
+    },
+    "candidate-disabled": {
+      "hashes": {
+        "depth": "b06bae44fd4a83c7872a5887e4571daa150b3ffc80513df9bd4ef29b351bd1ff",
+        "q": "105624ac2b0e9a82a55b5684999557ec7523077f9b5233ed7f33321737e18c64",
+        "bed": "6e348267555d2db02a8246ff879d7c42d6fa722b597e9c41894f1269b9afdab5",
+        "dt_sequence": "6f91366959059ff671babcb62b4cf8b3dfd3c02bb5057674dd18ab30b9452d47",
+        "trace": "3d9e59d3a5398f0a41e03674a4682f6cd951bb7ac9fcd4873f854bab9d9af77c",
+        "budget": "4b2df0265917db2d78881edc2f1019ae9f99cc58829c9acab650916eeaff200f",
+        "mass_balance_csv": "279e7a1c7ff52ab736be8f31012b4910362a515a3794164eb3be2e33b2b51f23",
+        "step_statistics_csv": "82e290f1b29980f174edb9ab55ee58bba5dafa074d9a68345c4549e67528465b"
+      },
+      "steps": 14,
+      "backend": "metal",
+      "device": "Apple M1 Max",
+      "duration": 12,
+      "warmup_duration": 2,
+      "clock": [
+        3584,
+        0
+      ],
+      "nonzero_discharge_edges": 2,
+      "source_sha256": "c908816673c549fee696529f7349d04b51fe6720372837b2c841e019f96f2081",
+      "input_sha256": {
+        "tests/.gate-work/metal-v2-scheduled/compat-small/ne.txt": "7b5bf24601227ba3a186a6c88261f8f481d45ddb5800b6d011aa11cca52446bb",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/ns.txt": "ff0def73eece05d1fcfb429a7fe55d5c407264b1c7999a5e56baa251f081438d",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/river.geojson": "b0c084c330e990c44da51d56f1d0cb1cfd501ce11f9cd046205bd3eeaa149fd6",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/river.csv": "c7251c2b99421204ac25aa592e03d4358e0b925502834a659a9913e0af96b8f8",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/rain.tif": "af01efc8eb61cdca9553a42ea8c1b3d38d145ffbe675ebd678255b673bae81c5",
+        "tests/.gate-work/metal-v2-scheduled/compat-small/intervals.csv": "95b93bdc3e35355606b481f5f31d2699bc11804a7f277bcc2be96487b009608e"
+      },
+      "platform": "macOS-27.0.1-arm64-arm-64bit",
+      "harness_sha256": "ae6e0933ce7d70e675b8e3393ae2784bc04021d116fcb582e4486e08f2499c38",
+      "python": "3.10.17",
+      "dependencies": {
+        "taichi": "1.7.4",
+        "fastdb4py": "0.2.4",
+        "numpy": "2.2.6",
+        "pydantic": "2.14.2",
+        "rasterio": "1.4.4"
+      },
+      "memory": {
+        "metal_sampled_peak_allocated_bytes": 34996224,
+        "metal_allocation_samples": 6,
+        "process_peak_rss_bytes": 188825600,
+        "memory_definition": "MTLDevice.currentAllocatedSize: sampled device-resource allocation bytes; process RSS is unified-memory high water, not separate VRAM residency"
+      }
+    }
+  },
+  "gpu_window": {
+    "time": "2026-11-05T19:35:00.476195+08:00",
+    "solver_pids": [],
+    "allowed": true,
+    "policy": "No python main.py solver PID, or local time at/after 20:30"
+  },
+  "budget_variability": {
+    "reference_repeat_max_abs_by_field": {
+      "elapsed_seconds": 0.0,
+      "rainfall_m3": 0.0,
+      "infiltration_m3": 0.0,
+      "discharge:river_m3": 0.0,
+      "requested_discharge:river_m3": 0.0,
+      "bed_clamp_nonlevel_m3": 0.0,
+      "bed_clamp_level_m3": 0.0,
+      "gate_bed_m3": 0.0,
+      "pipe_exchange_m3": 0.0,
+      "initial_storage_m3": 0.0,
+      "storage_m3": 0.0,
+      "residual_m3": 0.0,
+      "relative_residual": 0.0
+    },
+    "max_abs_difference_by_field": {
+      "7648185-repeat2": {
+        "elapsed_seconds": 0.0,
+        "rainfall_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "discharge:river_m3": 0.0,
+        "requested_discharge:river_m3": 0.0,
+        "bed_clamp_nonlevel_m3": 0.0,
+        "bed_clamp_level_m3": 0.0,
+        "gate_bed_m3": 0.0,
+        "pipe_exchange_m3": 0.0,
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "residual_m3": 0.0,
+        "relative_residual": 0.0
+      },
+      "candidate-no-gate": {
+        "elapsed_seconds": 0.0,
+        "rainfall_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "discharge:river_m3": 0.0,
+        "requested_discharge:river_m3": 0.0,
+        "bed_clamp_nonlevel_m3": 0.0,
+        "bed_clamp_level_m3": 0.0,
+        "gate_bed_m3": 0.0,
+        "pipe_exchange_m3": 0.0,
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "residual_m3": 0.0,
+        "relative_residual": 0.0
+      },
+      "candidate-disabled": {
+        "elapsed_seconds": 0.0,
+        "rainfall_m3": 0.0,
+        "infiltration_m3": 0.0,
+        "discharge:river_m3": 0.0,
+        "requested_discharge:river_m3": 0.0,
+        "bed_clamp_nonlevel_m3": 0.0,
+        "bed_clamp_level_m3": 0.0,
+        "gate_bed_m3": 0.0,
+        "pipe_exchange_m3": 0.0,
+        "initial_storage_m3": 0.0,
+        "storage_m3": 0.0,
+        "residual_m3": 0.0,
+        "relative_residual": 0.0
+      }
+    },
+    "fields_outside_measured_reference_spread": {
+      "candidate-no-gate": [],
+      "candidate-disabled": []
+    },
+    "note": "Measured finite-sample spread, not a bound on all GPU reduction schedules. Any fields outside the observed spread are listed explicitly."
+  }
+}

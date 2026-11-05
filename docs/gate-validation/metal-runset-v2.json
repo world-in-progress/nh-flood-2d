@@ -1,0 +1,90 @@
+[
+  {
+    "name": "enabled-small",
+    "exit_code": 0,
+    "wall_seconds": 13.339322416926734,
+    "window": {
+      "time": "2026-11-05T19:34:13.721542+08:00",
+      "solver_pids": [],
+      "allowed": true,
+      "policy": "No python main.py solver PID, or local time at/after 20:30"
+    }
+  },
+  {
+    "name": "enabled-medium",
+    "exit_code": 0,
+    "wall_seconds": 30.67919545795303,
+    "window": {
+      "time": "2026-11-05T19:34:27.090451+08:00",
+      "solver_pids": [],
+      "allowed": true,
+      "policy": "No python main.py solver PID, or local time at/after 20:30"
+    }
+  },
+  {
+    "name": "late-clock",
+    "exit_code": 0,
+    "wall_seconds": 2.5721217920072377,
+    "window": {
+      "time": "2026-11-05T19:34:57.793301+08:00",
+      "solver_pids": [],
+      "allowed": true,
+      "policy": "No python main.py solver PID, or local time at/after 20:30"
+    }
+  },
+  {
+    "name": "compat-small",
+    "exit_code": 0,
+    "wall_seconds": 11.198446459020488,
+    "window": {
+      "time": "2026-11-05T19:35:00.393606+08:00",
+      "solver_pids": [],
+      "allowed": true,
+      "policy": "No python main.py solver PID, or local time at/after 20:30"
+    }
+  },
+  {
+    "name": "compat-hk",
+    "exit_code": 0,
+    "wall_seconds": 263.49482704198454,
+    "window": {
+      "time": "2026-11-05T19:35:11.619771+08:00",
+      "solver_pids": [],
+      "allowed": true,
+      "policy": "No python main.py solver PID, or local time at/after 20:30"
+    }
+  },
+  {
+    "name": "performance-disabled",
+    "exit_code": 0,
+    "wall_seconds": 3.6365518749225885,
+    "window": {
+      "time": "2026-11-05T19:39:35.146477+08:00",
+      "solver_pids": [],
+      "allowed": true,
+      "policy": "No python main.py solver PID, or local time at/after 20:30"
+    }
+  },
+  {
+    "name": "performance-enabled",
+    "exit_code": 0,
+    "wall_seconds": 3.904537916998379,
+    "window": {
+      "time": "2026-11-05T19:39:38.807975+08:00",
+      "solver_pids": [],
+      "allowed": true,
+      "policy": "No python main.py solver PID, or local time at/after 20:30"
+    }
+  },
+  {
+    "name": "performance-disabled-repeat",
+    "exit_code": 0,
+    "wall_seconds": 2.958776833023876,
+    "window": {
+      "time": "2026-11-05T19:39:42.788517+08:00",
+      "solver_pids": [],
+      "allowed": true,
+      "policy": "No python main.py solver PID, or local time at/after 20:30"
+    }
+  }
+]

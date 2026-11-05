@@ -145,11 +145,31 @@ def test_uniform_and_hanging_section_agree_on_width_and_cumulative_flow(tmp_path
         lengths = np.full(np.count_nonzero(interface), 4. if hanging else 8.)
         assert sum(lengths) == 8.
         width_flow = float(np.dot(state.q[interface], lengths))
+        # Advance a second hydraulic step from the half-open bed, so the pair
+        # checks the changed geometry as well as the initial shared width.
+        first_net = gate['pond_net_m3']
+        pond_cells = topo[interface, 2]
+        left_eta = float(state.bed[2])+float(state.depth[2])
+        right_eta = state.bed[pond_cells].astype(float)+state.depth[pond_cells].astype(float)
+        face_depth = np.maximum(left_eta,right_eta)-np.maximum(float(state.bed[2]),state.bed[pond_cells].astype(float))
+        distance = 6. if hanging else 8.
+        expected_q = state.q[interface].astype(float)-9.81*face_depth*(right_eta-left_eta)/distance*.125
+        next_state,next_manifest = run(domain,force,.25,
+            output=Path(domain.domain_dir).parent/'next',
+            restart=Path(domain.domain_dir)/'output/state_final.fdb')
+        np.testing.assert_allclose(next_state.q[interface],expected_q,rtol=3e-5,atol=2e-8)
+        next_gate = next_manifest['gate_control']['gates'][0]
+        second_volume = next_gate['pond_net_m3']-first_net
+        assert second_volume == pytest.approx(float(np.dot(expected_q,lengths))*.125,rel=3e-5,abs=2e-8)
+        assert next_state.bed[2] == 0.
+        assert_control_volume(next_gate['channel_budget'],scale=100.)
         observations.append(dict(width_flow=width_flow, pond_net=gate['pond_net_m3'],
             river_net=gate['channel_budget']['river_net_m3'],
             pond_storage=pond['storage_m3'],
             channel_storage=gate['channel_budget']['storage_m3'],
-            center_distance=6. if hanging else 8.))
+            center_distance=distance,second_step_pond_net_m3=second_volume,
+            second_step_width_flow=float(np.dot(next_state.q[interface],lengths))))
+    (tmp_path/'paired_measurements.json').write_text(json.dumps(observations,indent=2)+'\n')
     uniform, hanging = observations
     if regime == 'dry_wet':
         # In this first step, the positive gate water surface is 0.15 m and
