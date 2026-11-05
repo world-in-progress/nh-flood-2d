@@ -97,16 +97,6 @@ def test_checkpoint_skips_automatic_fill_even_with_warmup(tmp_path):
     assert result['initial_storage_m3']==50
 
 
-@pytest.mark.usefixtures('taichi_cpu')
-def test_gate_open_at_start_precedes_fill_and_is_initial_inventory(tmp_path):
-    from test_solver_forcing import experiment
-    result,_,meta=experiment(tmp_path,[[0,0]],1,land_type=11,bed=2,
-        connected=True,level=1,warmup=1,warmup_only=True,
-        gate=dict(threshold=.5,land_type=11,level_boundary='sea'))
-    assert meta['gate_open'] and meta['bed_events'][0]['elapsed_seconds']==-1
-    assert meta['initialization']['wet_cells']==2
-    assert result['initial_storage_m3']==200
-    assert result['level:sea_m3']==0 and result['gate_bed_m3']==0
 
 
 def test_connectivity_compares_input_level_without_rounding_it_to_f32():

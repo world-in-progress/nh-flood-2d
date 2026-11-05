@@ -305,6 +305,7 @@ class BedTimeline:
         self.bed = read_bed(output_root / 'bed.fdb', expected_count)
         self.events = sorted(manifest.get('bed_events', []),
                              key=lambda event: event['elapsed_seconds'])
+        self.gate_control = manifest.get('gate_control', {})
         self.cursor = 0
         self.seconds = float('-inf')
 
@@ -322,6 +323,23 @@ class BedTimeline:
             self.bed[cell_ids] = new_bed
             self.cursor += 1
         self.seconds = elapsed_seconds
+        for gate in self.gate_control.get('gates', []):
+            command = gate['command_seconds']
+            closed = np.array(gate['closed_elevation'], dtype=np.float32)
+            fraction = np.float32(0.)
+            if command is not None and elapsed_seconds >= command:
+                words = gate['command_clock_ticks']
+                command_tick = (int(words[0]) << 32) | int(words[1])
+                tick = round((elapsed_seconds + self.gate_control['clock_origin_before_start_s']) * 2**40)
+                age_tick = max(tick-command_tick, 0)
+                age = np.float32(age_tick >> 32) / np.float32(256.) + np.float32(
+                    age_tick & 0xffffffff) * np.float32(2.**-40)
+                fraction = np.minimum(age / np.float32(
+                    self.gate_control['opening_seconds']), np.float32(1.))
+            self.bed[gate['cell_ids']] = closed + (np.float32(
+                self.gate_control['open_elevation']) - closed) * fraction
+            if fraction >= 1.:
+                self.bed[gate['cell_ids']] = np.float32(self.gate_control['open_elevation'])
         return self.bed
 
 

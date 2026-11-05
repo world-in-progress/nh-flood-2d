@@ -224,14 +224,6 @@ def test_existing_output_is_not_overwritten(tmp_path):
     assert before==(manifest.read_bytes(),balance.read_bytes())
 
 
-def test_gate_detects_short_threshold_crossing(tmp_path):
-    result, h, manifest = experiment(tmp_path, [[0,0]], 2, bed=1., land_type=1,
-        level=1.4, level_rows=[(0,1.4),(1,1.6),(2,1.4)],
-        gate=dict(threshold=1.5,land_type=1,level_boundary='sea'))
-    assert manifest['gate_open']
-    assert manifest['gate_cell_count'] == 2
-    assert result['gate_bed_m3'] == 0.
-    assert h[1] == 0.
 
 
 def test_input_failure_is_recorded(tmp_path):
@@ -408,45 +400,3 @@ def test_subsecond_level_knot_and_between_frame_peak(tmp_path):
     assert all(read_depth_frame(p)[2]<2e-6 for _,p in list_depth_frames(root))
     peak=(int(extrema.first_time_hi[2])*2**32+int(extrema.first_time_lo[2]))/2**40
     assert peak==pytest.approx(.000002,abs=5e-13)
-
-
-@pytest.mark.parametrize('tail', [ [(1,1.6)], [(.000008,1.4),(1,1.4)] ])
-def test_gate_uses_exact_upcrossing_without_lookahead_or_missing_pulse(tmp_path,tail):
-    _,_,manifest=experiment(tmp_path,[[0,0]],1,bed=1.,land_type=1,level=1.4,
-        level_rows=[(0,1.4),(.000004,1.6),*tail],
-        gate=dict(threshold=1.5,land_type=1,level_boundary='sea'))
-    assert manifest['gate_open']
-    assert len(manifest['bed_events'])==1
-    event=manifest['bed_events'][0]
-    assert event['elapsed_seconds']==pytest.approx(.000002,abs=5e-13)
-    assert event['cell_ids']==[1,2]
-    from src.nh_flood_2d.core.output import read_bed_at
-    root=tmp_path/'out/output'
-    assert read_bed_at(root,0)[1]==1.
-    assert read_bed_at(root,1)[1]==0.
-
-
-def test_initial_gate_event_precedes_frame_and_level_application(tmp_path):
-    result,_,manifest=experiment(tmp_path,[[0,0]],1,bed=1.,land_type=1,level=1.6,
-        gate=dict(threshold=1.5,land_type=1,level_boundary='sea'))
-    from src.nh_flood_2d.core.output import read_bed_at,read_depth_frame
-    root=tmp_path/'out/output'
-    bed=read_bed_at(root,0)
-    depth=read_depth_frame(root/'frames/depth_0.fdb')
-    assert manifest['bed_events'][0]['elapsed_seconds']==0.
-    assert bed[2]==0.
-    assert float(bed[2]+depth[2])==pytest.approx(1.6,abs=2e-6)
-    assert abs(result['residual_m3'])<1e-3
-
-
-def test_gate_at_output_time_is_reflected_in_station_and_budget(tmp_path):
-    result,_,manifest=experiment(tmp_path,[[0,0]],2,bed=1.,land_type=1,level=1.4,
-        level_rows=[(0,1.4),(1,1.5),(2,1.6)],yield_step=1,
-        stations={'sea':(15.,5.)},gate=dict(threshold=1.5,land_type=1,level_boundary='sea'))
-    rows=list(csv.DictReader((tmp_path/'out/output/stations.csv').open()))
-    at_event=next(r for r in rows if float(r['elapsed_seconds'])==1.)
-    assert float(at_event['depth'])==pytest.approx(1.5,abs=2e-6)
-    assert float(at_event['level'])==pytest.approx(1.5,abs=2e-6)
-    assert manifest['bed_events'][0]['elapsed_seconds']==1.
-    assert result['gate_bed_m3']==0.
-    assert abs(result['residual_m3'])<1e-3

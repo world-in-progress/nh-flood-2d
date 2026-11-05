@@ -8,7 +8,7 @@ def connected_still_water(bed, side_crest, closed_sides, side_topology, boundari
     """Fill only water bodies reachable from their prescribed starting levels.
 
     Bed, crest and closed-side masks are the same working state used by the
-    momentum update, including any gate that opens at the warmup start.
+    momentum update. Gate control remains disabled throughout warmup.
     """
     bed = bed.astype(np.float64)
     side_crest = side_crest.astype(np.float64)

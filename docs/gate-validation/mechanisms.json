@@ -1,0 +1,634 @@
+{
+  "candidate_source_sha256": "0b6590b22408380c7efcffcb807817963b5650bea1282a853e545be9e67c9f34",
+  "test_batches": {
+    "existing_regressions": {
+      "passed": 164,
+      "skipped": 3
+    },
+    "gate_mechanisms": {
+      "passed": 30
+    },
+    "gate_config": {
+      "passed": 14
+    },
+    "kernel_ast_audit": {
+      "passed": 1
+    },
+    "small_compatibility": {
+      "passed": 1
+    }
+  },
+  "hong_kong_compatibility": "Independent CPU three-way runner passed; see hong-kong-1h.json",
+  "cases": {
+    "test_warmup_disables_control_u0/formal/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": 1.0,
+          "first_fully_open_sample_seconds": 1.0,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_warmup_disables_control_u0/out/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": null,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": null,
+          "first_fully_open_sample_seconds": null,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_restart_before_during_aft2/out/manifest.json": {
+      "pond_residual_m3": -2.60770320892334e-08,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 2.0,
+          "first_effective_flow_seconds": 5.756565630435944,
+          "fully_open_seconds": 4.0,
+          "first_fully_open_sample_seconds": 4.0,
+          "pond_in_m3": 1.4293567538261414,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 1.4293567538261414
+        }
+      ]
+    },
+    "test_restart_before_during_aft2/part/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 2.0,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": 4.0,
+          "first_fully_open_sample_seconds": 4.0,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_restart_before_during_aft2/resumed/manifest.json": {
+      "pond_residual_m3": -2.60770320892334e-08,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 2.0,
+          "first_effective_flow_seconds": 5.756565630435944,
+          "fully_open_seconds": 4.0,
+          "first_fully_open_sample_seconds": 4.0,
+          "pond_in_m3": 1.4293567538261414,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 1.4293567538261414
+        }
+      ]
+    },
+    "test_limiter_records_actual_sh0/out/manifest.json": {
+      "pond_residual_m3": 3.3527612686157227e-08,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": 0.0020997996907681227,
+          "fully_open_seconds": 1.0,
+          "first_fully_open_sample_seconds": 1.0,
+          "pond_in_m3": 1.0499999523162842,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 1.0499999523162842
+        }
+      ]
+    },
+    "test_strict_threshold_and_dry_3/out/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": null,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": null,
+          "first_fully_open_sample_seconds": null,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_fixed_still_water_and_uni0/out/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": null,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": null,
+          "first_fully_open_sample_seconds": null,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_strict_threshold_and_dry_4/out/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": null,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": null,
+          "first_fully_open_sample_seconds": null,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_dry_near_dry_small_and_re0/out/manifest.json": {
+      "pond_residual_m3": -2.682209014892578e-07,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": 1.0,
+          "fully_open_seconds": 1.0,
+          "first_fully_open_sample_seconds": 1.0,
+          "pond_in_m3": 93.66828155517578,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 93.66828155517578
+        }
+      ]
+    },
+    "test_end_bed_and_pond_exchange0/out/manifest.json": {
+      "pond_residual_m3": 1.1138617992401123e-06,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": 1.0,
+          "fully_open_seconds": 1.0,
+          "first_fully_open_sample_seconds": 1.0,
+          "pond_in_m3": 75.099440574646,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 75.099440574646
+        }
+      ]
+    },
+    "test_dry_near_dry_small_and_re1/out/manifest.json": {
+      "pond_residual_m3": -1.1324882507324219e-06,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": 1.0,
+          "fully_open_seconds": 1.0,
+          "first_fully_open_sample_seconds": 1.0,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 92.74679756164551,
+          "pond_net_m3": -92.74679756164551
+        }
+      ]
+    },
+    "test_fixed_still_water_and_uni1/out/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": 1.0,
+          "first_fully_open_sample_seconds": 1.0,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_strict_threshold_and_dry_2/out/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": null,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": null,
+          "first_fully_open_sample_seconds": null,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_short_pulse_latches_each_0/out/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.125,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": 2.0,
+          "first_fully_open_sample_seconds": 2.0,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_local_bed_motion_preserve0/next/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": 0.1,
+          "first_fully_open_sample_seconds": 0.1000000000003638,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_local_bed_motion_preserve0/out/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": 0.1,
+          "first_fully_open_sample_seconds": 0.1000000000003638,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_short_pulse_latches_each_1/out/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.125,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": 2.0,
+          "first_fully_open_sample_seconds": 2.0,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_restart_before_during_aft1/out/manifest.json": {
+      "pond_residual_m3": -2.60770320892334e-08,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 2.0,
+          "first_effective_flow_seconds": 5.756565630435944,
+          "fully_open_seconds": 4.0,
+          "first_fully_open_sample_seconds": 4.0,
+          "pond_in_m3": 1.4293567538261414,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 1.4293567538261414
+        }
+      ]
+    },
+    "test_restart_before_during_aft1/part/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 2.0,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": null,
+          "first_fully_open_sample_seconds": null,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_restart_before_during_aft1/resumed/manifest.json": {
+      "pond_residual_m3": -2.60770320892334e-08,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 2.0,
+          "first_effective_flow_seconds": 5.756565630435944,
+          "fully_open_seconds": 4.0,
+          "first_fully_open_sample_seconds": 4.0,
+          "pond_in_m3": 1.4293567538261414,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 1.4293567538261414
+        }
+      ]
+    },
+    "test_pond_rain_infiltration_ov0/out/manifest.json": {
+      "pond_residual_m3": -3.3268952392973006e-07,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": 1.0,
+          "fully_open_seconds": 1.0,
+          "first_fully_open_sample_seconds": 1.0,
+          "pond_in_m3": 114.40670311450958,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 114.40670311450958
+        }
+      ]
+    },
+    "test_restart_before_during_aft0/out/manifest.json": {
+      "pond_residual_m3": -2.60770320892334e-08,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 2.0,
+          "first_effective_flow_seconds": 5.756565630435944,
+          "fully_open_seconds": 4.0,
+          "first_fully_open_sample_seconds": 4.0,
+          "pond_in_m3": 1.4293567538261414,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 1.4293567538261414
+        }
+      ]
+    },
+    "test_restart_before_during_aft0/part/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": null,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": null,
+          "first_fully_open_sample_seconds": null,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_restart_before_during_aft0/resumed/manifest.json": {
+      "pond_residual_m3": -2.60770320892334e-08,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 2.0,
+          "first_effective_flow_seconds": 5.756565630435944,
+          "fully_open_seconds": 4.0,
+          "first_fully_open_sample_seconds": 4.0,
+          "pond_in_m3": 1.4293567538261414,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 1.4293567538261414
+        }
+      ]
+    },
+    "test_strict_threshold_and_dry_0/out/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": null,
+          "first_fully_open_sample_seconds": null,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_dry_near_dry_small_and_re3/out/manifest.json": {
+      "pond_residual_m3": -1.1548399925231934e-06,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": 1.0,
+          "fully_open_seconds": 1.0,
+          "first_fully_open_sample_seconds": 1.0,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 49.39706265926361,
+          "pond_net_m3": -49.39706265926361
+        }
+      ]
+    },
+    "test_pond_level_reservoir_acco0/out/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": 0.0918620377779007,
+          "fully_open_seconds": null,
+          "first_fully_open_sample_seconds": null,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 124.46100234985352,
+          "pond_net_m3": -124.46100234985352
+        }
+      ]
+    },
+    "test_dry_near_dry_small_and_re2/out/manifest.json": {
+      "pond_residual_m3": -3.183231456205249e-12,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": 1.0,
+          "fully_open_seconds": 1.0,
+          "first_fully_open_sample_seconds": 1.0,
+          "pond_in_m3": 0.00027599127497524023,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.00027599127497524023
+        }
+      ]
+    },
+    "test_strict_threshold_and_dry_1/out/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": null,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": null,
+          "first_fully_open_sample_seconds": null,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_gates_trigger_independent0/out/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": 1.0,
+          "first_fully_open_sample_seconds": 1.0,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        },
+        {
+          "name": "B",
+          "command_seconds": null,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": null,
+          "first_fully_open_sample_seconds": null,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_fractional_opening_replay0/out/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": null,
+          "first_fully_open_sample_seconds": null,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_hanging_subedges_have_one0/out/manifest.json": {
+      "pond_residual_m3": -8.102506399154663e-08,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": 0.5644045472145081,
+          "fully_open_seconds": 1.0,
+          "first_fully_open_sample_seconds": 1.0,
+          "pond_in_m3": 83.22708766162395,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 83.22708766162395
+        }
+      ]
+    },
+    "test_hanging_subedges_have_one1/out/manifest.json": {
+      "pond_residual_m3": -5.494803190231323e-08,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": 1.0,
+          "fully_open_seconds": 1.0,
+          "first_fully_open_sample_seconds": 1.0,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 2.5567669570446014,
+          "pond_net_m3": -2.5567669570446014
+        }
+      ]
+    },
+    "test_short_pulse_latches_each_2/out/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.125,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": 2.0,
+          "first_fully_open_sample_seconds": 2.0,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    },
+    "test_multicell_dry_channel_wet0/out/manifest.json": {
+      "pond_residual_m3": -1.3003713320358656e-05,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": 4.841117352247238,
+          "fully_open_seconds": 1.0,
+          "first_fully_open_sample_seconds": 1.0,
+          "pond_in_m3": 1646.0100076915696,
+          "pond_out_m3": 1643.1367903243518,
+          "pond_net_m3": 2.873217367217876
+        }
+      ]
+    },
+    "test_local_movement_response_c0/2/out/manifest.json": {
+      "pond_residual_m3": -9.633367881178856e-09,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": 0.0625,
+          "fully_open_seconds": 0.5,
+          "first_fully_open_sample_seconds": 0.5,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.5533615933090914,
+          "pond_net_m3": -0.5533615933090914
+        }
+      ]
+    },
+    "test_local_movement_response_c0/1/out/manifest.json": {
+      "pond_residual_m3": -3.92901711165905e-10,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": 0.125,
+          "fully_open_seconds": 0.5,
+          "first_fully_open_sample_seconds": 0.5,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.5526404136326164,
+          "pond_net_m3": -0.5526404136326164
+        }
+      ]
+    },
+    "test_local_movement_response_c0/0/out/manifest.json": {
+      "pond_residual_m3": -8.265487849712372e-09,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": 0.0,
+          "first_effective_flow_seconds": 0.25,
+          "fully_open_seconds": 0.5,
+          "first_fully_open_sample_seconds": 0.5,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.5497569805011153,
+          "pond_net_m3": -0.5497569805011153
+        }
+      ]
+    },
+    "test_cold_warmup_initializatio0/out/manifest.json": {
+      "pond_residual_m3": 0.0,
+      "gates": [
+        {
+          "name": "A",
+          "command_seconds": null,
+          "first_effective_flow_seconds": null,
+          "fully_open_seconds": null,
+          "first_fully_open_sample_seconds": null,
+          "pond_in_m3": 0.0,
+          "pond_out_m3": 0.0,
+          "pond_net_m3": 0.0
+        }
+      ]
+    }
+  }
+}

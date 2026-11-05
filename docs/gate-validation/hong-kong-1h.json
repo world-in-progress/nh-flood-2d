@@ -1,0 +1,94 @@
+{
+  "case": "hk",
+  "cpu_threads": 1,
+  "bitwise_equal": true,
+  "results": {
+    "7648185": {
+      "hashes": {
+        "depth": "f874fd27f503c948185aa8871bdb159623012a09682f2b54ff95bfd311cdd123",
+        "q": "b8a36234ecaa63a62a06becf0af32c8754777bd4d53549ff89b92e9bc6203ca5",
+        "bed": "90c3bb7c71daba58ef4f6bb9c96b6e31bb4918b906d3fbe7ba2ed973fdded090",
+        "dt_sequence": "7c8d3e086188e9c3796fb1572a6a47d11bb3fcf950ede42fa8dac9d693e940cb",
+        "trace": "ff42cb36f27c3853119bded813f2d67430a9e3ef8637a5bd314d4e02fa9fb667",
+        "budget": "2ffca8257e343a7d7b1f933e281aa20c78d1a5832d866fc6136fbb1b10df9e62",
+        "mass_balance_csv": "528a33f868375b846fc0dcf817887283e804663a5a58028b8157c281af9a44d2",
+        "step_statistics_csv": "36f0f7c72bfbe6492d2944298a9d814deeae0c52a95629827ac036f661717280"
+      },
+      "steps": 9054,
+      "backend": "arm64",
+      "device": "Apple M1 Max",
+      "duration": 3600,
+      "warmup_duration": 0,
+      "clock": [
+        921600,
+        0
+      ],
+      "nonzero_discharge_edges": 31481
+    },
+    "candidate-no-gate": {
+      "hashes": {
+        "depth": "f874fd27f503c948185aa8871bdb159623012a09682f2b54ff95bfd311cdd123",
+        "q": "b8a36234ecaa63a62a06becf0af32c8754777bd4d53549ff89b92e9bc6203ca5",
+        "bed": "90c3bb7c71daba58ef4f6bb9c96b6e31bb4918b906d3fbe7ba2ed973fdded090",
+        "dt_sequence": "7c8d3e086188e9c3796fb1572a6a47d11bb3fcf950ede42fa8dac9d693e940cb",
+        "trace": "ff42cb36f27c3853119bded813f2d67430a9e3ef8637a5bd314d4e02fa9fb667",
+        "budget": "2ffca8257e343a7d7b1f933e281aa20c78d1a5832d866fc6136fbb1b10df9e62",
+        "mass_balance_csv": "528a33f868375b846fc0dcf817887283e804663a5a58028b8157c281af9a44d2",
+        "step_statistics_csv": "36f0f7c72bfbe6492d2944298a9d814deeae0c52a95629827ac036f661717280"
+      },
+      "steps": 9054,
+      "backend": "arm64",
+      "device": "Apple M1 Max",
+      "duration": 3600,
+      "warmup_duration": 0,
+      "clock": [
+        921600,
+        0
+      ],
+      "nonzero_discharge_edges": 31481
+    },
+    "candidate-disabled": {
+      "hashes": {
+        "depth": "f874fd27f503c948185aa8871bdb159623012a09682f2b54ff95bfd311cdd123",
+        "q": "b8a36234ecaa63a62a06becf0af32c8754777bd4d53549ff89b92e9bc6203ca5",
+        "bed": "90c3bb7c71daba58ef4f6bb9c96b6e31bb4918b906d3fbe7ba2ed973fdded090",
+        "dt_sequence": "7c8d3e086188e9c3796fb1572a6a47d11bb3fcf950ede42fa8dac9d693e940cb",
+        "trace": "ff42cb36f27c3853119bded813f2d67430a9e3ef8637a5bd314d4e02fa9fb667",
+        "budget": "2ffca8257e343a7d7b1f933e281aa20c78d1a5832d866fc6136fbb1b10df9e62",
+        "mass_balance_csv": "528a33f868375b846fc0dcf817887283e804663a5a58028b8157c281af9a44d2",
+        "step_statistics_csv": "36f0f7c72bfbe6492d2944298a9d814deeae0c52a95629827ac036f661717280"
+      },
+      "steps": 9054,
+      "backend": "arm64",
+      "device": "Apple M1 Max",
+      "duration": 3600,
+      "warmup_duration": 0,
+      "clock": [
+        921600,
+        0
+      ],
+      "nonzero_discharge_edges": 31481
+    }
+  },
+  "reference_commit": "7648185",
+  "input_sha256": {
+    "<case-dir>/runs_final/Bnone-I/ne.txt": "28482e3575fb26fd6592bc1756701568e64562511441f09604bd08df8995c593",
+    "<case-dir>/runs_final/Bnone-I/ns.txt": "5af606e2547baf4b0fe2bf0747a0498f01fef77936276246c50babebf3cdcea6",
+    "<case-dir>/runs_formal/Bnone-I/config/boundaries/tsim_bei_tsui.geojson": "2b8a312547ddfc655f08462eb323a3c0cb88e974216d434709308f167a8b1e4d",
+    "<case-dir>/domain_final/series/sea_level.csv": "f035c4a2f49cfaf1ae7b905a08bebb6d944efe2e68be2d1b4a7536f4f94bbde6",
+    "<case-dir>/runs_formal/Bnone-I/config/boundaries/shenzhen_river.geojson": "8789cc7cd9d72a68a1e8e20c8c1b4052ebea20b0c5494ef36a16e96718b8a717",
+    "<case-dir>/domain_final/series/shenzhen_river.csv": "a9171ef0f4dc3cf283876f5e9ebcd275c7da200aa0cc5b79069a74b241313450",
+    "<case-dir>/runs_formal/Bnone-I/config/boundaries/futian.geojson": "c13d709802d540bf541087891d3e15b3d0774cea493a185debc1178938928aac",
+    "<case-dir>/domain_final/series/futian.csv": "9571821211e18ceb67add18b99e0c4ba219e579be94d0945be2adc6032268043",
+    "<case-dir>/runs_formal/Bnone-I/config/boundaries/huanggang.geojson": "b42c1bd832f941531731ad733ae9813e12d2d379ac180074670c23e202e872e9",
+    "<case-dir>/domain_final/series/huanggang.csv": "62ab32ca1986e19d54cd50bbcccf3ac5bc423078873c07174c023d0228918ccd",
+    "<case-dir>/data/rainfall_hourly/field/rain_idw_500m.tif": "aeef68422d005d61119d16293653b902cd157e123a173b68999ee1d100c0950b",
+    "<case-dir>/data/rainfall_hourly/field/rain_intervals.csv": "ba0d7c91cf90e0e9f784e18d80e4e098e4a0686b9f5250dfd2e3fbac971e4da7"
+  },
+  "reference_source_sha256": "111d156cdfc1dc84e994200c450f1f6cc8abfacfdf58eba2dfca393c7a8f3c86",
+  "notes": [
+    "CPU, single thread, same dependencies and device for all three processes",
+    "Raw h/q/bed arrays, complete trace and diagnostic CSVs compared bitwise",
+    "Hong Kong smoke has zero warmup, not a full formal-event validation"
+  ]
+}

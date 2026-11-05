@@ -207,7 +207,6 @@ class Forcing:
     boundaries: list[Boundary]
     rain: RainField
     events: np.ndarray
-    gate_opening_time: float | None
 
     @classmethod
     def load(cls, domain: DomainConfig, config: ForceConfig, mesh):
@@ -215,21 +214,5 @@ class Forcing:
         boundaries = load_boundaries(config.boundaries, mesh, domain.epsg_code,
                                      domain.start, begin, end)
         rain = RainField.load(config.rainfall, mesh, domain.epsg_code, domain.start, begin, end)
-        crossings = []
-        opening = None
-        if config.gate:
-            series = next(b.series for b in boundaries if b.name == config.gate.level_boundary)
-            offset = series.values - config.gate.threshold
-            rising = (offset[:-1] <= 0) & (offset[1:] > 0)
-            candidates = []
-            for i in np.flatnonzero((offset[:-1] * offset[1:] < 0) | rising):
-                crossing = series.times[i] - offset[i] * (series.times[i+1] - series.times[i]) / (offset[i+1] - offset[i])
-                crossings.append(crossing)
-                if rising[i] and 0. <= crossing < end:
-                    candidates.append(crossing)
-            if series.at(0.) > config.gate.threshold:
-                opening = -float(domain.warmup_duration)
-            elif candidates:
-                opening = float(min(candidates))
-        events = np.unique(np.concatenate([rain.ends, [0., end], crossings, [] if opening is None else [opening]] + [b.series.times for b in boundaries]))
-        return cls(boundaries, rain, events, opening)
+        events = np.unique(np.concatenate([rain.ends, [0., end]] + [b.series.times for b in boundaries]))
+        return cls(boundaries, rain, events)
