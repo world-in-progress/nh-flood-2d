@@ -686,9 +686,12 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
         if continuation:
             if state_meta.get('boundary_identity') != boundary_identity:
                 raise ValueError('Checkpoint boundary identity or order differs from configuration')
-            expected = {'start': domain_cfg.start.isoformat(), 'afa': afa, 'sita': sita,
+            expected = {'start': domain_cfg.start.isoformat(), 'sita': sita,
                         'min_h': min_h, 'land_parameters': domain_cfg.model_dump(mode='json')['land_parameters']}
-            if state_meta['physics_config'] != expected:
+            # CFL controls the next step size, not the saved physical state.
+            physics_config = {key: value for key, value in state_meta['physics_config'].items()
+                              if key != 'afa'}
+            if physics_config != expected:
                 raise ValueError('Checkpoint clock or physical parameters differ from configuration')
         depth_t.from_numpy(state.depth)
         ez_t.from_numpy(state.bed)
