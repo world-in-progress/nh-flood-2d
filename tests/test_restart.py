@@ -46,11 +46,11 @@ def _inputs(path):
         f'{(START + timedelta(seconds=10)).isoformat()}\n')
 
 
-def _run(inputs, output, duration, restart='', boundaries=None):
+def _run(inputs, output, duration, restart='', boundaries=None, *, afa=.5, sita=1.):
     domain = DomainConfig(
         ne=str(inputs / 'ne.txt'), ns=str(inputs / 'ns.txt'),
         epsg_code=2326, domain_dir=str(output), start=START,
-        duration=duration, warmup_duration=0, yield_step=1,
+        duration=duration, warmup_duration=0, yield_step=1, afa=afa, sita=sita,
         land_parameters={10: dict(manning_n=.03, infiltration=dict(
             f0_mm_h=36, fc_mm_h=18, k_per_h=2))},
         restart_state=str(restart) if restart else '')
@@ -61,6 +61,27 @@ def _run(inputs, output, duration, restart='', boundaries=None):
     state = read_checkpoint(Path(domain.output_dir) / 'state_final.fdb')
     manifest = json.loads((output / 'manifest.json').read_text())
     return budget, state, manifest
+
+
+def test_restart_allows_changed_afa_but_rejects_changed_sita(tmp_path):
+    inputs = tmp_path / 'inputs'
+    _inputs(inputs)
+    first_budget, first, _ = _run(inputs, tmp_path / 'first', 5, afa=.25)
+    checkpoint = tmp_path / 'first/output/state_final.fdb'
+    first_physics = json.loads(first.metadata_json)['physics_config']
+    assert first_physics['afa'] == .25
+
+    budget, final, manifest = _run(inputs, tmp_path / 'resumed', 10,
+                                  restart=checkpoint, afa=.0625)
+    final_meta = json.loads(final.metadata_json)
+    assert manifest['steps'] > 0
+    assert final_meta['elapsed_seconds'] == 10
+    assert budget['rainfall_m3'] > first_budget['rainfall_m3']
+    assert final_meta['physics_config'] == {**first_physics, 'afa': .0625}
+
+    with pytest.raises(ValueError, match='Checkpoint clock or physical parameters'):
+        _run(inputs, tmp_path / 'changed_sita', 10,
+             restart=checkpoint, afa=.0625, sita=.7)
 
 
 def test_restart_after_requested_end_rejects_before_results(tmp_path):
