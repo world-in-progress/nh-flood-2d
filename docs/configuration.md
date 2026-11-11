@@ -47,15 +47,34 @@ All domain, force and nested parameter models reject unknown fields and NaN/Infi
 | `rainfall` | Required object | Supply explicit zero bands for a dry run |
 | `rainfall.raster` | Required path | Multiband GeoTIFF; band totals in mm |
 | `rainfall.intervals` | Required path | CSV `interval_start,interval_end` with timezone-aware timestamps |
-| `gate` | `null` | Optional one-time gate rule |
-| `gate.threshold` | Required if gate set; m | Finite water elevation in mesh vertical datum |
-| `gate.land_type` | Required if gate set | Integer 0–255; all matching cells are gate targets |
-| `gate.level_boundary` | Required if gate set | Must name a configured `level` boundary |
+| `gate` | `null` | Optional independent, irreversible moving-bed gate controls |
+| `gate.land_type` | Required if gate set | Integer 0–255; matching cells form shared-subedge connected components |
+| `gate.pond_land_type` | Required if gate set | Integer 0–255, distinct from `land_type`; pond control-volume class (10 in this experiment) |
+| `gate.enabled` | Required boolean | False preserves mesh beds and runs the unchanged numerical path; mapping checks still apply |
+| `gate.trigger_level` | Required; m | Strictly exceeded by a wet control cell's bed plus depth |
+| `gate.opening_seconds` | Required; s | Finite, strictly positive opening duration |
+| `gate.open_elevation` | Required; m | Final bed elevation, no higher than every selected gate cell's closed bed |
+| `gate.gates` | Required nonempty list | Exactly one named gate per connected component |
+| `gate.gates[].name` | Required string | Nonempty and unique |
+| `gate.gates[].inside_point` | Required `[x,y]` | Finite mesh-CRS point in this gate component |
+| `gate.gates[].control_point` | Required `[x,y]` | Finite mesh-CRS point inside the mesh, outside all gate cells |
+
+`threshold` and `level_boundary` have been removed and are rejected as unknown
+fields. There is no boundary-series gate trigger. See [gate control](gate-control.md)
+for a complete configuration, step ordering, replay and accounting definitions.
+
+At mesh load, `pond_land_type` must select at least one real cell. Every named gate
+must have an internal shared subedge to pond cells and another to real cells that
+are neither pond nor gate. These checks, component/point ownership and level
+boundary exclusion also apply when `enabled` is false. The two interface checks
+establish connectivity categories; inspect physical location and widths on each
+experimental mesh before interpreting `river_*` as river exchange.
 
 Force paths are strings in the model; existence, CSV coverage, raster sampling and geometric overlap are checked when preprocessing/solving loads the inputs.
 
 See the [README](../README.md#force-config) for boundary geometry selection,
-CSV examples, rainfall interval coverage and gate semantics. For hourly rain,
+CSV examples and rainfall interval coverage. Gate configuration is specified
+by this reference and [gate control](gate-control.md). For hourly rain,
 each band is that hour's accumulated millimetres; intensity stays constant
 within the hour. Cells sample the pixel containing their centre, without area
 averaging. The loader also accepts other positive contiguous interval lengths;

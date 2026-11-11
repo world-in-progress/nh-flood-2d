@@ -29,10 +29,29 @@ class RainfallConfig(InputModel):
     intervals: str
 
 
+class GatePointConfig(InputModel):
+    name: str = Field(min_length=1)
+    inside_point: tuple[float, float]
+    control_point: tuple[float, float]
+
+
 class GateConfig(InputModel):
-    threshold: float
     land_type: int = Field(ge=0, le=255)
-    level_boundary: str
+    pond_land_type: int = Field(ge=0, le=255)
+    enabled: bool
+    trigger_level: float
+    opening_seconds: float = Field(gt=0)
+    open_elevation: float
+    gates: list[GatePointConfig] = Field(min_length=1)
+
+    @model_validator(mode='after')
+    def unique_gates(self):
+        if self.pond_land_type == self.land_type:
+            raise ValueError('pond_land_type must differ from gate land_type')
+        names = [gate.name for gate in self.gates]
+        if len(names) != len(set(names)):
+            raise ValueError('Gate names must be unique')
+        return self
 
 
 class ForceConfig(InputModel):
@@ -45,11 +64,6 @@ class ForceConfig(InputModel):
         names = [b.name for b in self.boundaries]
         if len(set(names)) != len(names):
             raise ValueError('Boundary names must be unique')
-        if self.gate is not None and not any(
-            b.name == self.gate.level_boundary and b.kind == 'level'
-            for b in self.boundaries
-        ):
-            raise ValueError('gate.level_boundary must name a level boundary')
         return self
 
     def input_paths(self) -> list[str]:

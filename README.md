@@ -107,6 +107,7 @@ All domain, force and nested parameter models reject unknown fields and NaN/Infi
     "7": {"manning_n": 0.03, "infiltration": "none"},
     "8": {"manning_n": 0.03, "infiltration": "none"},
     "9": {"manning_n": 0.06, "infiltration": {"f0_mm_h": 152.4, "fc_mm_h": 25.4, "k_per_h": 3}},
+    "10": {"manning_n": 0.03, "infiltration": "none"},
     "11": {"manning_n": 0.03, "infiltration": "none"}
   },
   "afa": 0.5,
@@ -121,7 +122,7 @@ All domain, force and nested parameter models reject unknown fields and NaN/Infi
 
 `start` must include a timezone. All timestamps are aligned by absolute time, independently of the machine's local timezone. Boundary series and rainfall intervals must cover the formal interval from `start` through `start + duration`; missing coverage is an error. Warmup uses only the value at `start` and does not read earlier data. There is no extrapolation or endpoint padding during the formal simulation. The mesh, boundary lines and rainfall raster must use the same EPSG; coordinates are not reprojected.
 
-`land_parameters` must cover every land class present in the mesh; missing classes are errors. JSON keys are land-class codes. The values above are example inputs, not built-in defaults. Add entries for any further mesh classes; class 11 in the example is an illustrative gate entry. Each entry requires nonnegative `manning_n` (zero permits frictionless analytic tests) and either `"infiltration": "none"` or Horton parameters `f0_mm_h`, `fc_mm_h`, and `k_per_h`. Capacities use mm/h, decay uses 1/h, all must be nonnegative, and `f0_mm_h` must be at least `fc_mm_h`. Interior-side n is the arithmetic mean of its two cell values; closed exterior sides use the interior value, since sentinel element 0 is not a land class.
+`land_parameters` must cover every land class present in the mesh; missing classes are errors. JSON keys are land-class codes. The values above are example inputs, not built-in defaults. Add entries for any further mesh classes; classes 10 and 11 in the example illustrate pond and gate entries. Each entry requires nonnegative `manning_n` (zero permits frictionless analytic tests) and either `"infiltration": "none"` or Horton parameters `f0_mm_h`, `fc_mm_h`, and `k_per_h`. Capacities use mm/h, decay uses 1/h, all must be nonnegative, and `f0_mm_h` must be at least `fc_mm_h`. Interior-side n is the arithmetic mean of its two cell values; closed exterior sides use the interior value, since sentinel element 0 is not a land class.
 
 `afa`, `sita`, and `min_h` control CFL, time weighting, and the wet-depth threshold. The bound for an interior side is `afa * side_length / (sqrt(9.81 * face_depth) + abs(q) / face_depth)`, with CFL face depth at least 0.01 m and q in m²/s. Decreasing `afa` reduces the permitted step. The momentum numerator uses `sita * q_old + (1 - sita) * (q_left + q_right) / 2 + pressure_increment`; friction is applied through its denominator. Thus θ=1 retains only the local old discharge in this weighting. For θ<1, neighbouring face discharge is the length-weighted mean of all subedges; a single-edge face retains its value exactly. The linear θ-stencil continuation uses only selected exterior edges of prescribed level or discharge cells. Its exterior fractions are weighted by edge length; a fully missing neighbour yields a two-neighbour mean equal to the current edge's old discharge. Physical exterior fluxes stay zero; prescribed levels and cell discharge sources provide boundary exchange. θ=1 bypasses this stencil.
 
@@ -141,10 +142,14 @@ At a hanging interface, the pressure gradient uses water levels reconstructed to
 | `rainfall` | Required object | Supply explicit zero bands for a dry run |
 | `rainfall.raster` | Required path | Multiband GeoTIFF; band totals in mm |
 | `rainfall.intervals` | Required path | CSV `interval_start,interval_end` with timezone-aware timestamps |
-| `gate` | `null` | Optional one-time gate rule |
-| `gate.threshold` | Required if gate set; m | Finite water elevation in mesh vertical datum |
-| `gate.land_type` | Required if gate set | Integer 0–255; all matching cells are gate targets |
-| `gate.level_boundary` | Required if gate set | Must name a configured `level` boundary |
+| `gate` | `null` | Optional independent moving-bed gate controls |
+| `gate.land_type` | Required if gate set | Integer 0–255; gate cells form shared-subedge connected components |
+| `gate.pond_land_type` | Required if gate set | Integer 0–255, different from `land_type`; pond cells (10 in this experiment) |
+| `gate.enabled` | Required boolean | `false` disables bed motion and accounting; configuration is still validated |
+| `gate.trigger_level` | Required; m | Wet control cell's water level must strictly exceed this elevation |
+| `gate.opening_seconds` | Required; s | Finite, positive opening duration |
+| `gate.open_elevation` | Required; m | Final gate bed, no higher than any selected closed gate bed |
+| `gate.gates` | Required nonempty list | One named gate per connected component, with `inside_point` and `control_point` mesh-CRS coordinates |
 
 Force paths are strings in the model; existence, CSV coverage, raster sampling and geometric overlap are checked when preprocessing/solving loads the inputs.
 
@@ -168,7 +173,18 @@ Force paths are strings in the model; existence, CSV coverage, raster sampling a
     "raster": "path/to/rainfall.tif",
     "intervals": "path/to/rainfall_intervals.csv"
   },
-  "gate": {"threshold": 1.5, "land_type": 11, "level_boundary": "sea"}
+  "gate": {
+    "land_type": 11,
+    "pond_land_type": 10,
+    "enabled": true,
+    "trigger_level": 3.07,
+    "opening_seconds": 1800,
+    "open_elevation": 1.3,
+    "gates": [
+      {"name": "gate_A", "inside_point": [824100.0, 841400.0],
+       "control_point": [824080.0, 841400.0]}
+    ]
+  }
 }
 ```
 
@@ -205,9 +221,9 @@ interval_start,interval_end
 
 Intervals must have positive duration, be contiguous and nonoverlapping, and match the band count. Record zero-rain intervals explicitly. For hourly inputs, each band is the accumulated rain for that hour and intensity is constant throughout that hour. The loader also accepts other positive interval durations. For this example use two bands, such as 2 and 1 mm. Cell centres are mapped to raster pixels once; centres outside the raster, sampled NoData, nonfinite values and negative rain are errors. Intensity is constant within each interval: band millimetres × 0.001 / interval seconds. A single pixel covering the entire domain is the uniform-rain case. Configured Horton capacity is `fc + (f0 - fc) exp(-k t / 3600)`; at rainy time zero it is `f0`. Each rainy step advances rainy time before evaluating the capacity used for that step; dry steps retain the preceding capacity. Each cell accumulates rainy time `t` only while its own intensity is positive. `none` gives zero infiltration. Actual Horton removal is the minimum of capacity × dt and the water remaining after fluxes and rain.
 
-`gate` is optional; use `null` when no gate is modelled. Its named boundary must be `level`. When that boundary exceeds `threshold`, all cells of `land_type` have bed elevation changed to 0 m once while retaining their water depth and volume. Threshold and level use the same datum. Gate threshold crossings split steps; the manifest records the target-cell count and whether opening occurred.
+`gate` is optional; use `null` when no gate is modelled. Each configured gate watches its own wet `control_point` cell from formal time zero. The first sampled `bed + depth > trigger_level` commands its opening; each gate cell then moves from its input closed bed to `open_elevation` over `opening_seconds`, preserving depth and water volume. Commands are irreversible and do not add event steps. The point coordinates above are illustrative and must be replaced for each mesh. Mapping requires a nonempty pond class, one named gate per connected gate component, and at least one internal gate–pond and gate–nonpond/non-gate edge for each gate. Gate cells cannot overlap a prescribed level boundary. These checks apply even with `enabled: false`. See [gate control](docs/gate-control.md) for control timing, replay and accounting.
 
-Cold starts with `warmup_duration > 0` initialize connected still water before warmup. Each level boundary seeds its value at `start` (`series.at(0)`); water reaches a neighbouring cell only over an open interior edge whose effective crest, the maximum of both working beds and the momentum edge crest, is strictly below that level. Initial gate openings occur before this search. Isolated low land, enclosed ponds, and closed gates block filling; pond storage follows the input equivalent terrain without an extra land-class fill. Different starting levels reaching the same water body are an input error. Initial q is zero, and filled water belongs to initial storage. Later gate openings evolve dynamically without another fill. Runs without warmup retain dry initial conditions; checkpoints retain their stored physical state.
+Cold starts with `warmup_duration > 0` initialize connected still water before warmup. Each level boundary seeds its value at `start` (`series.at(0)`); water reaches a neighbouring cell only over an open interior edge whose effective crest, the maximum of both working beds and the momentum edge crest, is strictly below that level. Gate controls remain inactive during warmup, so closed gates block initial filling. Isolated low land and enclosed ponds also block filling; pond storage follows the input equivalent terrain without an extra land-class fill. Different starting levels reaching the same water body are an input error. Initial q is zero, and filled water belongs to initial storage. Formal-time gate openings evolve dynamically without another fill. Runs without warmup retain dry initial conditions; checkpoints retain their stored physical state.
 
 Warmup holds each boundary at its value at `start`, with constant starting river discharge and no rainfall. Infiltration remains active. The same engine then continues through the formal simulation. Choose warmup duration from measured station and boundary-band oscillations, storage drift and the complete river/sea/infiltration balance. `warmup_solver(domain_cfg, force_cfg)` runs an already preprocessed domain only through warmup and stops at `start`.
 
@@ -261,9 +277,11 @@ Preprocessing writes `ne.fdb`, `ns.fdb`, and `boundary.fdb` under `domain_dir/pr
 
 Mesh loading requires positive square cells, matching the edge-length CFL scale. Spatial WSE MAE is NaN when there are no common wet pixels; it does not indicate zero error.
 
-The bed can change when a gate opens. `manifest.json` records each `bed_events` entry with its time, all affected cell IDs, and their new bed values. Replaying these events over `bed.fdb` reconstructs the working bed at a frame; water surface elevation is working bed plus depth.
+The bed can change while a gate opens. `manifest.gate_control` records each gate's cells, closed beds, command clock and opening progress. `BedTimeline`/`read_bed_at` reconstructs the working bed at a frame from these records; new gate runs leave `bed_events` empty. Water surface elevation is working bed plus depth.
 
 Each `domain_dir/mass_balance.csv` row records cumulative nominal rainfall, actual infiltration, actual signed volume applied at each discharge boundary, signed volume change at each level boundary, `requested_discharge:<name>_m3`, `bed_clamp_nonlevel_m3`, `bed_clamp_level_m3`, signed `pipe_exchange_m3` (positive from pipe to surface), storage, and residual. The requested discharge column integrates the prescribed Q; the `discharge:<name>_m3` column uses the amount actually applied after donor limiting. Non-level clipping adds water and enters the balance. Level-cell clipping is an intermediate diagnostic overwritten by the prescribed depth, so it is excluded from net sources. A level below bed sets zero depth. Gate bed changes preserve depth and volume, so `gate_bed_m3` is zero. Residual is current storage minus initial storage and accounted signed sources. `relative_residual` uses the maximum of initial storage, cumulative rain plus positive cumulative net inputs, and absolute cumulative non-rain accounting terms; it is blank when that scale is zero.
+
+When gate controls are enabled, `gate_balance.csv` and `manifest.gate_control.pond_budget` account for the full `pond_land_type` control volume. `pond_in/out/net` measure gate–pond exchange; `river_in/out` measure gate–nonpond/non-gate exchange; `overtopping_in/out` measure the remaining pond boundary. These names classify interfaces, so the river and overtopping labels need geographic review on the actual mesh. Pond storage change is compared with pond net gate exchange, overtopping, rain, infiltration, positivity, pipe and boundary sources, and F32 rounding. Warmup is included in cumulative values; subtract the formal time-zero row for formal-period amounts. Each gate's independent `channel_budget` checks storage change against river net input minus pond net output, plus its actual sources and numerical corrections, and reports a residual. See [gate control](docs/gate-control.md#exchange-and-pond-inventory).
 
 Positivity uses one donor factor per cell from its depth at step start plus positive explicit sources, divided across total outward edge flux and negative explicit sources. Each shared edge is scaled once by its donor cell, so both adjacent cells see the same flux. Incoming edge flux cannot fund outgoing flux in the same step. Prescribed level cells have an unlimited reservoir and are set to the requested level at step end. CFL uses the original face depth floor `max(h, 0.01)` with the current depths after the cell update and the updated q, while excluding physical exterior edges. A real CFL below `1e-4` s fails explicitly with the limiting edge, its two cell depths, face depth, and face velocity; it is not enlarged to a supported step.
 
@@ -271,7 +289,7 @@ The device clock uses two U32 words at a quantum of `2^-40` s, with the warmup s
 
 Transport and rain increments are stored in one F32 device field before adding to the inventory. This global pass fixes their rounding order across kernel batching; it does not add a compensating source.
 
-Gate opening uses the first rising threshold crossing from the input series, quantized to the same clock as forcing events. Its zero-time bed change and any prescribed-level correction are processed before output or the next physics step; the CFL bound is refreshed. No zero-dt physics tick is executed. Starting formal simulation from a warmup-only checkpoint resets extrema at elapsed zero.
+Each gate checks its wet control cell at the start of every formal solver step and latches the first strictly above-threshold sample. The bed is evaluated at both ends of the step using the exact command clock; opening completion adds no step endpoint. Starting formal simulation from a warmup-only checkpoint resets extrema at elapsed zero.
 
 `domain_dir/step_statistics.csv` has one row at each output, including `standard_dt_min_s`, `standard_dt_max_s`, `standard_dt_mean_s`, and `standard_steps` for standard steps; event-shortened step count, minimum, and total duration; and the tightest CFL edge with its two cell depths, face depth, and face velocity. Budget, station, and statistics rows also occur at frame times between `yield_step` boundaries. `manifest.json` includes git commit/dirty state, full configuration, input hashes, simulation and wall-clock timestamps, step and dt summaries, preprocessing/warmup/simulation timing, budget transfer counts, backend/device, final water budget, and peak device memory (`unavailable` if it cannot be measured).
 
@@ -351,7 +369,7 @@ draw_hydrograph(domain_cfg, "S4", quantity="level")
 
 Hydrograph functions require `quantity="level"` or `quantity="depth"`. Observations must contain exactly one matching Water Level or Water Depth column; the other quantity is rejected. Plot labels and simulation samples use the same quantity.
 
-These functions read the preprocessed mesh and depth frames or extrema produced by the solver. Water-surface comparisons replay bed events from the manifest.
+These functions read the preprocessed mesh and depth frames or extrema produced by the solver. Water-surface comparisons replay gate bed motion from `manifest.gate_control`.
 
 ## DEM And GIS Utilities
 

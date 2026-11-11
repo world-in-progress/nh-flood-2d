@@ -1,0 +1,120 @@
+{
+  "cpu": [
+    {
+      "case": "test_uniform_and_hanging_secti0",
+      "measurements": [
+        {
+          "width_flow": 0.0,
+          "pond_net": 0.0,
+          "river_net": 1.3799136468151119e-05,
+          "pond_storage": 64.0,
+          "channel_storage": 57.600013732910156,
+          "center_distance": 8.0,
+          "second_step_pond_net_m3": -0.007280826568603516,
+          "second_step_width_flow": -0.058246612548828125
+        },
+        {
+          "width_flow": 0.0,
+          "pond_net": 0.0,
+          "river_net": 1.3799134649161715e-05,
+          "pond_storage": 64.0,
+          "channel_storage": 57.600013732910156,
+          "center_distance": 6.0,
+          "second_step_pond_net_m3": -0.009707768447697163,
+          "second_step_width_flow": -0.0776621475815773
+        }
+      ],
+      "backend": "arm64",
+      "device": "Apple M1 Max",
+      "source_sha256": "c908816673c549fee696529f7349d04b51fe6720372837b2c841e019f96f2081"
+    },
+    {
+      "case": "test_uniform_and_hanging_secti1",
+      "measurements": [
+        {
+          "width_flow": 0.009196876548230648,
+          "pond_net": 0.001149609568528831,
+          "river_net": 0.538783609867096,
+          "pond_storage": 0.001149609568528831,
+          "channel_storage": 3.7376341819763184,
+          "center_distance": 8.0,
+          "second_step_pond_net_m3": 0.002119818702340126,
+          "second_step_width_flow": 0.01695854961872101
+        },
+        {
+          "width_flow": 0.012262501753866673,
+          "pond_net": 0.001532812719233334,
+          "river_net": 0.538783609867096,
+          "pond_storage": 0.001532812719233334,
+          "channel_storage": 3.737250804901123,
+          "center_distance": 6.0,
+          "second_step_pond_net_m3": 0.002825863426551223,
+          "second_step_width_flow": 0.022606907412409782
+        }
+      ],
+      "backend": "arm64",
+      "device": "Apple M1 Max",
+      "source_sha256": "c908816673c549fee696529f7349d04b51fe6720372837b2c841e019f96f2081"
+    }
+  ],
+  "metal": [
+    {
+      "case": "test_metal_paired_section_uses0",
+      "measurements": [
+        {
+          "width_flow": 0.0,
+          "pond_net": 0.0,
+          "river_net": 1.3799136468151119e-05,
+          "pond_storage": 64.0,
+          "channel_storage": 57.600013732910156,
+          "center_distance": 8.0,
+          "second_step_pond_net_m3": -0.007280826568603516,
+          "second_step_width_flow": -0.058246612548828125
+        },
+        {
+          "width_flow": 0.0,
+          "pond_net": 0.0,
+          "river_net": 1.3799134649161715e-05,
+          "pond_storage": 64.0,
+          "channel_storage": 57.600013732910156,
+          "center_distance": 6.0,
+          "second_step_pond_net_m3": -0.009707769379019737,
+          "second_step_width_flow": -0.0776621550321579
+        }
+      ],
+      "backend": "metal",
+      "device": "Apple M1 Max",
+      "source_sha256": "c908816673c549fee696529f7349d04b51fe6720372837b2c841e019f96f2081"
+    },
+    {
+      "case": "test_metal_paired_section_uses1",
+      "measurements": [
+        {
+          "width_flow": 0.009196876548230648,
+          "pond_net": 0.001149609568528831,
+          "river_net": 0.538783609867096,
+          "pond_storage": 0.001149609568528831,
+          "channel_storage": 3.7376341819763184,
+          "center_distance": 8.0,
+          "second_step_pond_net_m3": 0.002119818702340126,
+          "second_step_width_flow": 0.01695854961872101
+        },
+        {
+          "width_flow": 0.012262502685189247,
+          "pond_net": 0.0015328128356486559,
+          "river_net": 0.538783609867096,
+          "pond_storage": 0.0015328128356486559,
+          "channel_storage": 3.737250804901123,
+          "center_distance": 6.0,
+          "second_step_pond_net_m3": 0.0028258636593818665,
+          "second_step_width_flow": 0.02260690927505493
+        }
+      ],
+      "backend": "metal",
+      "device": "Apple M1 Max",
+      "source_sha256": "c908816673c549fee696529f7349d04b51fe6720372837b2c841e019f96f2081"
+    }
+  ],
+  "metal_tests_passed": 4,
+  "metal_tests_scope": "Two paired second-step regimes plus dry/wet pressure-reconstruction spies that assert the updated F32 bed was read"
+}

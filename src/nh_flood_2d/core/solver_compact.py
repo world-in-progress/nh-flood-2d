@@ -16,11 +16,13 @@ import taichi as ti
 from ..input import DomainConfig, ForceConfig
 from ..preprocess import preprocess
 from ..preprocess.force import Forcing, MeshGeometry
+from ..preprocess.gate import GateLayout
 from ..preprocess.hydraulics import connected_still_water, map_land_parameters, open_boundary_face_fractions
 from ..schema.feature import Ne, Ns, IndexLike, SideTopoInfo, U8Value
 from ..util.ti import init_taichi, copy_to_taichi
 from .run_record import RunRecord, WaterBudget
 from .device_budget import DeviceBudget
+from .gate import GateController, append_gate_balance
 from .clock import StepClock, _seconds_to_ticks
 from .pressure import hanging_geometry, PressureReconstruction
 from .output import (read_checkpoint, write_checkpoint, write_bed, write_depth_frame,
@@ -197,6 +199,8 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
             getattr(nes.column, f'{direction}_side_num')
             for direction in ('l', 'r', 'b', 't')])
     forcing = Forcing.load(domain_cfg, force_cfg, mesh)
+    gate = force_cfg.gate
+    gate_layout = GateLayout.load(gate, mesh, land_types, side_topology, forcing.boundaries, bed) if gate else None
     e_num, s_num = len(ex), len(side_lengths)
     b_num = len(forcing.boundaries)
     side_n, cell_f0, cell_fc, cell_k = map_land_parameters(
@@ -271,10 +275,7 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
     diagnostic_t = device_budget.step
     record.data['budget_accumulator'].update(word_count=device_budget.word_count,
                                            interval_step_bound=step_bound)
-    gate_open = ti.field(ti.i32, ())
-    gate = force_cfg.gate
     coupled_enabled = coupling is not None
-    gate_type = gate.land_type if gate else -1
 
     state = read_checkpoint(domain_cfg.restart_state) if domain_cfg.restart_state else None
     state_meta = json.loads(state.metadata_json) if state else {}
@@ -293,6 +294,29 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
         if continuation and state_tick == end_tick:
             record.data['completion_reason'] = 'checkpoint_at_end'
     clock = StepClock(initial_clock)
+    gate_enabled = gate is not None and gate.enabled
+    controller = (GateController(gate, gate_layout, bed, land_types, clock,
+        origin_before_start, min_h, step_bound, s_num, ez_t, depth_t, area_t) if gate_enabled else None)
+    @ti.kernel
+    def check_gates():
+        controller.check()
+
+    @ti.kernel
+    def clear_gate_budget():
+        controller.clear_step()
+
+    @ti.kernel
+    def collect_gate_budget():
+        controller.collect()
+
+    @ti.kernel
+    def measure_pond_inventory():
+        controller.measure_inventory()
+
+    @ti.kernel
+    def finish_gate_bed():
+        controller.move_to_end()
+
     raining_t = ti.field(ti.i32, ())
     batch_slot_t = ti.field(ti.i32, ())
     coefficients_t = ti.field(ti.f32, (max(1, b_num), 2))
@@ -397,24 +421,6 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
 
     @ti.kernel
     @no_type_check
-    def apply_gate_event(impose_levels: ti.i32):
-        for ei in range(1, e_num):
-            if eu_t[ei] == gate_type:
-                # Bed motion itself preserves depth. A coincident prescribed
-                # level is a separate, measured zero-time boundary exchange.
-                ez_t[ei] = 0.
-                bi = boundary_id_t[ei]
-                if impose_levels:
-                    if bi >= 0:
-                        if kind_t[bi] == 0:
-                            previous = depth_t[ei]
-                            target = ti.max(level_values_t[bi] - ez_t[ei], 0.)
-                            depth_t[ei] = target
-                            add_diagnostic(ei // 256, 4 + 5 * bi, (target-previous)*area_t[ei])
-        gate_open[None] = 1
-
-    @ti.kernel
-    @no_type_check
     def tick():
         dt = clock.dt[None]
         raining = raining_t[None]
@@ -514,6 +520,8 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
                 if sq_t[si] != 0. and donor_scale_t[donor] < 1.:
                     ti.atomic_add(limited_faces_t[None], 1)
                 sq_t[si] *= donor_scale_t[donor]
+                if ti.static(gate_enabled):
+                    controller.record_flux(si, el, eh, sq_t[si] * sl_t[si] * dt)
         for ei in range(1, e_num):
             if clock.active[None] == 1:
                 bi = boundary_id_t[ei]
@@ -584,6 +592,16 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
                 else:
                     add_diagnostic(ei // 256, 1, floor * ea)
                     depth_t[ei] = ti.max(raw_depth, 0.)
+                if ti.static(gate_enabled):
+                    level_exchange = 0.
+                    applied_floor = floor
+                    if bi >= 0 and kind_t[bi] == 0:
+                        applied_floor = 0.
+                        level_exchange = ((depth_t[ei] - previous) * ea -
+                            (ql - qr + qb - qt) * dt - pipe * dt - rain_depth * ea + removed * ea)
+                    controller.record_cell(ei, previous, depth_t[ei], ea, rain_depth,
+                        removed, applied_floor, pipe * dt, (ssq_t[ei] - pipe) * dt,
+                        level_exchange, increment_t[ei])
                 u, v = velocity(ei)
                 u_t[ei], v_t[ei] = u, v
                 max_speed_t[ei] = ti.max(max_speed_t[ei], ti.sqrt(u*u + v*v))
@@ -699,12 +717,13 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
         max_speed_t.from_numpy(state.max_speed)
         peak_hi_t.from_numpy(state.first_time_hi)
         peak_lo_t.from_numpy(state.first_time_lo)
-        gate_open[None] = int(state.gate_open)
+        if gate_enabled and continuation:
+            controller.restore(state_meta['gate_controller'])
     bed_np = ez_t.to_numpy()
     root = Path(domain_cfg.output_dir)
     record.data.update(bed_events=[], output={
         'root': 'output', 'frame_interval_s': 900, 'station_budget_interval_s': domain_cfg.yield_step,
-        'frames': 'F32 depth only; bed.fdb plus manifest bed_events reconstruct water level',
+        'frames': 'F32 depth only; bed.fdb plus manifest gate_control reconstruct water level',
         'extrema_time_origin': (domain_cfg.start - timedelta(seconds=origin_before_start)).isoformat(),
         'clock_quantum_s': 2.**-40,
         'extrema_window': 'simulation' if end_time > 0 else 'warmup',
@@ -718,7 +737,7 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
     previous_warmup_steps = state_meta['total_warmup_steps'] if continuation else 0
     min_dt, max_dt, integrated_dt = float('inf'), 0., 0.
     discharge_peaks = np.zeros(b_num, dtype=np.float64)
-    gate_cells = np.flatnonzero(land_types[1:] == gate_type) + 1 if gate else np.empty(0,dtype=int)
+    gate_cells = np.flatnonzero(gate_layout.cell_gate >= 0) if gate else np.empty(0,dtype=int)
     record.data['gate_cell_count'] = len(gate_cells)
     record.data['station_cells'] = station_cells
     coefficients = np.zeros((max(1, b_num), 2), dtype=np.float32)
@@ -741,10 +760,6 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
     interval_activity = [0, 0, 1.]
     total_activity = [0, 0, 1.]
     limit_value_t[0] = float('inf')
-    gate_has_opened = bool(state.gate_open) if state else False
-    gate_tick = (None if forcing.gate_opening_time is None else
-                 _seconds_to_ticks(forcing.gate_opening_time + origin_before_start))
-    gate_levels = np.zeros(max(1,b_num),dtype='float32')
     dt_hasher = hashlib.sha256()
     q_exact = np.zeros(b_num, dtype=np.float64)
     # At a batch boundary Python uploads the active linear segment only once.
@@ -771,41 +786,6 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
                 rain_volume_rate = np.sum(rates[forcing.rain.pixel_index[1:]] * mesh.area[1:], dtype=np.float64)
                 rain_index = index
 
-    def process_gate_event(seconds, *, initial=False):
-        nonlocal gate_has_opened
-        if gate_tick is None or gate_has_opened:
-            return False
-        now_tick = _seconds_to_ticks(clock.host_now_seconds)
-        if now_tick < gate_tick:
-            return False
-        if seconds == end_time and forcing.gate_opening_time == end_time:
-            reference = next(b for b in forcing.boundaries if b.name == gate.level_boundary)
-            if reference.series.at(max(0.,seconds)) <= gate.threshold:
-                return False
-        impose_levels = not initial or continuation
-        if impose_levels:
-            sample = 0. if seconds < 0. else event_samples.get(now_tick,seconds)
-            for bi,b in enumerate(forcing.boundaries):
-                if b.kind == 'level': gate_levels[bi] = b.series.at(sample)
-            level_values_t.from_numpy(gate_levels)
-        diagnostic_t.fill(0)
-        apply_gate_event(int(impose_levels))
-        device_budget.collect(); device_budget.step_finished()
-        diagnostic_t.fill(0)
-        bed_np[gate_cells] = 0.
-        gate_has_opened = True
-        record.data['bed_events'].append(dict(elapsed_seconds=seconds,
-            time=(domain_cfg.start+timedelta(seconds=seconds)).isoformat(),
-            cell_ids=gate_cells.tolist(), new_bed=np.zeros(len(gate_cells)).tolist()))
-        record.data['gate_open'] = True
-        record.write()
-        if not initial:
-            initial_diagnostics()
-            clock.active[None] = 1
-            compute_cfl()
-            supported_dt()
-        return True
-
     def checkpoint(path, depth_np):
         nonlocal last_checkpoint_wall
         metadata = dict(state_identity, run_state=True,
@@ -818,11 +798,13 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
             budget={'initial_storage_m3': budget.initial, 'rainfall_m3': float(budget.rain),
                     'requested_discharge_m3': budget.discharge.tolist(),
                     'device_units': device_budget.total_units})
+        if gate_enabled:
+            metadata['gate_controller'] = controller.snapshot()
         tick_count = _seconds_to_ticks(clock.host_now_seconds)
         write_checkpoint(path, depth=depth_np, bed=ez_t.to_numpy(), q=sq_t.to_numpy(),
             rain_time=cumulative_rain_time_t.to_numpy(), infiltration=infiltration_t.to_numpy(),
             clock_hi=tick_count >> 32, clock_lo=tick_count & 0xffffffff,
-            gate_open=bool(gate_open[None]), metadata_json=json.dumps(metadata),
+            gate_open=bool(np.any(controller.commanded.to_numpy())) if gate_enabled else False, metadata_json=json.dumps(metadata),
             max_depth=max_depth_t.to_numpy(), first_time_hi=peak_hi_t.to_numpy(),
             first_time_lo=peak_lo_t.to_numpy(), max_speed=max_speed_t.to_numpy())
         last_checkpoint_wall = perf_counter()
@@ -833,6 +815,11 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
         depth_np = depth_t.to_numpy()
         storage = float(np.sum(depth_np.astype(float) * mesh.area, dtype=np.float64))
         row = budget.output(date, seconds, storage, phase)
+        if gate_enabled:
+            record.data['gate_control'] = controller.report(depth_np, mesh.area, seconds)
+            append_gate_balance(Path(domain_cfg.domain_dir) / 'gate_balance.csv', date,
+                                seconds, record.data['gate_control'])
+            record.write()
         if station_count:
             sample_stations()
             samples = station_sample_t.to_numpy()
@@ -864,7 +851,6 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
         limit_value_t[0] = float('inf')
         print(f't={seconds:.6f}s phase={phase} storage={storage:.9g} residual={row["residual_m3"]:.9g} m3', flush=True)
 
-    process_gate_event(elapsed, initial=True)
     if state is None and domain_cfg.warmup_duration > 0:
         initial_depth, initialization = connected_still_water(
             bed_np, dh_t.to_numpy(), side_flags,
@@ -893,6 +879,10 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
         apply_initial_levels()
         device_budget.collect(); device_budget.step_finished()
     clock.active[None] = 1
+    if gate_enabled:
+        if controller.initial_storage is None:
+            controller.initialize_inventory(depth_t.to_numpy(), mesh.area)
+        check_gates()
     compute_cfl()
     initial_diagnostics()
     if elapsed == 0. and end_time > 0.:
@@ -901,9 +891,16 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
     builder = ti.graph.GraphBuilder()
     for _ in range(clock.batch_size):
         builder.dispatch(prepare_step)
+        if gate_enabled:
+            builder.dispatch(check_gates)
+            builder.dispatch(clear_gate_budget)
         if has_hanging:
             builder.dispatch(update_pressure)
         builder.dispatch(tick)
+        if gate_enabled:
+            builder.dispatch(measure_pond_inventory)
+            builder.dispatch(collect_gate_budget)
+            builder.dispatch(finish_gate_bed)
         builder.dispatch(compute_cfl)
         builder.dispatch(finish_step)
     graph = builder.compile()
@@ -964,9 +961,10 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
                 (interval_event_dts if event_short else interval_dts).append(dt)
 
                 device_budget.step_finished()
+                if gate_enabled:
+                    controller.budget.step_finished()
             completed_bits = rows[rows[:,3] == clock.COMPLETED,0].astype('uint32')
             dt_hasher.update(completed_bits.tobytes())
-            process_gate_event(elapsed)
             is_output = abs(elapsed-next_output) < 1e-9 or elapsed == end_time
             is_frame = abs(elapsed-next_frame) < 1e-9 or elapsed == end_time
             if is_output or is_frame:
@@ -992,7 +990,7 @@ def _evolve(domain_cfg, force_cfg, record, coupling, end_time):
             limiter_activity=dict(limited_cell_steps=total_activity[0], limited_face_steps=total_activity[1],
                                   minimum_donor_scale=total_activity[2]),
             requested_discharge_peak_m3_s={b.name:float(discharge_peaks[i]) for i,b in enumerate(forcing.boundaries) if b.kind=='discharge'},
-            gate_open=bool(gate_open[None]),storage_depth_one_ulp_volume_m3=float(np.sum(
+            gate_open=bool(np.any(controller.commanded.to_numpy())) if gate_enabled else False,storage_depth_one_ulp_volume_m3=float(np.sum(
                 np.abs(np.spacing(depth_t.to_numpy()[1:]))*mesh.area[1:],dtype=np.float64)))
         phase_finished = perf_counter()
         if end_time == 0.:

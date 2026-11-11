@@ -1,0 +1,109 @@
+{
+  "validation_passed": true,
+  "gate_count": 7,
+  "pond_land_type": 10,
+  "pond_cell_count": 126554,
+  "gates": [
+    {
+      "name": "G0",
+      "cell_count": 37,
+      "area_m2": 5440.0,
+      "closed_min_m": 10.0,
+      "closed_max_m": 10.0,
+      "pond_interface_width_m": 128.0,
+      "other_interface_width_m": 288.0,
+      "neighbor_land_types": [
+        5,
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "name": "G1",
+      "cell_count": 313,
+      "area_m2": 24064.0,
+      "closed_min_m": 10.0,
+      "closed_max_m": 10.0,
+      "pond_interface_width_m": 328.0,
+      "other_interface_width_m": 536.0,
+      "neighbor_land_types": [
+        5,
+        8,
+        10
+      ]
+    },
+    {
+      "name": "G2",
+      "cell_count": 376,
+      "area_m2": 34048.0,
+      "closed_min_m": 10.0,
+      "closed_max_m": 10.0,
+      "pond_interface_width_m": 352.0,
+      "other_interface_width_m": 688.0,
+      "neighbor_land_types": [
+        5,
+        7,
+        8,
+        10
+      ]
+    },
+    {
+      "name": "G3",
+      "cell_count": 27,
+      "area_m2": 2112.0,
+      "closed_min_m": 10.0,
+      "closed_max_m": 10.0,
+      "pond_interface_width_m": 80.0,
+      "other_interface_width_m": 128.0,
+      "neighbor_land_types": [
+        5,
+        8,
+        10
+      ]
+    },
+    {
+      "name": "G4",
+      "cell_count": 227,
+      "area_m2": 11360.0,
+      "closed_min_m": 10.0,
+      "closed_max_m": 10.0,
+      "pond_interface_width_m": 296.0,
+      "other_interface_width_m": 320.0,
+      "neighbor_land_types": [
+        5,
+        8,
+        10
+      ]
+    },
+    {
+      "name": "G5",
+      "cell_count": 497,
+      "area_m2": 41216.0,
+      "closed_min_m": 10.0,
+      "closed_max_m": 10.0,
+      "pond_interface_width_m": 472.0,
+      "other_interface_width_m": 680.0,
+      "neighbor_land_types": [
+        5,
+        8,
+        10
+      ]
+    },
+    {
+      "name": "G6",
+      "cell_count": 1220,
+      "area_m2": 22880.0,
+      "closed_min_m": 10.0,
+      "closed_max_m": 10.0,
+      "pond_interface_width_m": 328.0,
+      "other_interface_width_m": 392.0,
+      "neighbor_land_types": [
+        5,
+        8,
+        10
+      ]
+    }
+  ],
+  "note": "Bnone-I actual input validation; auto-selected control points are mapping-only and are not experimental controls"
+}

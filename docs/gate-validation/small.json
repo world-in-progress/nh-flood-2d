@@ -1,0 +1,86 @@
+{
+  "case": "small",
+  "cpu_threads": 1,
+  "bitwise_equal": true,
+  "results": {
+    "7648185": {
+      "hashes": {
+        "depth": "42cf60ecd2d314b3794a04c96cb47b74f06858064839fc40459b1d9a00f0ec07",
+        "q": "9ecdbed90a4d833ca23906e22169b253f32b3e7f9b4e099f7c8744dba686c525",
+        "bed": "6e348267555d2db02a8246ff879d7c42d6fa722b597e9c41894f1269b9afdab5",
+        "dt_sequence": "6f91366959059ff671babcb62b4cf8b3dfd3c02bb5057674dd18ab30b9452d47",
+        "trace": "690e7bb6b694716d541ee988af097a0fa4938a71e62eaf8a71ebe30bec2d260d",
+        "budget": "e4966f60238d5cc8d9f43d0d288fc42f95726a604eaecb2135b1ee002c945813",
+        "mass_balance_csv": "c648d06472f747eadc00369a5de3015a1327ca577ed7272d6ad010eec8c8915c",
+        "step_statistics_csv": "1f8c8be7f8acade1803c56f93294f16112ac3fa4ebf5aee82ad231951ec344db"
+      },
+      "steps": 14,
+      "backend": "arm64",
+      "device": "Apple M1 Max",
+      "duration": 12,
+      "warmup_duration": 2,
+      "clock": [
+        3584,
+        0
+      ],
+      "nonzero_discharge_edges": 2
+    },
+    "candidate-no-gate": {
+      "hashes": {
+        "depth": "42cf60ecd2d314b3794a04c96cb47b74f06858064839fc40459b1d9a00f0ec07",
+        "q": "9ecdbed90a4d833ca23906e22169b253f32b3e7f9b4e099f7c8744dba686c525",
+        "bed": "6e348267555d2db02a8246ff879d7c42d6fa722b597e9c41894f1269b9afdab5",
+        "dt_sequence": "6f91366959059ff671babcb62b4cf8b3dfd3c02bb5057674dd18ab30b9452d47",
+        "trace": "690e7bb6b694716d541ee988af097a0fa4938a71e62eaf8a71ebe30bec2d260d",
+        "budget": "e4966f60238d5cc8d9f43d0d288fc42f95726a604eaecb2135b1ee002c945813",
+        "mass_balance_csv": "c648d06472f747eadc00369a5de3015a1327ca577ed7272d6ad010eec8c8915c",
+        "step_statistics_csv": "1f8c8be7f8acade1803c56f93294f16112ac3fa4ebf5aee82ad231951ec344db"
+      },
+      "steps": 14,
+      "backend": "arm64",
+      "device": "Apple M1 Max",
+      "duration": 12,
+      "warmup_duration": 2,
+      "clock": [
+        3584,
+        0
+      ],
+      "nonzero_discharge_edges": 2
+    },
+    "candidate-disabled": {
+      "hashes": {
+        "depth": "42cf60ecd2d314b3794a04c96cb47b74f06858064839fc40459b1d9a00f0ec07",
+        "q": "9ecdbed90a4d833ca23906e22169b253f32b3e7f9b4e099f7c8744dba686c525",
+        "bed": "6e348267555d2db02a8246ff879d7c42d6fa722b597e9c41894f1269b9afdab5",
+        "dt_sequence": "6f91366959059ff671babcb62b4cf8b3dfd3c02bb5057674dd18ab30b9452d47",
+        "trace": "690e7bb6b694716d541ee988af097a0fa4938a71e62eaf8a71ebe30bec2d260d",
+        "budget": "e4966f60238d5cc8d9f43d0d288fc42f95726a604eaecb2135b1ee002c945813",
+        "mass_balance_csv": "c648d06472f747eadc00369a5de3015a1327ca577ed7272d6ad010eec8c8915c",
+        "step_statistics_csv": "1f8c8be7f8acade1803c56f93294f16112ac3fa4ebf5aee82ad231951ec344db"
+      },
+      "steps": 14,
+      "backend": "arm64",
+      "device": "Apple M1 Max",
+      "duration": 12,
+      "warmup_duration": 2,
+      "clock": [
+        3584,
+        0
+      ],
+      "nonzero_discharge_edges": 2
+    }
+  },
+  "reference_commit": "7648185",
+  "input_sha256": {
+    "tests/.gate-work/compat-small2/ne.txt": "7b5bf24601227ba3a186a6c88261f8f481d45ddb5800b6d011aa11cca52446bb",
+    "tests/.gate-work/compat-small2/ns.txt": "ff0def73eece05d1fcfb429a7fe55d5c407264b1c7999a5e56baa251f081438d",
+    "tests/.gate-work/compat-small2/river.geojson": "b0c084c330e990c44da51d56f1d0cb1cfd501ce11f9cd046205bd3eeaa149fd6",
+    "tests/.gate-work/compat-small2/river.csv": "c7251c2b99421204ac25aa592e03d4358e0b925502834a659a9913e0af96b8f8",
+    "tests/.gate-work/compat-small2/rain.tif": "af01efc8eb61cdca9553a42ea8c1b3d38d145ffbe675ebd678255b673bae81c5",
+    "tests/.gate-work/compat-small2/intervals.csv": "95b93bdc3e35355606b481f5f31d2699bc11804a7f277bcc2be96487b009608e"
+  },
+  "reference_source_sha256": "111d156cdfc1dc84e994200c450f1f6cc8abfacfdf58eba2dfca393c7a8f3c86",
+  "notes": [
+    "CPU, single thread; 2 s warmup plus 12 s formal simulation"
+  ]
+}
